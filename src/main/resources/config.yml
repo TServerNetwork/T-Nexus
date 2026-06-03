@@ -1,0 +1,20 @@
+tnexus:
+  database:
+    host: "localhost"
+    port: 3306
+    name: "tnexus"
+    username: "root"
+    password: ""
+    table-prefix: "tnexus_"
+    pool-size: 10
+  server:
+    default-world: "lobby"
+  economy:
+    currency-name: "コイン"
+    currency-symbol: "¥"
+    starting-balance: 1000.0
+  gui:
+    main-menu-title: "&6&lT-Nexus メニュー"
+    items-per-page: 45
+    border-item: "GRAY_STAINED_GLASS_PANE"
+  locale: "ja_JP"

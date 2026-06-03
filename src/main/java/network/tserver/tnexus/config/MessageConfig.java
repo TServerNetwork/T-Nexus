@@ -1,0 +1,100 @@
+package network.tserver.tnexus.config;
+
+import java.io.File;
+import org.bukkit.ChatColor;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
+
+/**
+ * Manages i18n message loading and delivery.
+ */
+public final class MessageConfig {
+
+    private static final String DEFAULT_LOCALE = "ja_JP";
+    private static final String PREFIX_KEY = "prefix";
+
+    private final JavaPlugin plugin;
+    private final ConfigManager configManager;
+    private YamlConfiguration messages;
+    private String locale;
+
+    /**
+     * Creates a new message config and loads the active locale.
+     *
+     * @param plugin plugin instance
+     * @param configManager config manager
+     */
+    public MessageConfig(JavaPlugin plugin, ConfigManager configManager) {
+        this.plugin = plugin;
+        this.configManager = configManager;
+        reload();
+    }
+
+    /**
+     * Reloads the active locale file based on config.yml.
+     */
+    public void reload() {
+        this.locale = this.configManager.getString("tnexus.locale", DEFAULT_LOCALE);
+        String resourcePath = "lang/" + this.locale + ".yml";
+        if (this.plugin.getResource(resourcePath) == null) {
+            this.locale = DEFAULT_LOCALE;
+            resourcePath = "lang/" + DEFAULT_LOCALE + ".yml";
+        }
+
+        saveResourceIfMissing(resourcePath);
+        File file = new File(this.plugin.getDataFolder(), resourcePath);
+        this.messages = YamlConfiguration.loadConfiguration(file);
+    }
+
+    /**
+     * Returns the active locale identifier.
+     *
+     * @return active locale
+     */
+    public String getLocale() {
+        return this.locale;
+    }
+
+    /**
+     * Resolves a translated message, replacing indexed placeholders.
+     *
+     * @param key message key
+     * @param placeholders placeholder values
+     * @return translated message or the key when missing
+     */
+    public String getMessage(String key, Object... placeholders) {
+        String value = this.messages.getString(key);
+        if (value == null) {
+            return key;
+        }
+
+        String formatted = value;
+        for (int index = 0; index < placeholders.length; index++) {
+            formatted = formatted.replace("{" + index + "}", String.valueOf(placeholders[index]));
+        }
+        return ChatColor.translateAlternateColorCodes('&', formatted);
+    }
+
+    /**
+     * Sends a prefixed translated message to a player.
+     *
+     * @param player target player
+     * @param key message key
+     * @param placeholders placeholder values
+     */
+    public void sendMessage(Player player, String key, Object... placeholders) {
+        player.sendMessage(getPrefix() + getMessage(key, placeholders));
+    }
+
+    private String getPrefix() {
+        return getMessage(PREFIX_KEY);
+    }
+
+    private void saveResourceIfMissing(String resourcePath) {
+        File file = new File(this.plugin.getDataFolder(), resourcePath);
+        if (!file.exists()) {
+            this.plugin.saveResource(resourcePath, false);
+        }
+    }
+}

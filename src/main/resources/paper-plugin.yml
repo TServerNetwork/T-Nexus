@@ -2,9 +2,9 @@ name: T-Nexus
 description: $description
 version: '${version}'
 
-main: network.tserver.tNexus.TNexus
+main: network.tserver.tnexus.TNexus
 api-version: '26.1.2'
 load: POSTWORLD
 
-authors: [ @T_BanGDreamer ]
+authors: [ "T_BanGDreamer" ]
 website: https://tserver.network
