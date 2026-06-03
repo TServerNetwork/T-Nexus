@@ -10,7 +10,7 @@
 ## プロジェクト概要
 
 - **プロジェクト名:** T-Nexus
-- **種別:** Minecraft Paper 26.1.2 プラグイン（Java 25）
+- **種別:** Minecraft Paper 26.1.2 プラグイン（Java 26）
 - **役割:** TServerNetwork（生活経済サーバー）の根幹フロントエンドプラグイン
 - **バックエンド連携:** Vault（Economy）、LuckPerms（権限）、FAWE（WorldEdit）、Multiverse-Core（マルチワールド）
 

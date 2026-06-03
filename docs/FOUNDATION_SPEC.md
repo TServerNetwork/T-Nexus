@@ -15,7 +15,7 @@
 | サーバー名 | **TServerNetwork** |
 | サーバージャンル | 生活/経済系 |
 | MCバージョン | **26.1.2**（Java Edition, Tiny Takeover） |
-| Java バージョン | **Java 25**（LTS, 26.1必須） |
+| Java バージョン | **Java 26**（LTS, 26.1必須） |
 | 想定規模 | 〜30人（小規模コミュニティ） |
 | ホスティング | 自宅サーバー → 人数増加時にレンタルVPSへ移行 |
 
@@ -84,7 +84,7 @@ Vault APIをフロントエンドの抽象レイヤーとして使用する。�
 ## 5. 技術スタック
 
 ```
-言語:           Java（Java 25）
+言語:           Java（Java 26）
 サーバー:        Paper 26.1.2
 ビルドツール:     Gradle (Kotlin DSL)
 DB:             MySQL / MariaDB
@@ -121,7 +121,7 @@ IDE（補助）:     IntelliJ IDEA 等（初期セットアップ、依存管理
 - `build.gradle.kts`（Kotlin DSL）
 - shadowJar でプラグインjarにDB driverなど必要な依存を同梱
 - Paper公式のpaper-pluginテンプレート準拠
-- Java 25 toolchain 指定
+- Java 26 toolchain 指定
 
 ### DB 設計方針
 
