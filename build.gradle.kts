@@ -1,5 +1,6 @@
 plugins {
     id("java-library")
+    id("com.gradleup.shadow") version "9.2.2"
     id("xyz.jpenilla.run-paper") version "3.0.2"
 }
 
@@ -17,6 +18,10 @@ java {
 }
 
 tasks {
+    assemble {
+        dependsOn(shadowJar)
+    }
+
     runServer {
         // Configure the Minecraft version for our task.
         // This is the only required configuration besides applying the plugin.
@@ -30,5 +35,13 @@ tasks {
         filesMatching("paper-plugin.yml") {
             expand(props)
         }
+    }
+
+    shadowJar {
+        archiveClassifier.set("")
+    }
+
+    jar {
+        enabled = false
     }
 }

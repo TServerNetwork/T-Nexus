@@ -9,7 +9,7 @@
 ## プロジェクト概要
 
 - **プロジェクト名:** T-Nexus
-- **種別:** Minecraft Paper 26.1.2 プラグイン（Java 25）
+- **種別:** Minecraft Paper 26.1.2 プラグイン（Java 26）
 - **役割:** TServerNetwork（生活経済サーバー）の根幹フロントエンドプラグイン
 - **バックエンド連携:** Vault（Economy）、LuckPerms（権限）、FAWE（WorldEdit）、Multiverse-Core（マルチワールド）
 
@@ -170,6 +170,32 @@ Closes #{Issue番号}
 
 # クリーンビルド
 ./gradlew clean build
+```
+
+---
+
+## 開発環境の注意事項（Windows）
+
+### PowerShell でのファイル出力と文字化け
+
+日本語を含むファイル（PR本文、Issue本文、設定ファイル等）をPowerShellで作成する際、エンコーディングに注意すること。
+
+**問題:** `Set-Content` のデフォルトエンコーディングはPowerShellバージョンとOSロケールに依存し、UTF-16 LEやBOM付きUTF-8になる場合がある。これがGitHub CLIやGitに渡されると文字化けする。
+
+**安全な方法:**
+```powershell
+# .NET の UTF8Encoding($false) で BOM なし UTF-8 を確実に出力
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText("body.md", $content, $utf8NoBom)
+
+# その後 gh コマンドで使用
+gh pr create --body-file body.md
+```
+
+**避けるべき方法:**
+```powershell
+# BOM が付く可能性がある（環境依存）
+Set-Content -Path body.md -Value $content -Encoding utf8
 ```
 
 ---
