@@ -2,8 +2,8 @@ name: Build
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
+    tags: ['v*']
     paths:
       - '.github/workflows/build.yml'
       - 'build.gradle.kts'
@@ -14,8 +14,7 @@ on:
       - 'gradlew.bat'
       - 'src/**'
   pull_request:
-    branches:
-      - master
+    branches: [master]
     paths:
       - '.github/workflows/build.yml'
       - 'build.gradle.kts'
@@ -43,16 +42,30 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Determine build version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            version="0.1.0-SNAPSHOT+pr${{ github.event.pull_request.number }}"
+          else
+            version="0.1.0-SNAPSHOT+${GITHUB_SHA::7}"
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
       - name: Build and test
-        run: ./gradlew build
+        run: ./gradlew build -Pversion=${{ steps.version.outputs.version }}
 
       - name: Create plugin jar
-        run: ./gradlew shadowJar
+        run: ./gradlew shadowJar -Pversion=${{ steps.version.outputs.version }}
 
       - name: Upload plugin artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
-          name: T-Nexus-plugin
+          name: T-Nexus-${{ steps.version.outputs.version }}
           path: build/libs/T-Nexus-*.jar
           retention-days: 30
