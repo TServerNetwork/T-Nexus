@@ -4,9 +4,27 @@ on:
   push:
     branches:
       - master
+    paths:
+      - '.github/workflows/build.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'src/**'
   pull_request:
     branches:
       - master
+    paths:
+      - '.github/workflows/build.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'src/**'
 
 jobs:
   build:
