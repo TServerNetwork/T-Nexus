@@ -57,7 +57,9 @@ class CommandManagerTest {
         assertEquals("§8[§6T-Nexus§8] §e/tnexus version §7- Show plugin version", player.nextMessage());
 
         assertTrue(this.server.dispatchCommand(player, "tnexus version"));
-        assertEquals("§8[§6T-Nexus§8] §aT-Nexus version: §f0.1.0", player.nextMessage());
+        assertEquals(
+                "§8[§6T-Nexus§8] §aT-Nexus version: §f" + plugin.getPluginMeta().getVersion(),
+                player.nextMessage());
     }
 
     @Test
