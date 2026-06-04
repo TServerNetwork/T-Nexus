@@ -27,8 +27,7 @@
       {
         "assets": [
           {
-            "path": "build/libs/T-Nexus-*.jar",
-            "label": "T-Nexus Plugin"
+            "path": "build/libs/T-Nexus-*.jar"
           }
         ]
       }
