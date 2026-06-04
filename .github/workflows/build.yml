@@ -13,17 +13,6 @@ on:
       - 'gradlew'
       - 'gradlew.bat'
       - 'src/**'
-  pull_request:
-    branches: [master]
-    paths:
-      - '.github/workflows/build.yml'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradle/**'
-      - 'gradlew'
-      - 'gradlew.bat'
-      - 'src/**'
 
 permissions:
   contents: write
@@ -71,10 +60,6 @@ jobs:
             version="${base_version}dev-${short_sha}-b${build_number}"
             release_tag="${version}"
             prerelease="true"
-          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            version="${base_version}-SNAPSHOT+pr${{ github.event.pull_request.number }}"
-            release_tag=""
-            prerelease="false"
           else
             version="${base_version}-SNAPSHOT+${short_sha}"
             release_tag=""
