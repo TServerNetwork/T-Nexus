@@ -86,9 +86,6 @@ jobs:
       - name: Build and test
         run: ./gradlew build -Pversion=${{ steps.version.outputs.version }}
 
-      - name: Create plugin jar
-        run: ./gradlew shadowJar -Pversion=${{ steps.version.outputs.version }}
-
       - name: Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
