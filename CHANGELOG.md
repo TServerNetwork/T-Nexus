@@ -1,3 +1,10 @@
+## [0.1.4](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.3...v0.1.4) (2026-06-04)
+
+
+### Bug Fixes
+
+* **ci:** remove duplicate jar upload and show filename in release ([9c6ae98](https://github.com/TServerNetwork/T-Nexus/commit/9c6ae98309c14d32bd8c7b43ebf14cf6d97d754d))
+
 ## [0.1.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.2...v0.1.3) (2026-06-04)
 
 
