@@ -1,3 +1,10 @@
+## [0.1.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.1...v0.1.2) (2026-06-04)
+
+
+### Bug Fixes
+
+* **ci:** attach jar artifact to semantic-release GitHub Release ([6c9d430](https://github.com/TServerNetwork/T-Nexus/commit/6c9d430f2924d6cf762574a35fbba1e22a0aeb83))
+
 ## [0.1.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.0...v0.1.1) (2026-06-04)
 
 
