@@ -25,6 +25,9 @@ on:
       - 'gradlew.bat'
       - 'src/**'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,15 +49,37 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          base_version="$(grep '^version=' gradle.properties | cut -d= -f2-)"
+          short_sha="${GITHUB_SHA::7}"
+          build_number="${GITHUB_RUN_NUMBER}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/v*-beta ]]; then
+            tagged_version="${GITHUB_REF_NAME#v}"
+            base_version="${tagged_version%-beta}"
+            version="${base_version}b-${short_sha}-b${build_number}"
+            release_tag="${version}"
+            prerelease="true"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
+            release_tag="${version}"
+            prerelease="false"
+          elif [[ "${GITHUB_REF}" == refs/heads/master ]]; then
+            version="${base_version}a-${short_sha}-b${build_number}"
+            release_tag="${version}"
+            prerelease="true"
           elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            version="0.1.0-SNAPSHOT+pr${{ github.event.pull_request.number }}"
+            version="${base_version}-SNAPSHOT+pr${{ github.event.pull_request.number }}"
+            release_tag=""
+            prerelease="false"
           else
-            version="0.1.0-SNAPSHOT+${GITHUB_SHA::7}"
+            version="${base_version}-SNAPSHOT+${short_sha}"
+            release_tag=""
+            prerelease="false"
           fi
 
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and test
         run: ./gradlew build -Pversion=${{ steps.version.outputs.version }}
@@ -62,10 +87,14 @@ jobs:
       - name: Create plugin jar
         run: ./gradlew shadowJar -Pversion=${{ steps.version.outputs.version }}
 
-      - name: Upload plugin artifact
+      - name: Publish GitHub Release
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v2
         with:
-          name: T-Nexus-${{ steps.version.outputs.version }}
-          path: build/libs/T-Nexus-*.jar
-          retention-days: 30
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: ${{ steps.version.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: build/libs/T-Nexus-*.jar
