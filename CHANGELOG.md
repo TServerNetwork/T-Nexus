@@ -1,3 +1,10 @@
+## [0.1.5](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.4...v0.1.5) (2026-06-04)
+
+
+### Bug Fixes
+
+* **ci:** clean before shadowJar in semantic-release prepare to ensure correct version ([0ce716f](https://github.com/TServerNetwork/T-Nexus/commit/0ce716f027bfd5aae7d8467d9c49f6c879df95f7))
+
 ## [0.1.4](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.3...v0.1.4) (2026-06-04)
 
 
