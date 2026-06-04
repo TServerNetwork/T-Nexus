@@ -11,6 +11,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public final class ConfigManager {
 
+    private static final String DATABASE_PATH = "tnexus.database";
+
     private final JavaPlugin plugin;
     private FileConfiguration configuration;
 
@@ -155,5 +157,54 @@ public final class ConfigManager {
      */
     public ConfigurationSection getSection(String path) {
         return this.configuration.getConfigurationSection(path);
+    }
+
+    /**
+     * Returns the database connection settings.
+     *
+     * @return database settings
+     */
+    public DatabaseSettings getDatabaseSettings() {
+        ConfigurationSection section = getSection(DATABASE_PATH);
+        if (section == null) {
+            throw new IllegalStateException("Missing tnexus.database configuration section");
+        }
+
+        return new DatabaseSettings(
+                section.getString("host", "localhost"),
+                section.getInt("port", 3306),
+                section.getString("name", "tnexus"),
+                section.getString("username", "root"),
+                section.getString("password", ""),
+                section.getString("table-prefix", "tnexus_"),
+                section.getInt("pool-size", 10),
+                section.getString("jdbc-url"),
+                section.getString("driver-class-name")
+        );
+    }
+
+    /**
+     * Immutable database configuration values.
+     *
+     * @param host database host
+     * @param port database port
+     * @param name database name
+     * @param username database username
+     * @param password database password
+     * @param tablePrefix table prefix
+     * @param poolSize connection pool size
+     * @param jdbcUrl optional JDBC URL override
+     * @param driverClassName optional JDBC driver class name
+     */
+    public record DatabaseSettings(
+            String host,
+            int port,
+            String name,
+            String username,
+            String password,
+            String tablePrefix,
+            int poolSize,
+            String jdbcUrl,
+            String driverClassName) {
     }
 }

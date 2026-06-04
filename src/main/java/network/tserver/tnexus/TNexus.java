@@ -3,6 +3,7 @@ package network.tserver.tnexus;
 import java.util.logging.Logger;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
+import network.tserver.tnexus.database.DatabaseManager;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -13,19 +14,26 @@ public class TNexus extends JavaPlugin {
 
     private ConfigManager configManager;
     private MessageConfig messageConfig;
+    private DatabaseManager databaseManager;
 
     @Override
     public void onEnable() {
         this.configManager = new ConfigManager(this);
         this.messageConfig = new MessageConfig(this, this.configManager);
+        this.databaseManager = new DatabaseManager(this, this.configManager);
+        this.databaseManager.initialize();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
     }
 
     @Override
     public void onDisable() {
+        if (this.databaseManager != null) {
+            this.databaseManager.shutdown();
+        }
         if (this.messageConfig != null) {
             logMessage(this.messageConfig.getMessage("general.plugin-disabled"));
         }
+        this.databaseManager = null;
         this.messageConfig = null;
         this.configManager = null;
     }
@@ -46,6 +54,15 @@ public class TNexus extends JavaPlugin {
      */
     public MessageConfig getMessageConfig() {
         return this.messageConfig;
+    }
+
+    /**
+     * Returns the database manager instance.
+     *
+     * @return database manager
+     */
+    public DatabaseManager getDatabaseManager() {
+        return this.databaseManager;
     }
 
     private void logMessage(String message) {

@@ -31,6 +31,7 @@ class ConfigManagerTest {
         assertEquals(3306, configManager.getInt("tnexus.database.port"));
         assertEquals(1000.0D, configManager.getDouble("tnexus.economy.starting-balance"));
         assertTrue(configManager.getBoolean("tnexus.missing-flag", true));
+        assertEquals("tnexus_", configManager.getDatabaseSettings().tablePrefix());
 
         ConfigurationSection section = configManager.getSection("tnexus.database");
         assertNotNull(section);
