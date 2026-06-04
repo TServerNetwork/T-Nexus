@@ -1,6 +1,7 @@
 package network.tserver.tnexus.config;
 
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.configuration.ConfigurationSection;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
@@ -22,8 +23,8 @@ class ConfigManagerTest {
 
     @Test
     void shouldCreateDefaultConfigAndExposeTypedValues() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         ConfigManager configManager = plugin.getConfigManager();
 
         assertTrue(plugin.getDataFolder().toPath().resolve("config.yml").toFile().exists());

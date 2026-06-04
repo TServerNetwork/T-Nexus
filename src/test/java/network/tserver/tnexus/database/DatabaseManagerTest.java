@@ -6,6 +6,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.junit.jupiter.api.AfterEach;
@@ -101,8 +102,8 @@ class DatabaseManagerTest {
     }
 
     private TNexus loadPlugin() {
-        this.server = MockBukkit.mock();
-        return MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
     }
 
     private DatabaseManager createH2DatabaseManager(TNexus plugin, String databaseName) {
