@@ -16,5 +16,19 @@ tnexus:
   gui:
     main-menu-title: "&6&lT-Nexus メニュー"
     items-per-page: 45
+    header-item: "BLACK_STAINED_GLASS_PANE"
     border-item: "GRAY_STAINED_GLASS_PANE"
+    click-cooldown-millis: 200
+    prev-page-slot: 45
+    back-button-slot: 48
+    close-button-slot: 49
+    current-location-slot: 50
+    next-page-slot: 53
+    pager-textures:
+      previous:
+        enabled: "REPLACE_PREVIOUS_ENABLED_TEXTURE"
+        disabled: "REPLACE_PREVIOUS_DISABLED_TEXTURE"
+      next:
+        enabled: "REPLACE_NEXT_ENABLED_TEXTURE"
+        disabled: "REPLACE_NEXT_DISABLED_TEXTURE"
   locale: "ja_JP"

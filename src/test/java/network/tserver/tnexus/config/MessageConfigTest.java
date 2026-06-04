@@ -4,11 +4,11 @@ import java.io.File;
 import java.io.IOException;
 import network.tserver.tnexus.TNexus;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,6 +37,7 @@ class MessageConfigTest {
 
         assertEquals("§e残高: ¥2500", messageConfig.getMessage("general.balance", "¥", 2500));
         assertEquals("missing.key", messageConfig.getMessage("missing.key"));
+        assertEquals("§e次のページ", messageConfig.getMessage("gui.navigation.next.enabled.name"));
     }
 
     @Test
