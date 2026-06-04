@@ -6,9 +6,13 @@ on:
     tags: ['v*']
     paths:
       - '.github/workflows/build.yml'
+      - '.releaserc.json'
       - 'build.gradle.kts'
+      - 'package.json'
+      - 'package-lock.json'
       - 'settings.gradle.kts'
       - 'gradle.properties'
+      - 'CHANGELOG.md'
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
@@ -33,6 +37,15 @@ jobs:
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install release dependencies
+        run: npm ci
 
       - name: Determine build version
         id: version
@@ -76,12 +89,8 @@ jobs:
       - name: Create plugin jar
         run: ./gradlew shadowJar -Pversion=${{ steps.version.outputs.version }}
 
-      - name: Create GitHub Release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.release_name }}
-          files: build/libs/T-Nexus-*.jar
-          prerelease: ${{ steps.version.outputs.prerelease }}
-          generate_release_notes: true
+      - name: Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
