@@ -9,7 +9,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "sed -i 's/^version=.*/version=${nextRelease.version}/' gradle.properties && ./gradlew shadowJar -Pversion=${nextRelease.version}"
+        "prepareCmd": "sed -i 's/^version=.*/version=${nextRelease.version}/' gradle.properties && ./gradlew clean shadowJar -Pversion=${nextRelease.version}"
       }
     ],
     [
