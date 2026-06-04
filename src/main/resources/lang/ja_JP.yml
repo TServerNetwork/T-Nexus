@@ -1,0 +1,8 @@
+prefix: "&8[&6T-Nexus&8] "
+general:
+  plugin-enabled: "&aT-Nexus が有効になりました"
+  plugin-disabled: "&cT-Nexus が無効になりました"
+  no-permission: "&cこの操作を行う権限がありません"
+  player-only: "&cこのコマンドはプレイヤーのみ実行できます"
+  reload-success: "&a設定をリロードしました"
+  unknown-command: "&c不明なコマンドです。/tnexus help を参照してください"
