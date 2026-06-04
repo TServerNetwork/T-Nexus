@@ -1,3 +1,10 @@
+## [0.1.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.2...v0.1.3) (2026-06-04)
+
+
+### Bug Fixes
+
+* **ci:** build jar with correct version in semantic-release prepare phase ([1f3c233](https://github.com/TServerNetwork/T-Nexus/commit/1f3c23396b0f1ad62c91336b2c7125b0efc0b19e))
+
 ## [0.1.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.1...v0.1.2) (2026-06-04)
 
 
