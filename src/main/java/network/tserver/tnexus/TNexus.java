@@ -1,6 +1,7 @@
 package network.tserver.tnexus;
 
 import java.util.logging.Logger;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import network.tserver.tnexus.command.CommandManager;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
@@ -27,7 +28,9 @@ public class TNexus extends JavaPlugin {
         this.databaseManager = new DatabaseManager(this, this.configManager);
         this.guiManager = new GuiManager(this);
         this.commandManager = new CommandManager(this);
-        this.commandManager.register();
+        this.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            this.commandManager.registerCommands(event.registrar());
+        });
         this.databaseManager.initialize();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
     }

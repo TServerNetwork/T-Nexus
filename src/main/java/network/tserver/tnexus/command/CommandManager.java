@@ -1,6 +1,10 @@
 package network.tserver.tnexus.command;
 
+import io.papermc.paper.command.brigadier.BasicCommand;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -12,7 +16,6 @@ import network.tserver.tnexus.command.subcommand.ReloadCommand;
 import network.tserver.tnexus.command.subcommand.VersionCommand;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -20,7 +23,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Registers and dispatches the main /tnexus command tree.
  */
-public final class CommandManager implements TabExecutor {
+public final class CommandManager {
+
+    private static final String COMMAND_NAME = "tnexus";
+    private static final String COMMAND_DESCRIPTION = "T-Nexus main command";
+    private static final List<String> COMMAND_ALIASES = List.of("tn", "nexus");
 
     private final TNexus plugin;
     private final BaseCommand rootCommand;
@@ -41,23 +48,35 @@ public final class CommandManager implements TabExecutor {
     }
 
     /**
-     * Registers the plugin command executor and tab completer.
+     * Registers the plugin command and tab completions with Paper's lifecycle API.
      *
-     * @throws IllegalStateException when the tnexus command is missing
+     * @param commands Paper commands registrar
      */
-    public void register() {
-        org.bukkit.command.PluginCommand command = this.plugin.getCommand("tnexus");
-        if (command == null) {
-            throw new IllegalStateException("Command 'tnexus' is not defined in paper-plugin.yml");
-        }
-        command.setExecutor(this);
-        command.setTabCompleter(this);
+    public void registerCommands(Commands commands) {
+        commands.register(COMMAND_NAME, COMMAND_DESCRIPTION, COMMAND_ALIASES, new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onCommand(
+                        commandSourceStack.getSender(),
+                        null,
+                        COMMAND_NAME,
+                        args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onTabComplete(
+                        commandSourceStack.getSender(),
+                        null,
+                        COMMAND_NAME,
+                        args);
+            }
+        });
     }
 
-    @Override
     public boolean onCommand(
             @NotNull CommandSender sender,
-            @NotNull Command command,
+            @Nullable Command command,
             @NotNull String label,
             @NotNull String[] args) {
         if (args.length == 0) {
@@ -72,10 +91,9 @@ public final class CommandManager implements TabExecutor {
         return executeCommand(sender, subcommand, sliceArgs(args));
     }
 
-    @Override
     public @Nullable List<String> onTabComplete(
             @NotNull CommandSender sender,
-            @NotNull Command command,
+            @Nullable Command command,
             @NotNull String alias,
             @NotNull String[] args) {
         if (args.length <= 1) {
