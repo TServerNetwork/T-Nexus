@@ -18,6 +18,7 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,6 +126,23 @@ class CommandManagerTest {
                 "tnexus",
                 new String[] {"r"});
         assertIterableEquals(List.of("reload"), adminCompletions);
+    }
+
+    @Test
+    void shouldSuppressPermissionMessageDuringTabCompletion() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock player = this.server.addPlayer();
+        player.addAttachment(plugin, "tnexus.use", true);
+
+        List<String> completions = plugin.getCommandManager().onTabComplete(
+                player,
+                TEST_COMMAND,
+                "tnexus",
+                new String[] {"r"});
+
+        assertIterableEquals(List.of(), completions);
+        assertNull(player.nextMessage());
     }
 
     private void updateReloadSuccessMessage(TNexus plugin, String message) throws IOException {

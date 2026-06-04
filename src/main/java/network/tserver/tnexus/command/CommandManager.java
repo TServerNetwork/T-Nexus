@@ -100,7 +100,7 @@ public final class CommandManager {
             String input = args.length == 0 ? "" : normalize(args[0]);
             List<String> completions = new ArrayList<>();
             for (BaseCommand subcommand : this.subcommands.values()) {
-                if (!canUse(sender, subcommand)) {
+                if (!canTabComplete(sender, subcommand)) {
                     continue;
                 }
                 if (subcommand.getName().startsWith(input)) {
@@ -111,7 +111,7 @@ public final class CommandManager {
         }
 
         BaseCommand subcommand = this.subcommands.get(normalize(args[0]));
-        if (subcommand == null || !canUse(sender, subcommand)) {
+        if (subcommand == null || !canTabComplete(sender, subcommand)) {
             return List.of();
         }
         return subcommand.getTabCompletions(sender, sliceArgs(args));
@@ -140,6 +140,15 @@ public final class CommandManager {
             return false;
         }
         return true;
+    }
+
+    private boolean canTabComplete(CommandSender sender, BaseCommand command) {
+        String permission = command.getPermission();
+        if (permission != null && !permission.isBlank() && !sender.hasPermission(permission)) {
+            return false;
+        }
+
+        return !command.isPlayerOnly() || sender instanceof Player;
     }
 
     private String[] sliceArgs(String[] args) {
