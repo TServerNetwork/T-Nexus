@@ -7,6 +7,7 @@ import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
 import network.tserver.tnexus.gui.GuiManager;
+import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PluginHookManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
 import network.tserver.tnexus.manager.hook.LuckPermsHook;
@@ -26,6 +27,7 @@ public class TNexus extends JavaPlugin {
     private GuiManager guiManager;
     private CommandManager commandManager;
     private PluginHookManager pluginHookManager;
+    private EconomyManager economyManager;
 
     @Override
     public void onEnable() {
@@ -36,6 +38,14 @@ public class TNexus extends JavaPlugin {
 
         if (!this.pluginHookManager.hookAll()) {
             logSevere(this.messageConfig.getMessage("general.required-plugin-missing"));
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        try {
+            this.economyManager = createEconomyManager();
+        } catch (IllegalStateException exception) {
+            logSevere(this.messageConfig.getMessage("hook.failed", "Vault Economy provider"));
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -66,6 +76,7 @@ public class TNexus extends JavaPlugin {
         this.guiManager = null;
         this.commandManager = null;
         this.pluginHookManager = null;
+        this.economyManager = null;
     }
 
     /**
@@ -123,6 +134,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the economy manager instance.
+     *
+     * @return economy manager
+     */
+    public EconomyManager getEconomyManager() {
+        return this.economyManager;
+    }
+
+    /**
      * Creates the plugin hook manager used during startup.
      *
      * @return plugin hook manager
@@ -150,6 +170,15 @@ public class TNexus extends JavaPlugin {
      */
     protected DatabaseManager createDatabaseManager() {
         return new DatabaseManager(this, this.configManager);
+    }
+
+    /**
+     * Creates the economy manager used during startup.
+     *
+     * @return economy manager
+     */
+    protected EconomyManager createEconomyManager() {
+        return new EconomyManager(this);
     }
 
     /**

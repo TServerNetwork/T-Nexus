@@ -9,13 +9,16 @@ version = providers.gradleProperty("version").getOrElse(version.toString())
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://jitpack.io")
 }
 
 dependencies {
     implementation("com.zaxxer:HikariCP:7.0.2")
     runtimeOnly("com.mysql:mysql-connector-j:9.5.0")
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
+    compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     testImplementation("io.papermc.paper:paper-api:26.1.2.build.+")
+    testImplementation("com.github.MilkBowl:VaultAPI:1.7.1")
     testImplementation("com.h2database:h2:2.4.240")
     testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
