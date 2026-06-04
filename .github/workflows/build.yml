@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [master]
+    branches: ['**']
     tags: ['v*']
     paths:
       - '.github/workflows/build.yml'
@@ -65,6 +65,10 @@ jobs:
             prerelease="false"
           elif [[ "${GITHUB_REF}" == refs/heads/master ]]; then
             version="${base_version}a-${short_sha}-b${build_number}"
+            release_tag="${version}"
+            prerelease="true"
+          elif [[ "${GITHUB_REF}" == refs/heads/* ]]; then
+            version="${base_version}dev-${short_sha}-b${build_number}"
             release_tag="${version}"
             prerelease="true"
           elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
