@@ -123,6 +123,15 @@ public abstract class BaseGui implements InventoryHolder {
     }
 
     /**
+     * Returns the owning plugin instance.
+     *
+     * @return plugin instance
+     */
+    protected final TNexus getPlugin() {
+        return this.plugin;
+    }
+
+    /**
      * Rebuilds the content area for the current page.
      */
     protected abstract void buildContent();

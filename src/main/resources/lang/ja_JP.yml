@@ -6,7 +6,20 @@ general:
   player-only: "&cこのコマンドはプレイヤーのみ実行できます"
   reload-success: "&a設定をリロードしました"
   unknown-command: "&c不明なコマンドです。/tnexus help を確認してください"
+command:
+  help:
+    header: "&6T-Nexus Commands"
+    menu: "&e/tnexus &7- Open the main menu"
+    help: "&e/tnexus help &7- Show command help"
+    reload: "&e/tnexus reload &7- Reload config and messages"
+    version: "&e/tnexus version &7- Show plugin version"
+  version:
+    info: "&aT-Nexus version: &f{0}"
 gui:
+  main-menu:
+    stub:
+      name: "&6Main Menu"
+      lore: "&7BaseGui stub for Issue #5"
   navigation:
     previous:
       enabled:
