@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.List;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.ConsoleCommandSender;
@@ -32,8 +33,8 @@ class CommandManagerTest {
 
     @Test
     void shouldOpenMainMenuForPlayers() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         player.addAttachment(plugin, "tnexus.use", true);
 
@@ -46,8 +47,8 @@ class CommandManagerTest {
 
     @Test
     void shouldShowHelpAndVersionMessages() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         player.addAttachment(plugin, "tnexus.use", true);
 
@@ -66,8 +67,8 @@ class CommandManagerTest {
 
     @Test
     void shouldReloadConfigAndMessagesForAdmins() throws IOException {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         player.addAttachment(plugin, "tnexus.use", true);
         player.addAttachment(plugin, "tnexus.admin", true);
@@ -84,8 +85,8 @@ class CommandManagerTest {
 
     @Test
     void shouldEnforcePermissionsAndPlayerOnlyChecks() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         ConsoleCommandSender console = this.server.getConsoleSender();
 
@@ -105,8 +106,8 @@ class CommandManagerTest {
 
     @Test
     void shouldProvideTabCompletionsForAccessibleSubcommands() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         player.addAttachment(plugin, "tnexus.use", true);
 

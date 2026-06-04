@@ -2,10 +2,16 @@ prefix: "&8[&6T-Nexus&8] "
 general:
   plugin-enabled: "&aT-Nexus を有効化しました"
   plugin-disabled: "&cT-Nexus を無効化しました"
+  required-plugin-missing: "&c必須プラグインが見つかりません。T-Nexus を無効化します。"
+  database-initialization-failed: "&cデータベースの初期化に失敗しました。T-Nexus を無効化します。"
   no-permission: "&cこの操作を行う権限がありません"
   player-only: "&cこのコマンドはプレイヤーのみ実行できます"
   reload-success: "&a設定をリロードしました"
   unknown-command: "&c不明なコマンドです。/tnexus help を確認してください"
+hook:
+  success: "&a[T-Nexus] {0} にフックしました。"
+  missing: "&c[T-Nexus] {0} が見つかりません。プラグインを無効化します。"
+  failed: "&c[T-Nexus] {0} へのフックに失敗しました。プラグインを無効化します。"
 command:
   help:
     header: "&6T-Nexus Commands"

@@ -3,6 +3,7 @@ package network.tserver.tnexus.config;
 import java.io.File;
 import java.io.IOException;
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +25,8 @@ class MessageConfigTest {
 
     @Test
     void shouldTranslateMessagesAndReplacePlaceholders() throws IOException {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         MessageConfig messageConfig = plugin.getMessageConfig();
 
         File localeFile = plugin.getDataFolder().toPath().resolve("lang").resolve("ja_JP.yml").toFile();
@@ -42,8 +43,8 @@ class MessageConfigTest {
 
     @Test
     void shouldSendPrefixedMessagesToPlayers() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
 
         plugin.getMessageConfig().sendMessage(player, "general.reload-success");

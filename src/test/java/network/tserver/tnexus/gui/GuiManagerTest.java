@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.Material;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
@@ -35,8 +36,8 @@ class GuiManagerTest {
 
     @Test
     void shouldTrackOpenGuiCancelEventsAndReleaseOnClose() {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         TestGui gui = new TestGui(plugin, player, 12);
 
@@ -72,8 +73,8 @@ class GuiManagerTest {
 
     @Test
     void shouldPaginateAndThrottleRapidNavigationClicks() throws InterruptedException {
-        this.server = MockBukkit.mock();
-        TNexus plugin = MockBukkit.load(TNexus.class);
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
         TestGui gui = new TestGui(plugin, player, 60);
 
