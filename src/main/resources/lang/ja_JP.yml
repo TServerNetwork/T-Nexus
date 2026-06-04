@@ -1,8 +1,33 @@
 prefix: "&8[&6T-Nexus&8] "
 general:
-  plugin-enabled: "&aT-Nexus が有効になりました"
-  plugin-disabled: "&cT-Nexus が無効になりました"
+  plugin-enabled: "&aT-Nexus を有効化しました"
+  plugin-disabled: "&cT-Nexus を無効化しました"
   no-permission: "&cこの操作を行う権限がありません"
   player-only: "&cこのコマンドはプレイヤーのみ実行できます"
   reload-success: "&a設定をリロードしました"
-  unknown-command: "&c不明なコマンドです。/tnexus help を参照してください"
+  unknown-command: "&c不明なコマンドです。/tnexus help を確認してください"
+gui:
+  navigation:
+    previous:
+      enabled:
+        name: "&e前のページ"
+        lore: "&7クリックで前のページへ移動"
+      disabled:
+        name: "&8前のページ"
+        lore: "&8これ以上戻れません"
+    next:
+      enabled:
+        name: "&e次のページ"
+        lore: "&7クリックで次のページへ移動"
+      disabled:
+        name: "&8次のページ"
+        lore: "&8これ以上進めません"
+    back:
+      name: "&e戻る"
+      lore: "&7前の画面に戻ります"
+    close:
+      name: "&c閉じる"
+      lore: "&7GUIを閉じます"
+    current:
+      name: "&a{0}"
+      lore: "&8現在地 &7> &a{0}"

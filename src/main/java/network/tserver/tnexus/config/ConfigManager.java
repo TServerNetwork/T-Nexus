@@ -2,6 +2,7 @@ package network.tserver.tnexus.config;
 
 import java.io.File;
 import java.io.IOException;
+import network.tserver.tnexus.gui.PagerTexture;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -12,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class ConfigManager {
 
     private static final String DATABASE_PATH = "tnexus.database";
+    private static final String GUI_PATH = "tnexus.gui";
 
     private final JavaPlugin plugin;
     private FileConfiguration configuration;
@@ -184,6 +186,52 @@ public final class ConfigManager {
     }
 
     /**
+     * Returns the GUI framework settings.
+     *
+     * @return GUI settings
+     */
+    public GuiSettings getGuiSettings() {
+        ConfigurationSection section = getSection(GUI_PATH);
+        if (section == null) {
+            throw new IllegalStateException("Missing tnexus.gui configuration section");
+        }
+
+        ConfigurationSection pagerSection = section.getConfigurationSection("pager-textures");
+        if (pagerSection == null) {
+            throw new IllegalStateException("Missing tnexus.gui.pager-textures configuration section");
+        }
+
+        return new GuiSettings(
+                section.getString("main-menu-title", "&6&lT-Nexus Menu"),
+                section.getInt("items-per-page", 45),
+                section.getString("header-item", "BLACK_STAINED_GLASS_PANE"),
+                section.getString("border-item", "GRAY_STAINED_GLASS_PANE"),
+                section.getInt("click-cooldown-millis", 200),
+                section.getInt("prev-page-slot", 45),
+                section.getInt("back-button-slot", 48),
+                section.getInt("close-button-slot", 49),
+                section.getInt("current-location-slot", 50),
+                section.getInt("next-page-slot", 53),
+                new PagerSettings(
+                        getPagerTexture(pagerSection, "previous"),
+                        getPagerTexture(pagerSection, "next")
+                )
+        );
+    }
+
+    private PagerTexture getPagerTexture(ConfigurationSection section, String key) {
+        ConfigurationSection pagerSection = section.getConfigurationSection(key);
+        if (pagerSection == null) {
+            throw new IllegalStateException("Missing tnexus.gui.pager-textures." + key + " configuration section");
+        }
+
+        return new PagerTexture(
+                pagerSection.getString("enabled", ""),
+                pagerSection.getString("disabled", "")
+        );
+    }
+
+    /**
      * Immutable database configuration values.
      *
      * @param host database host
@@ -206,5 +254,43 @@ public final class ConfigManager {
             int poolSize,
             String jdbcUrl,
             String driverClassName) {
+    }
+
+    /**
+     * Immutable GUI configuration values.
+     *
+     * @param mainMenuTitle default main menu title
+     * @param itemsPerPage configured maximum page size
+     * @param headerItem header border material name
+     * @param borderItem shared border material name
+     * @param clickCooldownMillis click cooldown duration
+     * @param prevPageSlot normalized previous-page slot
+     * @param backButtonSlot normalized back-button slot
+     * @param closeButtonSlot normalized close-button slot
+     * @param currentLocationSlot normalized current-location slot
+     * @param nextPageSlot normalized next-page slot
+     * @param pagerSettings pager head texture settings
+     */
+    public record GuiSettings(
+            String mainMenuTitle,
+            int itemsPerPage,
+            String headerItem,
+            String borderItem,
+            int clickCooldownMillis,
+            int prevPageSlot,
+            int backButtonSlot,
+            int closeButtonSlot,
+            int currentLocationSlot,
+            int nextPageSlot,
+            PagerSettings pagerSettings) {
+    }
+
+    /**
+     * Immutable pager texture configuration values.
+     *
+     * @param previous previous-page head textures
+     * @param next next-page head textures
+     */
+    public record PagerSettings(PagerTexture previous, PagerTexture next) {
     }
 }

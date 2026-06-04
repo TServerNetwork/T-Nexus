@@ -32,6 +32,11 @@ class ConfigManagerTest {
         assertEquals(1000.0D, configManager.getDouble("tnexus.economy.starting-balance"));
         assertTrue(configManager.getBoolean("tnexus.missing-flag", true));
         assertEquals("tnexus_", configManager.getDatabaseSettings().tablePrefix());
+        assertEquals("BLACK_STAINED_GLASS_PANE", configManager.getGuiSettings().headerItem());
+        assertEquals("GRAY_STAINED_GLASS_PANE", configManager.getGuiSettings().borderItem());
+        assertEquals("REPLACE_PREVIOUS_ENABLED_TEXTURE",
+                configManager.getGuiSettings().pagerSettings().previous().enabledTexture());
+        assertEquals(50, configManager.getGuiSettings().currentLocationSlot());
 
         ConfigurationSection section = configManager.getSection("tnexus.database");
         assertNotNull(section);
