@@ -7,6 +7,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.ChatColor;
+import org.bukkit.command.Command;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.AfterEach;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandManagerTest {
 
+    private static final Command TEST_COMMAND = new TestCommand();
     private ServerMock server;
 
     @AfterEach
@@ -109,11 +111,19 @@ class CommandManagerTest {
         PlayerMock player = this.server.addPlayer();
         player.addAttachment(plugin, "tnexus.use", true);
 
-        List<String> userCompletions = plugin.getCommand("tnexus").tabComplete(player, "tnexus", new String[] {""});
+        List<String> userCompletions = plugin.getCommandManager().onTabComplete(
+                player,
+                TEST_COMMAND,
+                "tnexus",
+                new String[] {""});
         assertIterableEquals(List.of("help", "version"), userCompletions);
 
         player.addAttachment(plugin, "tnexus.admin", true);
-        List<String> adminCompletions = plugin.getCommand("tnexus").tabComplete(player, "tnexus", new String[] {"r"});
+        List<String> adminCompletions = plugin.getCommandManager().onTabComplete(
+                player,
+                TEST_COMMAND,
+                "tnexus",
+                new String[] {"r"});
         assertIterableEquals(List.of("reload"), adminCompletions);
     }
 
@@ -129,5 +139,17 @@ class CommandManagerTest {
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(configFile);
         configuration.set("tnexus.gui.main-menu-title", title);
         configuration.save(configFile);
+    }
+
+    private static final class TestCommand extends Command {
+
+        private TestCommand() {
+            super("tnexus");
+        }
+
+        @Override
+        public boolean execute(org.bukkit.command.CommandSender sender, String commandLabel, String[] args) {
+            return false;
+        }
     }
 }
