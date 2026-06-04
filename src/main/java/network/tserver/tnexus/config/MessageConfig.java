@@ -3,6 +3,7 @@ package network.tserver.tnexus.config;
 import java.io.File;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -85,6 +86,17 @@ public final class MessageConfig {
      */
     public void sendMessage(Player player, String key, Object... placeholders) {
         player.sendMessage(getPrefix() + getMessage(key, placeholders));
+    }
+
+    /**
+     * Sends a prefixed translated message to any command sender.
+     *
+     * @param sender target sender
+     * @param key message key
+     * @param placeholders placeholder values
+     */
+    public void sendMessage(CommandSender sender, String key, Object... placeholders) {
+        sender.sendMessage(getPrefix() + getMessage(key, placeholders));
     }
 
     private String getPrefix() {

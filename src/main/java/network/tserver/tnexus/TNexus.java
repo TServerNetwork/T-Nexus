@@ -1,6 +1,7 @@
 package network.tserver.tnexus;
 
 import java.util.logging.Logger;
+import network.tserver.tnexus.command.CommandManager;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
@@ -17,6 +18,7 @@ public class TNexus extends JavaPlugin {
     private MessageConfig messageConfig;
     private DatabaseManager databaseManager;
     private GuiManager guiManager;
+    private CommandManager commandManager;
 
     @Override
     public void onEnable() {
@@ -24,6 +26,8 @@ public class TNexus extends JavaPlugin {
         this.messageConfig = new MessageConfig(this, this.configManager);
         this.databaseManager = new DatabaseManager(this, this.configManager);
         this.guiManager = new GuiManager(this);
+        this.commandManager = new CommandManager(this);
+        this.commandManager.register();
         this.databaseManager.initialize();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
     }
@@ -40,6 +44,7 @@ public class TNexus extends JavaPlugin {
         this.messageConfig = null;
         this.configManager = null;
         this.guiManager = null;
+        this.commandManager = null;
     }
 
     /**
@@ -76,6 +81,15 @@ public class TNexus extends JavaPlugin {
      */
     public GuiManager getGuiManager() {
         return this.guiManager;
+    }
+
+    /**
+     * Returns the command manager instance.
+     *
+     * @return command manager
+     */
+    public CommandManager getCommandManager() {
+        return this.commandManager;
     }
 
     private void logMessage(String message) {
