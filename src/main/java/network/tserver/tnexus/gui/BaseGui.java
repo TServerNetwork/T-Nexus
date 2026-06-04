@@ -387,7 +387,7 @@ public abstract class BaseGui implements InventoryHolder {
         meta.setLore(lore.stream().map(this::colorize).toList());
 
         if (textureValue != null && !textureValue.isBlank()) {
-            PlayerProfile profile = (PlayerProfile) Bukkit.createPlayerProfile(UUID.randomUUID(), "tnexus-pager");
+            PlayerProfile profile = Bukkit.createProfile(UUID.randomUUID(), "tnexus-pager");
             profile.setProperty(new ProfileProperty("textures", textureValue));
             meta.setPlayerProfile(profile);
         }
