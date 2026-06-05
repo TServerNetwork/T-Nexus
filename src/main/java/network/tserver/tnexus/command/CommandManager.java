@@ -41,6 +41,7 @@ public final class CommandManager {
     private static final String COMMAND_DESCRIPTION = "T-Nexus main command";
     private static final List<String> COMMAND_ALIASES = List.of("tn", "nexus");
     private static final String BALANCE_COMMAND_NAME = "balance";
+    private static final String BALANCE_ALIAS_COMMAND_NAME = "bal";
     private static final String PAY_COMMAND_NAME = "pay";
     private static final String SHOP_COMMAND_NAME = "shop";
     private static final String SHOPS_COMMAND_NAME = "shops";
@@ -93,12 +94,14 @@ public final class CommandManager {
             }
                 });
 
-        commands.register(BALANCE_COMMAND_NAME, "Show your balance", List.of("bal"), new BasicCommand() {
+        BasicCommand balanceCommand = new BasicCommand() {
             @Override
             public void execute(CommandSourceStack commandSourceStack, String[] args) {
                 CommandManager.this.onBalanceCommand(commandSourceStack.getSender(), args);
             }
-        });
+        };
+        commands.register(BALANCE_COMMAND_NAME, "Show your balance", List.of(BALANCE_ALIAS_COMMAND_NAME), balanceCommand);
+        commands.register(BALANCE_ALIAS_COMMAND_NAME, "Show your balance", List.of(), balanceCommand);
 
         commands.register(PAY_COMMAND_NAME, "Pay another player", List.of(), new BasicCommand() {
             @Override

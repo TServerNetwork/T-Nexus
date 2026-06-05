@@ -44,6 +44,9 @@ public final class TestPluginSupport {
               balance:
                 description: test balance command
                 usage: "/balance"
+              bal:
+                description: test balance alias command
+                usage: "/bal"
               pay:
                 description: test pay command
                 usage: "/pay <player>"

@@ -32,7 +32,9 @@ commands:
   balance:
     description: Show your balance
     usage: "/<command>"
-    aliases: [bal]
+  bal:
+    description: Show your balance
+    usage: "/<command>"
   pay:
     description: Pay another player
     usage: "/<command> <player>"

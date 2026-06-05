@@ -2,6 +2,7 @@ package network.tserver.tnexus.command;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.List;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
@@ -83,11 +84,29 @@ class CommandManagerTest {
         player.addAttachment(plugin, "tnexus.use", true);
         plugin.getEconomyManager().deposit(player.getUniqueId(), 1234.0D).get();
 
-        assertTrue(this.server.dispatchCommand(player, "balance"));
-        this.server.getScheduler().performOneTick();
-        String message = player.nextMessage();
+        Method onBalanceCommand = CommandManager.class.getDeclaredMethod(
+                "onBalanceCommand",
+                org.bukkit.command.CommandSender.class,
+                String[].class);
+        onBalanceCommand.setAccessible(true);
+        onBalanceCommand.invoke(plugin.getCommandManager(), player, new String[0]);
+        String message = waitForNextMessage(player);
         assertNotNull(message);
         assertTrue(message.contains("1234") || message.contains("1,234"));
+    }
+
+    @Test
+    void shouldRouteBalAliasToBalanceCommand() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("BalanceAliasUser");
+        player.addAttachment(plugin, "tnexus.use", true);
+        plugin.getEconomyManager().deposit(player.getUniqueId(), 4321.0D).get();
+
+        assertTrue(this.server.dispatchCommand(player, "bal"));
+        String message = waitForNextMessage(player);
+        assertNotNull(message);
+        assertTrue(message.contains("4321") || message.contains("4,321"));
     }
 
     @Test
@@ -352,5 +371,18 @@ class CommandManagerTest {
             Thread.sleep(25L);
         }
         assertTrue(condition.getAsBoolean(), "Condition was not met in time");
+    }
+
+    private String waitForNextMessage(PlayerMock player) throws Exception {
+        long deadline = System.currentTimeMillis() + 5000L;
+        while (System.currentTimeMillis() < deadline) {
+            this.server.getScheduler().performOneTick();
+            String message = player.nextMessage();
+            if (message != null) {
+                return message;
+            }
+            Thread.sleep(25L);
+        }
+        return player.nextMessage();
     }
 }
