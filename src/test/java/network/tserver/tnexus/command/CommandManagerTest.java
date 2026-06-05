@@ -20,6 +20,7 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandManagerTest {
@@ -64,6 +65,21 @@ class CommandManagerTest {
         assertEquals(
                 "§8[§6T-Nexus§8] §aT-Nexus version: §f" + plugin.getPluginMeta().getVersion(),
                 player.nextMessage());
+    }
+
+    @Test
+    void shouldShowBalanceForPlayers() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("BalanceUser");
+        player.addAttachment(plugin, "tnexus.use", true);
+        plugin.getEconomyManager().deposit(player.getUniqueId(), 1234.0D).get();
+
+        assertTrue(this.server.dispatchCommand(player, "balance"));
+        this.server.getScheduler().performOneTick();
+        String message = player.nextMessage();
+        assertNotNull(message);
+        assertTrue(message.contains("1,234"));
     }
 
     @Test

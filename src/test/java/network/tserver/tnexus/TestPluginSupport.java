@@ -33,6 +33,12 @@ public final class TestPluginSupport {
               tnexus:
                 description: test command
                 usage: "/tnexus"
+              balance:
+                description: test balance command
+                usage: "/balance"
+              pay:
+                description: test pay command
+                usage: "/pay <player>"
             """;
 
     private TestPluginSupport() {
@@ -126,6 +132,26 @@ public final class TestPluginSupport {
         @Override
         protected DatabaseManager createDatabaseManager() {
             return new ReadyDatabaseManager(this, getConfigManager());
+        }
+    }
+
+    /**
+     * Test plugin variant backed by an in-memory H2 database.
+     */
+    public static class H2TestTNexus extends TNexus {
+
+        @Override
+        protected DatabaseManager createDatabaseManager() {
+            String databaseName = "tnexus_test_" + System.nanoTime();
+            getConfigManager().getConfiguration().set(
+                    "tnexus.database.jdbc-url",
+                    "jdbc:h2:mem:%s;MODE=MySQL;DB_CLOSE_DELAY=-1".formatted(databaseName));
+            getConfigManager().getConfiguration().set("tnexus.database.driver-class-name", "org.h2.Driver");
+            getConfigManager().getConfiguration().set("tnexus.database.username", "sa");
+            getConfigManager().getConfiguration().set("tnexus.database.password", "");
+            getConfigManager().getConfiguration().set("tnexus.database.table-prefix", "tnexus_");
+            getConfigManager().getConfiguration().set("tnexus.database.pool-size", 4);
+            return new DatabaseManager(this, getConfigManager());
         }
     }
 
