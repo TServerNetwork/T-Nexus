@@ -42,6 +42,24 @@ class MessageConfigTest {
     }
 
     @Test
+    void shouldFallbackToBundledDefaultsWhenDiskLocaleMissesKeys() throws IOException {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        MessageConfig messageConfig = plugin.getMessageConfig();
+
+        File localeFile = plugin.getDataFolder().toPath().resolve("lang").resolve("ja_JP.yml").toFile();
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(localeFile);
+        configuration.set("economy.balance", null);
+        configuration.set("economy.pay", null);
+        configuration.save(localeFile);
+
+        messageConfig.reload();
+
+        assertEquals("§7Balance: §a1234", messageConfig.getMessage("economy.balance.self", 1234));
+        assertEquals("§cUsage: /pay <player>", messageConfig.getMessage("economy.pay.usage"));
+    }
+
+    @Test
     void shouldSendPrefixedMessagesToPlayers() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);

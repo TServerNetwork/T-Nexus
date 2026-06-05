@@ -1,6 +1,9 @@
 package network.tserver.tnexus.config;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.command.CommandSender;
@@ -45,7 +48,13 @@ public final class MessageConfig {
 
         saveResourceIfMissing(resourcePath);
         File file = new File(this.plugin.getDataFolder(), resourcePath);
-        this.messages = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration loadedMessages = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration defaultMessages = loadDefaultMessages(resourcePath);
+        if (defaultMessages != null) {
+            loadedMessages.setDefaults(defaultMessages);
+            loadedMessages.options().copyDefaults(true);
+        }
+        this.messages = loadedMessages;
     }
 
     /**
@@ -107,6 +116,19 @@ public final class MessageConfig {
         File file = new File(this.plugin.getDataFolder(), resourcePath);
         if (!file.exists()) {
             this.plugin.saveResource(resourcePath, false);
+        }
+    }
+
+    private YamlConfiguration loadDefaultMessages(String resourcePath) {
+        InputStream inputStream = this.plugin.getResource(resourcePath);
+        if (inputStream == null) {
+            return null;
+        }
+        try (InputStream stream = inputStream;
+             InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to load bundled locale resource: " + resourcePath, exception);
         }
     }
 }
