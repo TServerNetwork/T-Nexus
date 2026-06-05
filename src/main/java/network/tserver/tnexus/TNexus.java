@@ -13,11 +13,13 @@ import network.tserver.tnexus.gui.GuiManager;
 import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PluginHookManager;
+import network.tserver.tnexus.manager.SignShopManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
 import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
+import network.tserver.tnexus.listener.SignShopListener;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -36,6 +38,8 @@ public class TNexus extends JavaPlugin {
     private EconomyManager economyManager;
     private PaymentManager paymentManager;
     private PaymentNotificationListener paymentNotificationListener;
+    private SignShopManager signShopManager;
+    private SignShopListener signShopListener;
 
     @Override
     public void onEnable() {
@@ -69,6 +73,9 @@ public class TNexus extends JavaPlugin {
         this.anvilGuiManager = new AnvilGuiManager(this);
         this.paymentManager = createPaymentManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
+        this.signShopManager = new SignShopManager(this);
+        this.signShopListener = new SignShopListener(this, this.signShopManager);
+        this.signShopManager.initialize();
         registerCommands();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
     }
@@ -91,6 +98,8 @@ public class TNexus extends JavaPlugin {
         this.economyManager = null;
         this.paymentManager = null;
         this.paymentNotificationListener = null;
+        this.signShopManager = null;
+        this.signShopListener = null;
     }
 
     /**
@@ -172,6 +181,15 @@ public class TNexus extends JavaPlugin {
      */
     public PaymentManager getPaymentManager() {
         return this.paymentManager;
+    }
+
+    /**
+     * Returns the SignShop manager instance.
+     *
+     * @return SignShop manager
+     */
+    public SignShopManager getSignShopManager() {
+        return this.signShopManager;
     }
 
     /**

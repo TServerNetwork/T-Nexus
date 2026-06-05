@@ -1,17 +1,17 @@
 prefix: "&8[&6T-Nexus&8] "
 general:
-  plugin-enabled: "&aT-Nexus を有効化しました"
-  plugin-disabled: "&cT-Nexus を無効化しました"
-  required-plugin-missing: "&c必須プラグインが見つかりません。T-Nexus を無効化します。"
-  database-initialization-failed: "&cデータベースの初期化に失敗しました。T-Nexus を無効化します。"
-  no-permission: "&cこの操作を行う権限がありません"
-  player-only: "&cこのコマンドはプレイヤーのみ実行できます"
-  reload-success: "&a設定をリロードしました"
-  unknown-command: "&c不明なコマンドです。/tnexus help を確認してください"
+  plugin-enabled: "&aT-Nexus enabled"
+  plugin-disabled: "&cT-Nexus disabled"
+  required-plugin-missing: "&cA required plugin is missing. T-Nexus has been disabled."
+  database-initialization-failed: "&cDatabase initialization failed. T-Nexus has been disabled."
+  no-permission: "&cYou do not have permission to do that."
+  player-only: "&cThis command can only be used by players."
+  reload-success: "&aReloaded configuration and messages."
+  unknown-command: "&cUnknown command. Use /tnexus help."
 hook:
-  success: "&a[T-Nexus] {0} にフックしました。"
-  missing: "&c[T-Nexus] {0} が見つかりません。プラグインを無効化します。"
-  failed: "&c[T-Nexus] {0} へのフックに失敗しました。プラグインを無効化します。"
+  success: "&a[T-Nexus] Hooked into {0}."
+  missing: "&c[T-Nexus] Missing dependency: {0}."
+  failed: "&c[T-Nexus] Failed to hook {0}."
 command:
   help:
     header: "&6T-Nexus Commands"
@@ -23,56 +23,146 @@ command:
     info: "&aT-Nexus version: &f{0}"
 economy:
   balance:
-    self: "&7現在の残高: &a{0}"
-    usage: "&c使い方: /balance"
+    self: "&7Balance: &a{0}"
+    usage: "&cUsage: /balance"
   pay:
-    usage: "&c使い方: /pay <player>"
-    anvil-title: "&6{0} に送金"
-    target-not-found: "&cプレイヤー {0} は見つかりません"
-    confirmation: "&7{0} さんへ &a{1}&7 を送金します。よろしいですか？"
-    confirm-button: "&a[承認]"
-    confirm-hover: "&aクリックして送金を確定します"
-    cancel-button: "&c[拒否]"
-    cancel-hover: "&cクリックして送金をキャンセルします"
-    invalid-amount: "&c0より大きい有効な金額を入力してください"
-    insufficient-funds: "&c残高が不足しています"
-    sender-success: "&a{0} さんへ {1} を送金しました"
-    receiver-online: "&a{0} さんから {1} を受け取りました"
-    receiver-offline-delivery: "&a{0} さんから {1} を受け取りました"
-    cancelled: "&e送金をキャンセルしました"
-    expired: "&c送金確認の有効期限が切れました。もう一度実行してください"
-    failed: "&c送金処理に失敗しました"
+    usage: "&cUsage: /pay <player>"
+    anvil-title: "&6Pay {0}"
+    target-not-found: "&cPlayer {0} was not found."
+    confirmation: "&7Pay &a{1}&7 to {0}?"
+    confirm-button: "&a[Confirm]"
+    confirm-hover: "&aClick to confirm this payment."
+    cancel-button: "&c[Cancel]"
+    cancel-hover: "&cClick to cancel this payment."
+    invalid-amount: "&cEnter an amount greater than 0."
+    insufficient-funds: "&cYou do not have enough funds."
+    sender-success: "&aPaid {1} to {0}."
+    receiver-online: "&aReceived {1} from {0}."
+    receiver-offline-delivery: "&aReceived {1} from {0}."
+    cancelled: "&ePayment cancelled."
+    expired: "&cThat payment confirmation expired."
+    failed: "&cPayment failed."
 gui:
   main-menu:
     stub:
       name: "&6Main Menu"
       lore: "&7BaseGui stub for Issue #5"
   anvil:
-    cancelled: "&7入力をキャンセルしました"
+    cancelled: "&7Input cancelled."
     number:
       placeholder: "0"
-      invalid: "&c数値を入力してください"
+      invalid: "&cEnter a valid number."
   navigation:
     previous:
       enabled:
-        name: "&e前のページ"
-        lore: "&7クリックで前のページへ移動"
+        name: "&ePrevious Page"
+        lore: "&7Go to the previous page."
       disabled:
-        name: "&8前のページ"
-        lore: "&8これ以上戻れません"
+        name: "&8Previous Page"
+        lore: "&8There is no previous page."
     next:
       enabled:
-        name: "&e次のページ"
-        lore: "&7クリックで次のページへ移動"
+        name: "&eNext Page"
+        lore: "&7Go to the next page."
       disabled:
-        name: "&8次のページ"
-        lore: "&8これ以上進めません"
+        name: "&8Next Page"
+        lore: "&8There is no next page."
     back:
-      name: "&e戻る"
-      lore: "&7前の画面に戻ります"
+      name: "&eBack"
+      lore: "&7Return to the previous screen."
     close:
-      name: "&c閉じる"
-      lore: "&7GUIを閉じます"
+      name: "&cClose"
+      lore: "&7Close this GUI."
     current:
       name: "&a{0}"
-      lore: "&8現在地 &7> &a{0}"
+      lore: "&8Current &7> &a{0}"
+shop:
+  command:
+    usage: "&cUsage: /shop link"
+  create:
+    success: "&aSignShop created."
+    server-requires-chest: "&cServerShop requires an adjacent chest with an item."
+    banned-material: "&c{0} cannot be sold in a SignShop."
+  sign:
+    direct-edit-blocked: "&cEdit SignShop text from the edit GUI."
+  break:
+    denied: "&cOnly the owner or tnexus.shop.admin may break this shop."
+  link:
+    mode-started: "&eLink mode started. Right-click a shop sign, then right-click a chest."
+    tool-name: "&eSignShop Link Tool"
+    tool-lore: "&7Right-click a player shop sign, then a chest."
+    not-player-shop: "&cOnly player shops can be linked to a chest."
+    sign-selected: "&aShop selected. Right-click a chest to finish linking."
+    select-sign-first: "&cSelect a shop sign first."
+    shop-not-found: "&cThat shop is no longer available."
+    chest-empty: "&cThe chest must contain at least one item to define the shop item."
+    success: "&aChest linked successfully."
+    failed: "&cFailed to save the chest link."
+  edit:
+    not-owner: "&cOnly the owner or tnexus.shop.admin may edit this shop."
+    price:
+      buy-title: "&6Enter buy price (0 = disabled)"
+      sell-title: "&6Enter sell price (0 = disabled)"
+      failed: "&cFailed to update prices."
+      updated: "&aPrices updated."
+    toggle:
+      failed: "&cFailed to update shop state."
+      enabled: "&aShop enabled."
+      disabled: "&8Shop disabled."
+  delete:
+    success: "&aShop deleted."
+  trade:
+    invalid-amount: "&cEnter a valid amount."
+    unavailable: "&cThis shop is currently unavailable."
+    insufficient-funds: "&cYou do not have enough funds."
+    failed: "&cThe trade failed."
+    buy-success: "&aBought {0}x {1} for {2}."
+    sell-success: "&aSold {0}x {1} for {2}."
+  gui:
+    browse:
+      title: "&6Shop"
+    edit:
+      title: "&6Edit Shop"
+      owner: "&7Owner: &f{0}"
+      status: "&7Status: &f{0}"
+      price:
+        name: "&eChange Prices"
+        lore: "&7Configure buy and sell prices."
+      toggle:
+        enabled: "&aAvailable"
+        disabled: "&8Disabled"
+        lore: "&7Toggle the shop state."
+      delete:
+        name: "&cDelete Shop"
+        lore: "&7Delete this SignShop."
+    delete:
+      title: "&cDelete Shop"
+      warning:
+        name: "&cDelete this shop?"
+        lore: "&7This cannot be undone."
+      confirm:
+        name: "&aDelete"
+        lore: "&7Permanently delete the shop."
+      cancel:
+        name: "&cCancel"
+        lore: "&7Return to the edit menu."
+    preview:
+      name: "&e{0}"
+      buy: "&7Buy: &a{0}"
+      sell: "&7Sell: &c{0}"
+      hint: "&7Left-click to buy, right-click to sell."
+    amount:
+      name: "&a{0}x"
+      buy: "&7Buy {0}: &a{1}"
+      sell: "&7Sell {0}: &c{1}"
+      hint: "&7Left-click buy / Right-click sell"
+    max:
+      name: "&aInventory Max"
+      lore: "&7Trade the maximum amount allowed right now."
+    custom:
+      name: "&eCustom Amount"
+      lore: "&7Open AnvilGUI for a manual amount."
+      title: "&6Enter amount"
+    unlinked:
+      name: "&cUnlinked Shop"
+      lore: "&7Link a chest to define the shop item."

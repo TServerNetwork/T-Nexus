@@ -41,6 +41,7 @@ public final class CommandManager {
     private static final List<String> COMMAND_ALIASES = List.of("tn", "nexus");
     private static final String BALANCE_COMMAND_NAME = "balance";
     private static final String PAY_COMMAND_NAME = "pay";
+    private static final String SHOP_COMMAND_NAME = "shop";
     private static final String USE_PERMISSION = "tnexus.use";
 
     private final TNexus plugin;
@@ -103,6 +104,18 @@ public final class CommandManager {
             @Override
             public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
                 return CommandManager.this.onPayTabComplete(commandSourceStack.getSender(), args);
+            }
+        });
+
+        commands.register(SHOP_COMMAND_NAME, "Manage sign shops", List.of(), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onShopCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onShopTabComplete(commandSourceStack.getSender(), args);
             }
         });
     }
@@ -256,6 +269,35 @@ public final class CommandManager {
                 player,
                 this.plugin.getMessageConfig().getMessage("economy.pay.anvil-title", targetName),
                 amount -> queuePayment(player, target, amount));
+    }
+
+    private void onShopCommand(CommandSender sender, String[] args) {
+        if (!this.plugin.getSignShopManager().canUseShops(sender)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return;
+        }
+        if (!(sender instanceof Player player)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
+            return;
+        }
+        if (args.length != 1 || !"link".equalsIgnoreCase(args[0])) {
+            this.plugin.getMessageConfig().sendMessage(sender, "shop.command.usage");
+            return;
+        }
+        this.plugin.getSignShopManager().beginLinkMode(player);
+    }
+
+    private Collection<String> onShopTabComplete(CommandSender sender, String[] args) {
+        if (!this.plugin.getSignShopManager().canUseShops(sender)) {
+            return List.of();
+        }
+        if (args.length <= 1) {
+            String input = args.length == 0 ? "" : normalize(args[0]);
+            return List.of("link").stream()
+                    .filter(option -> option.startsWith(input))
+                    .toList();
+        }
+        return List.of();
     }
 
     private Collection<String> onPayTabComplete(CommandSender sender, String[] args) {
