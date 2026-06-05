@@ -31,14 +31,14 @@ class MessageConfigTest {
 
         File localeFile = plugin.getDataFolder().toPath().resolve("lang").resolve("ja_JP.yml").toFile();
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(localeFile);
-        configuration.set("general.balance", "&eBalance: {0}{1}");
+        configuration.set("general.balance", "&e残高: {0}{1}");
         configuration.save(localeFile);
 
         messageConfig.reload();
 
-        assertEquals("§eBalance: $2500", messageConfig.getMessage("general.balance", "$", 2500));
+        assertEquals("§e残高: $2500", messageConfig.getMessage("general.balance", "$", 2500));
         assertEquals("missing.key", messageConfig.getMessage("missing.key"));
-        assertEquals("§eNext Page", messageConfig.getMessage("gui.navigation.next.enabled.name"));
+        assertEquals("§e次のページ", messageConfig.getMessage("gui.navigation.next.enabled.name"));
     }
 
     @Test
@@ -55,8 +55,8 @@ class MessageConfigTest {
 
         messageConfig.reload();
 
-        assertEquals("§7Balance: §a1234", messageConfig.getMessage("economy.balance.self", 1234));
-        assertEquals("§cUsage: /pay <player>", messageConfig.getMessage("economy.pay.usage"));
+        assertEquals("§7所持金: §a1234", messageConfig.getMessage("economy.balance.self", 1234));
+        assertEquals("§c使い方: /pay <player>", messageConfig.getMessage("economy.pay.usage"));
     }
 
     @Test
@@ -68,7 +68,7 @@ class MessageConfigTest {
         plugin.getMessageConfig().sendMessage(player, "general.reload-success");
 
         String message = player.nextMessage();
-        assertEquals("§8[§6T-Nexus§8] §aReloaded configuration and messages.", message);
+        assertEquals("§8[§6T-Nexus§8] §a設定ファイルとメッセージを再読み込みしました。", message);
         assertTrue(message.startsWith("§8[§6T-Nexus§8] "));
     }
 }

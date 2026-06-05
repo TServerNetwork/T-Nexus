@@ -67,8 +67,8 @@ class SignShopBrowseGuiTest {
         assertEquals(Material.NAME_TAG, infoItem.getType());
         ItemMeta infoMeta = infoItem.getItemMeta();
         assertNotNull(infoMeta);
-        assertTrue(infoMeta.getLore().stream().anyMatch(line -> line.contains("Buy Price:")));
-        assertTrue(infoMeta.getLore().stream().anyMatch(line -> line.contains("Sell Capacity:")));
+        assertTrue(infoMeta.getLore().stream().anyMatch(line -> line.contains("購入単価:")));
+        assertTrue(infoMeta.getLore().stream().anyMatch(line -> line.contains("買取空き容量:")));
 
         ItemStack previewItem = viewer.getOpenInventory().getTopInventory().getItem(4);
         assertNotNull(previewItem);
@@ -108,11 +108,11 @@ class SignShopBrowseGuiTest {
         this.server.getPluginManager().callEvent(createClickEvent(buyer, 20, ClickType.LEFT));
 
         waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 8));
-        waitUntil(() -> hasLoreLine(buyer, 3, "Current Stock: §f0"));
+        waitUntil(() -> hasLoreLine(buyer, 3, "現在の在庫: §f0"));
 
         assertTrue(plugin.getGuiManager().hasOpenGui(buyer));
         assertEquals("§81x", getDisplayName(buyer, 19));
-        assertFalse(hasLoreLine(buyer, 3, "Sell Capacity:"));
+        assertFalse(hasLoreLine(buyer, 3, "買取空き容量:"));
     }
 
     private TNexus loadPlugin() {

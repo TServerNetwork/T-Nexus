@@ -67,15 +67,15 @@ class CommandManagerTest {
         player.addAttachment(plugin, "tnexus.use", true);
 
         assertTrue(this.server.dispatchCommand(player, "tnexus help"));
-        assertEquals("§8[§6T-Nexus§8] §6T-Nexus Commands", player.nextMessage());
-        assertEquals("§8[§6T-Nexus§8] §e/tnexus §7- Open the main menu", player.nextMessage());
-        assertEquals("§8[§6T-Nexus§8] §e/tnexus help §7- Show command help", player.nextMessage());
-        assertEquals("§8[§6T-Nexus§8] §e/tnexus reload §7- Reload config and messages", player.nextMessage());
-        assertEquals("§8[§6T-Nexus§8] §e/tnexus version §7- Show plugin version", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §6T-Nexus コマンド一覧", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §e/tnexus §7- メインメニューを開きます", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §e/tnexus help §7- ヘルプを表示します", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §e/tnexus reload §7- 設定とメッセージを再読み込みします", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §e/tnexus version §7- プラグインのバージョンを表示します", player.nextMessage());
 
         assertTrue(this.server.dispatchCommand(player, "tnexus version"));
         assertEquals(
-                "§8[§6T-Nexus§8] §aT-Nexus version: §f" + plugin.getPluginMeta().getVersion(),
+                "§8[§6T-Nexus§8] §aT-Nexus バージョン: §f" + plugin.getPluginMeta().getVersion(),
                 player.nextMessage());
     }
 
@@ -138,17 +138,17 @@ class CommandManagerTest {
         CommandSender console = this.server.getConsoleSender();
 
         assertTrue(this.server.dispatchCommand(player, "tnexus reload"));
-        assertEquals("§8[§6T-Nexus§8] §cYou do not have permission to do that.", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §cこの操作を行う権限がありません。", player.nextMessage());
 
         player.addAttachment(plugin, "tnexus.use", true);
         assertTrue(this.server.dispatchCommand(console, "tnexus"));
         assertEquals(
-                "[T-Nexus] This command can only be used by players.",
+                "[T-Nexus] このコマンドはプレイヤーのみ実行できます。",
                 PlainTextComponentSerializer.plainText().serialize(
                         ((ConsoleCommandSenderMock) console).nextComponentMessage()));
 
         assertTrue(this.server.dispatchCommand(player, "tnexus reload"));
-        assertEquals("§8[§6T-Nexus§8] §cYou do not have permission to do that.", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §cこの操作を行う権限がありません。", player.nextMessage());
     }
 
     @Test
@@ -200,7 +200,7 @@ class CommandManagerTest {
 
         assertTrue(this.server.dispatchCommand(player, "shop link"));
         assertEquals(
-                "§8[§6T-Nexus§8] §eLink mode started. Right-click a shop sign, then right-click a chest.",
+                "§8[§6T-Nexus§8] §eリンクモードを開始しました。ショップ看板を右クリックし、その後チェストを右クリックしてください。",
                 player.nextMessage());
     }
 
@@ -235,7 +235,7 @@ class CommandManagerTest {
         String entry = owner.nextMessage();
         assertNotNull(header);
         assertNotNull(entry);
-        assertTrue(header.contains("Your Shops"));
+        assertTrue(header.contains("あなたのショップ一覧"));
         assertTrue(entry.contains("Diamond"));
         assertTrue(entry.contains(world.getName()));
     }
@@ -310,7 +310,7 @@ class CommandManagerTest {
         assertTrue(this.server.dispatchCommand(player, "history"));
         waitUntil(() -> plugin.getGuiManager().hasOpenGui(player));
 
-        assertEquals(ChatColor.translateAlternateColorCodes('&', "&6Transaction History"), player.getOpenInventory().getTitle());
+        assertEquals(ChatColor.translateAlternateColorCodes('&', "&6取引履歴"), player.getOpenInventory().getTitle());
         assertEquals(Material.HOPPER, player.getOpenInventory().getTopInventory().getItem(4).getType());
     }
 
@@ -327,7 +327,7 @@ class CommandManagerTest {
         assertTrue(this.server.dispatchCommand(admin, "history Target"));
         waitUntil(() -> plugin.getGuiManager().hasOpenGui(admin));
 
-        assertEquals(ChatColor.translateAlternateColorCodes('&', "&6Target's History"), admin.getOpenInventory().getTitle());
+        assertEquals(ChatColor.translateAlternateColorCodes('&', "&6Target の取引履歴"), admin.getOpenInventory().getTitle());
     }
 
     @Test
@@ -340,7 +340,7 @@ class CommandManagerTest {
 
         assertTrue(this.server.dispatchCommand(player, "history Target"));
         assertEquals(
-                ChatColor.translateAlternateColorCodes('&', "&8[&6T-Nexus&8] &cYou do not have permission to do that."),
+                ChatColor.translateAlternateColorCodes('&', "&8[&6T-Nexus&8] &cこの操作を行う権限がありません。"),
                 player.nextMessage());
     }
 
