@@ -515,6 +515,9 @@ public final class SignShopManager {
                 yield Math.min(fitAmount, countMatchingItems(chestInventory, template));
             }
             case SELL -> {
+                if (shop.getType() == ShopType.SERVER && !isServerShopSellToVoidEnabled()) {
+                    yield 0;
+                }
                 if (shop.getSellPrice() == null) {
                     yield 0;
                 }
@@ -659,6 +662,10 @@ public final class SignShopManager {
     }
 
     private void executeSell(Player player, SignShop shop, ItemStack template, int amount, double totalPrice) {
+        if (shop.getType() == ShopType.SERVER && !isServerShopSellToVoidEnabled()) {
+            this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
+            return;
+        }
         CompletableFuture<Boolean> ownerFundsFuture = shop.getType() == ShopType.PLAYER
                 ? this.economyManager.has(shop.getOwnerUuid(), totalPrice)
                 : CompletableFuture.completedFuture(true);
@@ -863,8 +870,7 @@ public final class SignShopManager {
             return new SyncAvailability(false, false, false, CompletableFuture.completedFuture(false));
         }
         if (shop.getType() == ShopType.SERVER) {
-            boolean hasPrice = shop.getBuyPrice() != null || shop.getSellPrice() != null;
-            return new SyncAvailability(hasPrice, false, false, CompletableFuture.completedFuture(true));
+            return new SyncAvailability(true, true, false, CompletableFuture.completedFuture(true));
         }
 
         Inventory chestInventory = resolveLinkedChestInventory(shop);
@@ -1058,6 +1064,10 @@ public final class SignShopManager {
 
     private double nullablePrice(@Nullable Double price) {
         return price == null ? 0.0D : price;
+    }
+
+    private boolean isServerShopSellToVoidEnabled() {
+        return this.plugin.getConfigManager().getBoolean("tnexus.shop.server-shop.sell-to-void", true);
     }
 
     private String trimPrice(double price) {

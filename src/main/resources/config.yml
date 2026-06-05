@@ -34,5 +34,13 @@ tnexus:
   shop:
     link-tool:
       material: "STICK"
-    banned-materials: []
+    server-shop:
+      sell-to-void: true
+    banned-materials:
+      - "COMMAND_BLOCK"
+      - "BARRIER"
+      - "DEBUG_STICK"
+      - "BEDROCK"
+      - "STRUCTURE_VOID"
+      - "JIGSAW"
   locale: "ja_JP"
