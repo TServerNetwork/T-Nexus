@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.List;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
@@ -19,6 +21,7 @@ import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -275,6 +278,28 @@ class CommandManagerTest {
     }
 
     @Test
+    void shouldUsePayConfirmCommandInPaymentClickEvent() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("Sender");
+        player.addAttachment(plugin, "tnexus.use", true);
+
+        Method method = CommandManager.class.getDeclaredMethod(
+                "sendPaymentConfirmationMessage",
+                Player.class,
+                String.class,
+                String.class,
+                double.class);
+        method.setAccessible(true);
+        method.invoke(plugin.getCommandManager(), player, "token-123", "Receiver", 25.0D);
+
+        Component message = player.nextComponentMessage();
+        ClickEvent confirmClickEvent = findFirstClickEvent(message);
+        assertNotNull(confirmClickEvent);
+        assertEquals("/pay confirm token-123", confirmClickEvent.value());
+    }
+
+    @Test
     void shouldOpenOwnHistoryGui() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -384,5 +409,18 @@ class CommandManagerTest {
             Thread.sleep(25L);
         }
         return player.nextMessage();
+    }
+
+    private ClickEvent findFirstClickEvent(Component component) {
+        if (component.clickEvent() != null) {
+            return component.clickEvent();
+        }
+        for (Component child : component.children()) {
+            ClickEvent clickEvent = findFirstClickEvent(child);
+            if (clickEvent != null) {
+                return clickEvent;
+            }
+        }
+        return null;
     }
 }
