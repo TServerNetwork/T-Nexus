@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.4.0...v0.5.0) (2026-06-05)
+
+
+### Features
+
+* **economy:** implement balance and pay flow ([#26](https://github.com/TServerNetwork/T-Nexus/issues/26)) ([22d4430](https://github.com/TServerNetwork/T-Nexus/commit/22d4430a6b3dd2247af7112771ca0d40570c50c6))
+
 # [0.4.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.3.0...v0.4.0) (2026-06-05)
 
 
