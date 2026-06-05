@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.2.0...v0.3.0) (2026-06-05)
+
+
+### Features
+
+* **db:** add economy schema migration ([#24](https://github.com/TServerNetwork/T-Nexus/issues/24)) ([ff87f6a](https://github.com/TServerNetwork/T-Nexus/commit/ff87f6a2524d5351d6f0f79daf85bd121795ec35))
+
 # [0.2.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.5...v0.2.0) (2026-06-05)
 
 
