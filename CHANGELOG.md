@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.7.0...v0.8.0) (2026-06-05)
+
+
+### Features
+
+* **gui:** add audit history viewer ([#30](https://github.com/TServerNetwork/T-Nexus/issues/30)) ([d0ebaea](https://github.com/TServerNetwork/T-Nexus/commit/d0ebaea9e76ef0028193654a66cc8d8c7c8ab46e))
+
 # [0.7.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.6.0...v0.7.0) (2026-06-05)
 
 
