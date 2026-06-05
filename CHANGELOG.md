@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.3.0...v0.4.0) (2026-06-05)
+
+
+### Features
+
+* **gui:** add anvil gui input manager ([#25](https://github.com/TServerNetwork/T-Nexus/issues/25)) ([d685325](https://github.com/TServerNetwork/T-Nexus/commit/d6853256818a6a6cbf1dabb98aba091959df0a04))
+
 # [0.3.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.2.0...v0.3.0) (2026-06-05)
 
 
