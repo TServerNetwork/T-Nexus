@@ -31,4 +31,8 @@ tnexus:
       next:
         enabled: "REPLACE_NEXT_ENABLED_TEXTURE"
         disabled: "REPLACE_NEXT_DISABLED_TEXTURE"
+  shop:
+    link-tool:
+      material: "STICK"
+    banned-materials: []
   locale: "ja_JP"

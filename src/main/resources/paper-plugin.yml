@@ -27,6 +27,9 @@ commands:
   pay:
     description: Pay another player
     usage: "/<command> <player>"
+  shop:
+    description: Manage sign shops
+    usage: "/<command> link"
 
 permissions:
   tnexus.use:
@@ -34,4 +37,13 @@ permissions:
     default: true
   tnexus.admin:
     description: Allows reloading T-Nexus configuration
+    default: op
+  tnexus.shop.use:
+    description: Allows creating and using SignShops
+    default: true
+  tnexus.shop.admin:
+    description: Allows editing and removing all SignShops
+    default: op
+  tnexus.shop.bypass.ban:
+    description: Allows creating banned-material SignShops
     default: op

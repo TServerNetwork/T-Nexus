@@ -26,6 +26,9 @@ class TNexusLifecycleTest {
               tnexus:
                 description: test command
                 usage: "/tnexus"
+              shop:
+                description: test shop command
+                usage: "/shop link"
             """;
 
     private ServerMock server;

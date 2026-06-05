@@ -39,6 +39,9 @@ public final class TestPluginSupport {
               pay:
                 description: test pay command
                 usage: "/pay <player>"
+              shop:
+                description: test shop command
+                usage: "/shop link"
             """;
 
     private TestPluginSupport() {
