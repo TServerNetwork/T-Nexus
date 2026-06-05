@@ -7,9 +7,12 @@ import java.util.function.BooleanSupplier;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.util.BlockPosition;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
@@ -248,6 +251,35 @@ class SignShopManagerTest {
 
         assertNotNull(shop);
         waitUntil(() -> manager.getShop(signBlock) != null);
+    }
+
+    @Test
+    void shouldApplyLegacyColorCodesToRenderedSignText() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(35, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(36, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Color",
+                chestBlock,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        Sign sign = (Sign) signBlock.getState();
+        assertEquals("§c[ServerShop]", LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(0)));
+        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(2)).startsWith("§cB -"));
     }
 
     @Test

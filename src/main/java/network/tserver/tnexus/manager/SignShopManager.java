@@ -937,10 +937,11 @@ public final class SignShopManager {
         String label = shop.getType() == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
         String buyValue = shop.getBuyPrice() == null ? "-" : trimPrice(shop.getBuyPrice());
         String sellValue = shop.getSellPrice() == null ? "-" : trimPrice(shop.getSellPrice());
-        sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacySection().deserialize(color + label));
-        sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacySection().deserialize("&f" + shop.getItemName()));
-        sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacySection().deserialize(color + "B " + buyValue + " &8| " + color + "S " + sellValue));
-        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacySection().deserialize("&7" + shop.getNote()));
+        sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacyAmpersand().deserialize(color + label));
+        sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getItemName()));
+        sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacyAmpersand().deserialize(
+                color + "B " + buyValue + " &8| " + color + "S " + sellValue));
+        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&7" + shop.getNote()));
         sign.setWaxed(true);
         sign.update(true, false);
     }
