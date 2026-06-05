@@ -215,6 +215,7 @@ class SignShopManagerTest {
         signBlock.setType(Material.OAK_SIGN);
         Block chestBlock = world.getBlockAt(21, 64, 0);
         chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.BARRIER, 1));
 
         SignShop shop = manager.createShop(
                 admin,
@@ -240,6 +241,7 @@ class SignShopManagerTest {
         signBlock.setType(Material.OAK_SIGN);
         Block chestBlock = world.getBlockAt(31, 64, 0);
         chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.BARRIER, 1));
 
         SignShop shop = manager.createShop(
                 admin,
@@ -355,6 +357,47 @@ class SignShopManagerTest {
 
         assertEquals(50.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
         assertEquals(1, countTransactions(plugin, buyer, "SHOP_BUY"));
+    }
+
+    @Test
+    void shouldSnapshotServerShopItemFromChestAtCreation() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(42, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(43, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop created = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Snapshot",
+                chestBlock,
+                new ItemStack(Material.EMERALD));
+        assertNotNull(created);
+
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        chestBlock.setType(Material.AIR);
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 1);
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 1));
+
+        assertEquals(Material.DIAMOND, liveShop.getItemStack().getType());
+        assertFalse(buyer.getInventory().contains(Material.EMERALD));
     }
 
     private TNexus loadPlugin() {

@@ -134,6 +134,7 @@ public final class SignShopManager {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(signBlock, "signBlock");
         Objects.requireNonNull(type, "type");
+        ItemStack resolvedTemplateItem = resolveCreationTemplateItem(type, initialChest, templateItem);
 
         if (type == ShopType.PLAYER
                 && !player.hasPermission(PLAYER_SHOP_PERMISSION)
@@ -149,12 +150,17 @@ public final class SignShopManager {
             this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
             return null;
         }
-        if (type == ShopType.SERVER && (initialChest == null || templateItem == null)) {
+        if (type == ShopType.SERVER && (initialChest == null || resolvedTemplateItem == null)) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.server-requires-chest");
             return null;
         }
-        if (templateItem != null && isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
-            this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
+        if (resolvedTemplateItem != null
+                && isBannedMaterial(resolvedTemplateItem.getType())
+                && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(
+                    player,
+                    "shop.create.banned-material",
+                    resolvedTemplateItem.getType().name());
             return null;
         }
         if (type == ShopType.PLAYER) {
@@ -171,7 +177,7 @@ public final class SignShopManager {
             this.pendingPlayerShopCreations.merge(player.getUniqueId(), 1, Integer::sum);
         }
 
-        ItemStack normalizedItem = normalizeTemplateItem(templateItem);
+        ItemStack normalizedItem = normalizeTemplateItem(resolvedTemplateItem);
         BlockPosition chestPosition = type == ShopType.PLAYER && initialChest != null ? BlockPosition.from(initialChest) : null;
         SignShop shop = new SignShop(
                 0L,
@@ -1167,6 +1173,20 @@ public final class SignShopManager {
         ItemStack clone = itemStack.clone();
         clone.setAmount(1);
         return clone;
+    }
+
+    private @Nullable ItemStack resolveCreationTemplateItem(
+            ShopType type,
+            @Nullable Block initialChest,
+            @Nullable ItemStack templateItem) {
+        if (initialChest == null) {
+            return templateItem;
+        }
+        ItemStack chestItem = findFirstTemplateItem(initialChest);
+        if (type == ShopType.SERVER) {
+            return chestItem;
+        }
+        return chestItem == null ? templateItem : chestItem;
     }
 
     private @Nullable Double normalizePrice(@Nullable Double price) {
