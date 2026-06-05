@@ -149,10 +149,6 @@ public final class SignShopManager {
             this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
             return null;
         }
-        if (type == ShopType.PLAYER && (initialChest == null || templateItem == null)) {
-            this.plugin.getMessageConfig().sendMessage(player, "shop.create.player-requires-chest");
-            return null;
-        }
         if (type == ShopType.SERVER && (initialChest == null || templateItem == null)) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.server-requires-chest");
             return null;
@@ -205,6 +201,9 @@ public final class SignShopManager {
                     cacheShop(shop);
                     refreshShopDisplay(shop);
                     this.plugin.getMessageConfig().sendMessage(player, "shop.create.success");
+                    if (shop.getType() == ShopType.PLAYER && shop.getLinkedChestPosition() == null) {
+                        this.plugin.getMessageConfig().sendMessage(player, "shop.create.link-guidance");
+                    }
                 }));
         return shop;
     }

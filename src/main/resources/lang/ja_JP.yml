@@ -131,6 +131,7 @@ shop:
   create:
     success: "&aSignShop created."
     player-requires-chest: "&cPlayer shops require an adjacent chest with an item."
+    link-guidance: "&eUse the link tool to connect this shop to a chest."
     limit-reached: "&cYou have reached your shop limit ({0}/{1})."
     server-requires-chest: "&cServerShop requires an adjacent chest with an item."
     banned-material: "&c{0} cannot be sold in a SignShop."
