@@ -33,6 +33,9 @@ commands:
   shops:
     description: List player shops
     usage: "/<command> [player]"
+  history:
+    description: Open audit history
+    usage: "/<command> [player]"
 
 permissions:
   tnexus.use:
@@ -49,6 +52,9 @@ permissions:
     default: true
   tnexus.shop.admin:
     description: Allows editing and removing all SignShops
+    default: op
+  tnexus.audit.admin:
+    description: Allows viewing other players audit history
     default: op
   tnexus.shop.bypass.ban:
     description: Allows creating banned-material SignShops

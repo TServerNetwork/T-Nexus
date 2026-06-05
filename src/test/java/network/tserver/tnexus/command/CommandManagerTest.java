@@ -6,6 +6,9 @@ import java.util.List;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
+import network.tserver.tnexus.database.repository.TransactionRepository;
+import network.tserver.tnexus.database.repository.TransactionRepository.AuditRecord;
+import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.manager.ShopType;
 import network.tserver.tnexus.manager.SignShop;
 import org.bukkit.ChatColor;
@@ -252,6 +255,51 @@ class CommandManagerTest {
         assertTrue(entry.contains("Emerald"));
     }
 
+    @Test
+    void shouldOpenOwnHistoryGui() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("HistoryUser");
+        player.addAttachment(plugin, "tnexus.use", true);
+        insertAudit(plugin, player, TransactionType.DEPOSIT, 150.0D, 150.0D, "System deposit");
+
+        assertTrue(this.server.dispatchCommand(player, "history"));
+        waitUntil(() -> plugin.getGuiManager().hasOpenGui(player));
+
+        assertEquals(ChatColor.translateAlternateColorCodes('&', "&6Transaction History"), player.getOpenInventory().getTitle());
+        assertEquals(Material.HOPPER, player.getOpenInventory().getTopInventory().getItem(4).getType());
+    }
+
+    @Test
+    void shouldOpenOtherPlayersHistoryGuiForAdmins() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock target = this.server.addPlayer("Target");
+        admin.addAttachment(plugin, "tnexus.use", true);
+        admin.addAttachment(plugin, "tnexus.audit.admin", true);
+        insertAudit(plugin, target, TransactionType.PAYMENT_RECEIVED, 75.0D, 75.0D, "Payment received from Admin");
+
+        assertTrue(this.server.dispatchCommand(admin, "history Target"));
+        waitUntil(() -> plugin.getGuiManager().hasOpenGui(admin));
+
+        assertEquals(ChatColor.translateAlternateColorCodes('&', "&6Target's History"), admin.getOpenInventory().getTitle());
+    }
+
+    @Test
+    void shouldDenyOtherPlayersHistoryWithoutAuditPermission() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("User");
+        this.server.addPlayer("Target");
+        player.addAttachment(plugin, "tnexus.use", true);
+
+        assertTrue(this.server.dispatchCommand(player, "history Target"));
+        assertEquals(
+                ChatColor.translateAlternateColorCodes('&', "&8[&6T-Nexus&8] &cYou do not have permission to do that."),
+                player.nextMessage());
+    }
+
     private void updateReloadSuccessMessage(TNexus plugin, String message) throws IOException {
         File localeFile = plugin.getDataFolder().toPath().resolve("lang").resolve("ja_JP.yml").toFile();
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(localeFile);
@@ -264,6 +312,22 @@ class CommandManagerTest {
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(configFile);
         configuration.set("tnexus.gui.main-menu-title", title);
         configuration.save(configFile);
+    }
+
+    private void insertAudit(
+            TNexus plugin,
+            PlayerMock player,
+            TransactionType type,
+            double amount,
+            double balanceAfter,
+            String description) throws Exception {
+        new TransactionRepository(plugin.getDatabaseManager()).insert(new AuditRecord(
+                player.getUniqueId(),
+                type,
+                amount,
+                balanceAfter,
+                description,
+                null)).get();
     }
 
     private static final class TestCommand extends Command {

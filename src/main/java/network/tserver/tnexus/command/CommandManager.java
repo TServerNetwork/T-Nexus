@@ -20,6 +20,7 @@ import network.tserver.tnexus.command.subcommand.HelpCommand;
 import network.tserver.tnexus.command.subcommand.MenuCommand;
 import network.tserver.tnexus.command.subcommand.ReloadCommand;
 import network.tserver.tnexus.command.subcommand.VersionCommand;
+import network.tserver.tnexus.manager.AuditLogFilter;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PaymentManager.ConfirmationResult;
 import network.tserver.tnexus.manager.PaymentManager.QueueResult;
@@ -43,8 +44,10 @@ public final class CommandManager {
     private static final String PAY_COMMAND_NAME = "pay";
     private static final String SHOP_COMMAND_NAME = "shop";
     private static final String SHOPS_COMMAND_NAME = "shops";
+    private static final String HISTORY_COMMAND_NAME = "history";
     private static final String USE_PERMISSION = "tnexus.use";
     private static final String SHOP_ADMIN_PERMISSION = "tnexus.shop.admin";
+    private static final String AUDIT_ADMIN_PERMISSION = "tnexus.audit.admin";
 
     private final TNexus plugin;
     private final BaseCommand rootCommand;
@@ -130,6 +133,18 @@ public final class CommandManager {
             @Override
             public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
                 return CommandManager.this.onShopsTabComplete(commandSourceStack.getSender(), args);
+            }
+        });
+
+        commands.register(HISTORY_COMMAND_NAME, "Open audit history", List.of(), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onHistoryCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onHistoryTabComplete(commandSourceStack.getSender(), args);
             }
         });
     }
@@ -376,6 +391,54 @@ public final class CommandManager {
             for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
                 String name = onlinePlayer.getName();
                 if (!name.equalsIgnoreCase(sender.getName()) && normalize(name).startsWith(input)) {
+                    completions.add(name);
+                }
+            }
+            return completions;
+        }
+        return List.of();
+    }
+
+    private void onHistoryCommand(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
+            return;
+        }
+        if (!sender.hasPermission(USE_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return;
+        }
+        if (args.length > 1) {
+            this.plugin.getMessageConfig().sendMessage(sender, "audit.history.usage");
+            return;
+        }
+        if (args.length == 0) {
+            this.plugin.getAuditLogManager().openHistoryViewer(player, player, AuditLogFilter.ALL);
+            return;
+        }
+        if (!sender.hasPermission(AUDIT_ADMIN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return;
+        }
+
+        OfflinePlayer target = resolveTarget(args[0]);
+        if (target == null) {
+            this.plugin.getMessageConfig().sendMessage(sender, "audit.history.player-not-found", args[0]);
+            return;
+        }
+        this.plugin.getAuditLogManager().openHistoryViewer(player, target, AuditLogFilter.ALL);
+    }
+
+    private Collection<String> onHistoryTabComplete(CommandSender sender, String[] args) {
+        if (args.length <= 1) {
+            if (args.length == 0 || !sender.hasPermission(AUDIT_ADMIN_PERMISSION)) {
+                return List.of();
+            }
+            String input = normalize(args[0]);
+            List<String> completions = new ArrayList<>();
+            for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
+                String name = onlinePlayer.getName();
+                if (normalize(name).startsWith(input)) {
                     completions.add(name);
                 }
             }

@@ -42,6 +42,47 @@ economy:
     cancelled: "&ePayment cancelled."
     expired: "&cThat payment confirmation expired."
     failed: "&cPayment failed."
+audit:
+  history:
+    usage: "&cUsage: /history [player]"
+    player-not-found: "&cPlayer {0} was not found."
+    load-failed: "&cFailed to load audit history."
+    gui:
+      title-self: "&6Transaction History"
+      title-other: "&6{0}'s History"
+      system-name: "System"
+      filter:
+        name: "&eFilter History"
+        current: "&7Current Filter: &f{0}"
+        lore: "&7Click to choose a different filter."
+      empty:
+        name: "&cNo History"
+        lore: "&7No audit entries matched this filter."
+      entry:
+        name: "&e{0}"
+        type: "&7Type: {0}{1}"
+        counterpart: "&7Counterpart: &f{0}"
+        description: "&7Details: &f{0}"
+        separator: "&8----------------"
+        amount: "&7Amount: {0}{1}{2}"
+        balance: "&7Balance After: &f{0}"
+  filter:
+    label:
+      all: "All"
+      deposit: "Deposit"
+      withdraw: "Withdraw"
+      payment-received: "Payment Received"
+      payment-sent: "Payment Sent"
+      shop-sell: "Shop Sell"
+      shop-buy: "Shop Buy"
+    gui:
+      title: "&6Select Filter"
+      option:
+        name: "&e{0}"
+        current: "&7Status: &f{0}"
+        selected: "Selected"
+        not-selected: "Not selected"
+        lore: "&7Click to view this transaction type."
 gui:
   main-menu:
     stub:

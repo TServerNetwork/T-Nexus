@@ -53,6 +53,9 @@ public final class TestPluginSupport {
               shops:
                 description: test shops command
                 usage: "/shops [player]"
+              history:
+                description: test history command
+                usage: "/history [player]"
             """;
 
     private TestPluginSupport() {
