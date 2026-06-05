@@ -6,7 +6,12 @@ import java.util.List;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
+import network.tserver.tnexus.manager.ShopType;
+import network.tserver.tnexus.manager.SignShop;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -174,6 +179,79 @@ class CommandManagerTest {
                 player.nextMessage());
     }
 
+    @Test
+    void shouldListOwnPlayerShops() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(70, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory()
+                .addItem(new org.bukkit.inventory.ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(71, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = plugin.getSignShopManager().createShop(
+                owner,
+                signBlock,
+                ShopType.PLAYER,
+                "List test",
+                chestBlock,
+                new org.bukkit.inventory.ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+
+        waitUntil(() -> plugin.getSignShopManager().getShop(signBlock) != null);
+
+        assertTrue(this.server.dispatchCommand(owner, "shops"));
+        String header = owner.nextMessage();
+        String entry = owner.nextMessage();
+        assertNotNull(header);
+        assertNotNull(entry);
+        assertTrue(header.contains("Your Shops"));
+        assertTrue(entry.contains("Diamond"));
+        assertTrue(entry.contains(world.getName()));
+    }
+
+    @Test
+    void shouldListOtherPlayersShopsForAdmins() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock admin = this.server.addPlayer("Admin");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(80, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory()
+                .addItem(new org.bukkit.inventory.ItemStack(Material.EMERALD, 1));
+        Block signBlock = world.getBlockAt(81, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = plugin.getSignShopManager().createShop(
+                owner,
+                signBlock,
+                ShopType.PLAYER,
+                "Admin list",
+                chestBlock,
+                new org.bukkit.inventory.ItemStack(Material.EMERALD));
+        assertNotNull(shop);
+
+        waitUntil(() -> plugin.getSignShopManager().getShop(signBlock) != null);
+
+        assertTrue(this.server.dispatchCommand(admin, "shops Owner"));
+        String header = admin.nextMessage();
+        String entry = admin.nextMessage();
+        assertNotNull(header);
+        assertNotNull(entry);
+        assertTrue(header.contains("Owner"));
+        assertTrue(entry.contains("Emerald"));
+    }
+
     private void updateReloadSuccessMessage(TNexus plugin, String message) throws IOException {
         File localeFile = plugin.getDataFolder().toPath().resolve("lang").resolve("ja_JP.yml").toFile();
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(localeFile);
@@ -198,5 +276,17 @@ class CommandManagerTest {
         public boolean execute(CommandSender sender, String commandLabel, String[] args) {
             return false;
         }
+    }
+
+    private void waitUntil(java.util.function.BooleanSupplier condition) throws Exception {
+        long deadline = System.currentTimeMillis() + 5000L;
+        while (System.currentTimeMillis() < deadline) {
+            this.server.getScheduler().performOneTick();
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(25L);
+        }
+        assertTrue(condition.getAsBoolean(), "Condition was not met in time");
     }
 }

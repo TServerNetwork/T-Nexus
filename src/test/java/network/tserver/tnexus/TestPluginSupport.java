@@ -8,9 +8,15 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.DatabaseManager;
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.cacheddata.CachedDataManager;
+import net.luckperms.api.cacheddata.CachedMetaData;
+import net.luckperms.api.model.user.User;
+import net.luckperms.api.platform.PlayerAdapter;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.ServicePriority;
 import org.junit.jupiter.api.Assertions;
@@ -23,6 +29,8 @@ import org.mockbukkit.mockbukkit.plugin.PluginMock;
  * Shared helpers for loading test plugin instances with mocked dependencies.
  */
 public final class TestPluginSupport {
+
+    private static final Map<UUID, Map<String, String>> LUCKPERMS_META = new ConcurrentHashMap<>();
 
     private static final String TEST_PLUGIN_YAML = """
             name: TestTNexus
@@ -42,6 +50,9 @@ public final class TestPluginSupport {
               shop:
                 description: test shop command
                 usage: "/shop link"
+              shops:
+                description: test shops command
+                usage: "/shops [player]"
             """;
 
     private TestPluginSupport() {
@@ -53,10 +64,23 @@ public final class TestPluginSupport {
      * @return mocked server
      */
     public static ServerMock mockServerWithRequiredPlugins() {
+        LUCKPERMS_META.clear();
         ServerMock server = MockBukkit.mock();
         registerRequiredPlugins(server);
         registerEconomyProvider(server);
+        registerLuckPermsProvider(server);
         return server;
+    }
+
+    /**
+     * Sets a LuckPerms meta value for the given test player.
+     *
+     * @param playerId player id
+     * @param key meta key
+     * @param value meta value
+     */
+    public static void setLuckPermsMeta(UUID playerId, String key, String value) {
+        LUCKPERMS_META.computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>()).put(key, value);
     }
 
     /**
@@ -101,6 +125,20 @@ public final class TestPluginSupport {
         server.getServicesManager().register(
                 Economy.class,
                 createEconomyProxy(),
+                providerPlugin,
+                ServicePriority.Normal);
+    }
+
+    /**
+     * Registers a basic LuckPerms API provider for tests.
+     *
+     * @param server mocked server
+     */
+    public static void registerLuckPermsProvider(ServerMock server) {
+        PluginMock providerPlugin = (PluginMock) server.getPluginManager().getPlugin("LuckPerms");
+        server.getServicesManager().register(
+                LuckPerms.class,
+                createLuckPermsProxy(),
                 providerPlugin,
                 ServicePriority.Normal);
     }
@@ -190,6 +228,63 @@ public final class TestPluginSupport {
         return (Economy) Proxy.newProxyInstance(
                 Economy.class.getClassLoader(),
                 new Class<?>[]{Economy.class},
+                handler);
+    }
+
+    private static LuckPerms createLuckPermsProxy() {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "getPlayerAdapter" -> createPlayerAdapterProxy();
+            default -> defaultValue(method.getReturnType());
+        };
+        return (LuckPerms) Proxy.newProxyInstance(
+                LuckPerms.class.getClassLoader(),
+                new Class<?>[]{LuckPerms.class},
+                handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static PlayerAdapter<Player> createPlayerAdapterProxy() {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "getUser" -> createUserProxy(((Player) args[0]).getUniqueId());
+            default -> defaultValue(method.getReturnType());
+        };
+        return (PlayerAdapter<Player>) Proxy.newProxyInstance(
+                PlayerAdapter.class.getClassLoader(),
+                new Class<?>[]{PlayerAdapter.class},
+                handler);
+    }
+
+    private static User createUserProxy(UUID playerId) {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "getCachedData" -> createCachedDataProxy(playerId);
+            case "getUniqueId" -> playerId;
+            default -> defaultValue(method.getReturnType());
+        };
+        return (User) Proxy.newProxyInstance(
+                User.class.getClassLoader(),
+                new Class<?>[]{User.class},
+                handler);
+    }
+
+    private static CachedDataManager createCachedDataProxy(UUID playerId) {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "getMetaData" -> createCachedMetaProxy(playerId);
+            default -> defaultValue(method.getReturnType());
+        };
+        return (CachedDataManager) Proxy.newProxyInstance(
+                CachedDataManager.class.getClassLoader(),
+                new Class<?>[]{CachedDataManager.class},
+                handler);
+    }
+
+    private static CachedMetaData createCachedMetaProxy(UUID playerId) {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "getMetaValue" -> LUCKPERMS_META.getOrDefault(playerId, Map.of()).get((String) args[0]);
+            default -> defaultValue(method.getReturnType());
+        };
+        return (CachedMetaData) Proxy.newProxyInstance(
+                CachedMetaData.class.getClassLoader(),
+                new Class<?>[]{CachedMetaData.class},
                 handler);
     }
 

@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
+import net.luckperms.api.LuckPerms;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.database.repository.SignShopRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
@@ -50,8 +51,11 @@ public final class SignShopManager {
     private static final String DEFAULT_UNLINKED_NAME = "Unlinked";
     private static final String DEFAULT_NOTE = "";
     private static final String SHOP_PERMISSION = "tnexus.shop.use";
+    private static final String PLAYER_SHOP_PERMISSION = "tnexus.shop.player";
     private static final String ADMIN_PERMISSION = "tnexus.shop.admin";
     private static final String BYPASS_BAN_PERMISSION = "tnexus.shop.bypass.ban";
+    private static final String SHOP_LIMIT_META_KEY = "tnexus.shop.limit";
+    private static final int DEFAULT_PLAYER_SHOP_LIMIT = 5;
 
     private final TNexus plugin;
     private final EconomyManager economyManager;
@@ -61,6 +65,7 @@ public final class SignShopManager {
     private final Map<BlockPosition, Long> signIndex;
     private final Map<BlockPosition, Set<Long>> chestIndex;
     private final Map<UUID, LinkSession> linkSessions;
+    private final Map<UUID, Integer> pendingPlayerShopCreations;
 
     /**
      * Creates a new shop manager.
@@ -76,6 +81,7 @@ public final class SignShopManager {
         this.signIndex = new ConcurrentHashMap<>();
         this.chestIndex = new ConcurrentHashMap<>();
         this.linkSessions = new ConcurrentHashMap<>();
+        this.pendingPlayerShopCreations = new ConcurrentHashMap<>();
     }
 
     /**
@@ -129,7 +135,13 @@ public final class SignShopManager {
         Objects.requireNonNull(signBlock, "signBlock");
         Objects.requireNonNull(type, "type");
 
-        if (!player.hasPermission(SHOP_PERMISSION) && !player.hasPermission(ADMIN_PERMISSION)) {
+        if (type == ShopType.PLAYER
+                && !player.hasPermission(PLAYER_SHOP_PERMISSION)
+                && !player.hasPermission(ADMIN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
+            return null;
+        }
+        if (type == ShopType.SERVER && !player.hasPermission(SHOP_PERMISSION) && !player.hasPermission(ADMIN_PERMISSION)) {
             this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
             return null;
         }
@@ -137,13 +149,30 @@ public final class SignShopManager {
             this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
             return null;
         }
-        if (type == ShopType.SERVER && templateItem == null) {
+        if (type == ShopType.PLAYER && (initialChest == null || templateItem == null)) {
+            this.plugin.getMessageConfig().sendMessage(player, "shop.create.player-requires-chest");
+            return null;
+        }
+        if (type == ShopType.SERVER && (initialChest == null || templateItem == null)) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.server-requires-chest");
             return null;
         }
         if (templateItem != null && isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
             return null;
+        }
+        if (type == ShopType.PLAYER) {
+            int shopLimit = getPlayerShopLimit(player);
+            int currentCount = getPlayerShopCount(player.getUniqueId());
+            if (currentCount >= shopLimit) {
+                this.plugin.getMessageConfig().sendMessage(
+                        player,
+                        "shop.create.limit-reached",
+                        currentCount,
+                        shopLimit);
+                return null;
+            }
+            this.pendingPlayerShopCreations.merge(player.getUniqueId(), 1, Integer::sum);
         }
 
         ItemStack normalizedItem = normalizeTemplateItem(templateItem);
@@ -165,6 +194,9 @@ public final class SignShopManager {
         applySignLines(shop, ShopStatus.UNAVAILABLE);
         this.signShopRepository.insert(shop)
                 .whenComplete((shopId, throwable) -> runSync(() -> {
+                    if (type == ShopType.PLAYER) {
+                        decrementPendingPlayerShopCreation(player.getUniqueId());
+                    }
                     if (throwable != null) {
                         this.plugin.getLogger().log(Level.SEVERE, "Failed to persist SignShop.", throwable);
                         return;
@@ -1031,7 +1063,81 @@ public final class SignShopManager {
      * @return {@code true} when allowed
      */
     public boolean canUseShops(CommandSender sender) {
-        return sender.hasPermission(SHOP_PERMISSION) || sender.hasPermission(ADMIN_PERMISSION);
+        return sender.hasPermission(SHOP_PERMISSION)
+                || sender.hasPermission(PLAYER_SHOP_PERMISSION)
+                || sender.hasPermission(ADMIN_PERMISSION);
+    }
+
+    /**
+     * Returns the current player shop limit for the given player.
+     *
+     * @param player target player
+     * @return resolved shop limit
+     */
+    public int getPlayerShopLimit(Player player) {
+        Objects.requireNonNull(player, "player");
+        LuckPerms luckPerms = this.plugin.getPluginHookManager().getApi(LuckPerms.class);
+        if (luckPerms != null) {
+            String metaValue = luckPerms.getPlayerAdapter(Player.class)
+                    .getUser(player)
+                    .getCachedData()
+                    .getMetaData()
+                    .getMetaValue(SHOP_LIMIT_META_KEY);
+            Integer parsedLimit = parsePositiveInteger(metaValue);
+            if (parsedLimit != null) {
+                return parsedLimit;
+            }
+        }
+
+        return this.plugin.getConfigManager().getInt(
+                "tnexus.shop.player-shop.default-limit",
+                DEFAULT_PLAYER_SHOP_LIMIT);
+    }
+
+    /**
+     * Returns the current number of cached player shops owned by the player.
+     *
+     * @param ownerUuid owner id
+     * @return player shop count
+     */
+    public int getPlayerShopCount(UUID ownerUuid) {
+        Objects.requireNonNull(ownerUuid, "ownerUuid");
+        int cachedCount = 0;
+        for (SignShop shop : this.shopsById.values()) {
+            if (shop.getType() == ShopType.PLAYER && ownerUuid.equals(shop.getOwnerUuid())) {
+                cachedCount++;
+            }
+        }
+        return cachedCount + this.pendingPlayerShopCreations.getOrDefault(ownerUuid, 0);
+    }
+
+    /**
+     * Returns cached shops owned by the given player.
+     *
+     * @param ownerUuid owner id
+     * @return owned shops
+     */
+    public List<SignShop> getOwnedShops(UUID ownerUuid) {
+        Objects.requireNonNull(ownerUuid, "ownerUuid");
+        return this.shopsById.values().stream()
+                .filter(shop -> shop.getType() == ShopType.PLAYER)
+                .filter(shop -> ownerUuid.equals(shop.getOwnerUuid()))
+                .sorted((left, right) -> {
+                    int worldCompare = left.getSignPosition().worldName().compareToIgnoreCase(right.getSignPosition().worldName());
+                    if (worldCompare != 0) {
+                        return worldCompare;
+                    }
+                    int xCompare = Integer.compare(left.getSignPosition().x(), right.getSignPosition().x());
+                    if (xCompare != 0) {
+                        return xCompare;
+                    }
+                    int yCompare = Integer.compare(left.getSignPosition().y(), right.getSignPosition().y());
+                    if (yCompare != 0) {
+                        return yCompare;
+                    }
+                    return Integer.compare(left.getSignPosition().z(), right.getSignPosition().z());
+                })
+                .toList();
     }
 
     private String resolveItemName(ItemStack itemStack) {
@@ -1066,8 +1172,24 @@ public final class SignShopManager {
         return price == null ? 0.0D : price;
     }
 
+    private @Nullable Integer parsePositiveInteger(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            return parsed > 0 ? parsed : null;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
     private boolean isServerShopSellToVoidEnabled() {
         return this.plugin.getConfigManager().getBoolean("tnexus.shop.server-shop.sell-to-void", true);
+    }
+
+    private void decrementPendingPlayerShopCreation(UUID ownerUuid) {
+        this.pendingPlayerShopCreations.computeIfPresent(ownerUuid, (ignored, count) -> count <= 1 ? null : count - 1);
     }
 
     private String trimPrice(double price) {

@@ -92,6 +92,7 @@ class TNexusLifecycleTest {
         registerPlugin("Multiverse-Core");
         registerPlugin("FastAsyncWorldEdit");
         TestPluginSupport.registerEconomyProvider(this.server);
+        TestPluginSupport.registerLuckPermsProvider(this.server);
     }
 
     private void registerPlugin(String pluginName) {

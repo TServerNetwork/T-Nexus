@@ -42,7 +42,9 @@ public final class CommandManager {
     private static final String BALANCE_COMMAND_NAME = "balance";
     private static final String PAY_COMMAND_NAME = "pay";
     private static final String SHOP_COMMAND_NAME = "shop";
+    private static final String SHOPS_COMMAND_NAME = "shops";
     private static final String USE_PERMISSION = "tnexus.use";
+    private static final String SHOP_ADMIN_PERMISSION = "tnexus.shop.admin";
 
     private final TNexus plugin;
     private final BaseCommand rootCommand;
@@ -116,6 +118,18 @@ public final class CommandManager {
             @Override
             public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
                 return CommandManager.this.onShopTabComplete(commandSourceStack.getSender(), args);
+            }
+        });
+
+        commands.register(SHOPS_COMMAND_NAME, "List player shops", List.of(), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onShopsCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onShopsTabComplete(commandSourceStack.getSender(), args);
             }
         });
     }
@@ -300,6 +314,58 @@ public final class CommandManager {
         return List.of();
     }
 
+    private void onShopsCommand(CommandSender sender, String[] args) {
+        if (args.length > 1) {
+            this.plugin.getMessageConfig().sendMessage(sender, "shop.list.usage");
+            return;
+        }
+        if (args.length == 0) {
+            if (!(sender instanceof Player player)) {
+                this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
+                return;
+            }
+            if (!this.plugin.getSignShopManager().canUseShops(player)) {
+                this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+                return;
+            }
+            sendShopList(sender, player.getUniqueId(), player.getName(), true);
+            return;
+        }
+
+        if (!sender.hasPermission(SHOP_ADMIN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return;
+        }
+
+        OfflinePlayer target = resolveTarget(args[0]);
+        if (target == null) {
+            this.plugin.getMessageConfig().sendMessage(sender, "shop.list.player-not-found", args[0]);
+            return;
+        }
+        sendShopList(sender, target.getUniqueId(), target.getName() == null ? args[0] : target.getName(), false);
+    }
+
+    private Collection<String> onShopsTabComplete(CommandSender sender, String[] args) {
+        if (args.length <= 1) {
+            if (args.length == 0) {
+                return List.of();
+            }
+            if (!sender.hasPermission(SHOP_ADMIN_PERMISSION)) {
+                return List.of();
+            }
+            String input = normalize(args[0]);
+            List<String> completions = new ArrayList<>();
+            for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
+                String name = onlinePlayer.getName();
+                if (normalize(name).startsWith(input)) {
+                    completions.add(name);
+                }
+            }
+            return completions;
+        }
+        return List.of();
+    }
+
     private Collection<String> onPayTabComplete(CommandSender sender, String[] args) {
         if (!canTabUseEconomyCommand(sender)) {
             return List.of();
@@ -446,6 +512,33 @@ public final class CommandManager {
 
     private boolean canTabUseEconomyCommand(CommandSender sender) {
         return sender.hasPermission(USE_PERMISSION) && sender instanceof Player;
+    }
+
+    private void sendShopList(CommandSender sender, java.util.UUID ownerUuid, String ownerName, boolean selfView) {
+        List<network.tserver.tnexus.manager.SignShop> shops = this.plugin.getSignShopManager().getOwnedShops(ownerUuid);
+        if (shops.isEmpty()) {
+            this.plugin.getMessageConfig().sendMessage(
+                    sender,
+                    selfView ? "shop.list.empty-self" : "shop.list.empty-other",
+                    ownerName);
+            return;
+        }
+
+        this.plugin.getMessageConfig().sendMessage(
+                sender,
+                selfView ? "shop.list.header-self" : "shop.list.header-other",
+                ownerName);
+        for (network.tserver.tnexus.manager.SignShop shop : shops) {
+            this.plugin.getMessageConfig().sendMessage(
+                    sender,
+                    "shop.list.entry",
+                    shop.getId(),
+                    shop.getItemName(),
+                    shop.getSignPosition().worldName(),
+                    shop.getSignPosition().x(),
+                    shop.getSignPosition().y(),
+                    shop.getSignPosition().z());
+        }
     }
 
     private void runSync(Runnable runnable) {
