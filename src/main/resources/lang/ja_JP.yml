@@ -173,6 +173,21 @@ shop:
   gui:
     browse:
       title: "&6Shop"
+    showcase:
+      name: "&6&lPrice / Stock"
+      separator: "&8----------------"
+      price:
+        buy: "&7Buy Price: &c{0}"
+        buy-disabled: "&7Buy: &8Unavailable"
+        sell: "&7Sell Price: &a{0}"
+        sell-disabled: "&7Sell: &8Unavailable"
+      stock:
+        player: "&7Current Stock: &f{0}"
+        server: "&7Current Stock: &f∞ (Unlimited)"
+      capacity:
+        player: "&7Sell Capacity: &f{0}"
+        server: "&7Sell Capacity: &f∞ (Unlimited)"
+      hint: "&e> The item on the right is the shop item."
     edit:
       title: "&6Edit Shop"
       owner: "&7Owner: &f{0}"
@@ -205,15 +220,23 @@ shop:
       hint: "&7Left-click to buy, right-click to sell."
     amount:
       name: "&a{0}x"
+      disabled-name: "&8{0}x"
       buy: "&7Buy {0}: &a{1}"
+      buy-disabled: "&7Buy {0}: &8Unavailable"
       sell: "&7Sell {0}: &c{1}"
+      sell-disabled: "&7Sell {0}: &8Unavailable"
       hint: "&7Left-click buy / Right-click sell"
+      disabled-hint: "&8You cannot trade this amount right now."
     max:
       name: "&aInventory Max"
       lore: "&7Trade the maximum amount allowed right now."
+      disabled-name: "&8Inventory Max"
+      disabled-lore: "&8No trade is available right now."
     custom:
       name: "&eCustom Amount"
       lore: "&7Open AnvilGUI for a manual amount."
+      disabled-name: "&8Custom Amount"
+      disabled-lore: "&8No trade is available right now."
       title: "&6Enter amount"
     unlinked:
       name: "&cUnlinked Shop"
