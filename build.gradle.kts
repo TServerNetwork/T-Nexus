@@ -10,10 +10,12 @@ repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
+    maven("https://mvn.wesjd.net/")
 }
 
 dependencies {
     implementation("com.zaxxer:HikariCP:7.0.2")
+    implementation("net.wesjd:anvilgui:1.10.13-SNAPSHOT")
     runtimeOnly("com.mysql:mysql-connector-j:9.5.0")
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
@@ -56,6 +58,9 @@ tasks {
 
     shadowJar {
         archiveClassifier.set("")
+        manifest {
+            attributes["paperweight-mappings-namespace"] = "spigot"
+        }
     }
 
     jar {
