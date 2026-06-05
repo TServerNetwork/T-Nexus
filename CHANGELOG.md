@@ -1,3 +1,10 @@
+# [0.9.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.3...v0.9.0) (2026-06-05)
+
+
+### Features
+
+* **gui:** add showcase shop header ([#44](https://github.com/TServerNetwork/T-Nexus/issues/44)) ([758a9f1](https://github.com/TServerNetwork/T-Nexus/commit/758a9f1d5176f7ea369d5e7b8536647e5f0e96bb))
+
 ## [0.8.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.2...v0.8.3) (2026-06-05)
 
 
