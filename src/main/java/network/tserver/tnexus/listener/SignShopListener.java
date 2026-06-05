@@ -1,6 +1,7 @@
 package network.tserver.tnexus.listener;
 
 import java.util.List;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.manager.ShopType;
 import network.tserver.tnexus.manager.SignShop;
@@ -66,10 +67,11 @@ public final class SignShopListener implements Listener {
             }
 
             String label = shopType == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
-            event.setLine(0, "&c" + label);
-            event.setLine(1, templateItem == null ? "Unlinked" : ChatColor.stripColor(shop.getItemName()));
-            event.setLine(2, "B - | S -");
-            event.setLine(3, note);
+            event.line(0, LegacyComponentSerializer.legacyAmpersand().deserialize("&c" + label));
+            event.line(1, LegacyComponentSerializer.legacyAmpersand().deserialize(
+                    templateItem == null ? "Unlinked" : "&f" + ChatColor.stripColor(shop.getItemName())));
+            event.line(2, LegacyComponentSerializer.legacyAmpersand().deserialize("&cB - &8| &cS -"));
+            event.line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&7" + note));
             return;
         }
 

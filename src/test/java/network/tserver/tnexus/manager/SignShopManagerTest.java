@@ -7,9 +7,12 @@ import java.util.function.BooleanSupplier;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.util.BlockPosition;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
@@ -19,6 +22,7 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -102,6 +106,38 @@ class SignShopManagerTest {
     }
 
     @Test
+    void shouldCancelCommandLinkModeAfterChestValidationError() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock player = this.server.addPlayer("Owner");
+        player.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = player.getWorld();
+        Block sourceChest = world.getBlockAt(15, 64, 0);
+        sourceChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) sourceChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(16, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+        Block emptyChest = world.getBlockAt(17, 64, 0);
+        emptyChest.setType(Material.CHEST);
+
+        SignShop shop = manager.createShop(
+                player,
+                signBlock,
+                ShopType.PLAYER,
+                "",
+                sourceChest,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        manager.beginLinkMode(player);
+        assertTrue(manager.handleLinkInteraction(player, signBlock, false));
+        assertTrue(manager.handleLinkInteraction(player, emptyChest, false));
+        assertFalse(manager.handleLinkInteraction(player, emptyChest, false));
+    }
+
+    @Test
     void shouldEnforceLuckPermsPlayerShopLimit() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
@@ -179,6 +215,7 @@ class SignShopManagerTest {
         signBlock.setType(Material.OAK_SIGN);
         Block chestBlock = world.getBlockAt(21, 64, 0);
         chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.BARRIER, 1));
 
         SignShop shop = manager.createShop(
                 admin,
@@ -204,6 +241,7 @@ class SignShopManagerTest {
         signBlock.setType(Material.OAK_SIGN);
         Block chestBlock = world.getBlockAt(31, 64, 0);
         chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.BARRIER, 1));
 
         SignShop shop = manager.createShop(
                 admin,
@@ -215,6 +253,67 @@ class SignShopManagerTest {
 
         assertNotNull(shop);
         waitUntil(() -> manager.getShop(signBlock) != null);
+    }
+
+    @Test
+    void shouldApplyLegacyColorCodesToRenderedSignText() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(35, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(36, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Color",
+                chestBlock,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        Sign sign = (Sign) signBlock.getState();
+        assertEquals("§c[ServerShop]", LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(0)));
+        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(2)).startsWith("§cB -"));
+    }
+
+    @Test
+    void shouldReleaseSignProtectionAfterDeletingShop() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(37, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(38, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Delete",
+                chestBlock,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        manager.deleteShop(shop);
+
+        Sign sign = (Sign) signBlock.getState();
+        assertFalse(sign.isWaxed());
+        assertEquals("", LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(0)));
+        assertNull(manager.getShop(signBlock));
     }
 
     @Test
@@ -258,6 +357,47 @@ class SignShopManagerTest {
 
         assertEquals(50.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
         assertEquals(1, countTransactions(plugin, buyer, "SHOP_BUY"));
+    }
+
+    @Test
+    void shouldSnapshotServerShopItemFromChestAtCreation() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(42, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(43, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop created = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Snapshot",
+                chestBlock,
+                new ItemStack(Material.EMERALD));
+        assertNotNull(created);
+
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        chestBlock.setType(Material.AIR);
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 1);
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 1));
+
+        assertEquals(Material.DIAMOND, liveShop.getItemStack().getType());
+        assertFalse(buyer.getInventory().contains(Material.EMERALD));
     }
 
     private TNexus loadPlugin() {

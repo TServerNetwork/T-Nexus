@@ -536,7 +536,7 @@ public final class CommandManager {
                 .append(createActionComponent(
                         this.plugin.getMessageConfig().getMessage("economy.pay.confirm-button"),
                         this.plugin.getMessageConfig().getMessage("economy.pay.confirm-hover"),
-                        "/tnexus:pay confirm " + token))
+                        "/pay confirm " + token))
                 .append(Component.space())
                 .append(createActionComponent(
                         this.plugin.getMessageConfig().getMessage("economy.pay.cancel-button"),

@@ -134,6 +134,7 @@ public final class SignShopManager {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(signBlock, "signBlock");
         Objects.requireNonNull(type, "type");
+        ItemStack resolvedTemplateItem = resolveCreationTemplateItem(type, initialChest, templateItem);
 
         if (type == ShopType.PLAYER
                 && !player.hasPermission(PLAYER_SHOP_PERMISSION)
@@ -149,12 +150,17 @@ public final class SignShopManager {
             this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
             return null;
         }
-        if (type == ShopType.SERVER && (initialChest == null || templateItem == null)) {
+        if (type == ShopType.SERVER && (initialChest == null || resolvedTemplateItem == null)) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.server-requires-chest");
             return null;
         }
-        if (templateItem != null && isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
-            this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
+        if (resolvedTemplateItem != null
+                && isBannedMaterial(resolvedTemplateItem.getType())
+                && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(
+                    player,
+                    "shop.create.banned-material",
+                    resolvedTemplateItem.getType().name());
             return null;
         }
         if (type == ShopType.PLAYER) {
@@ -171,7 +177,7 @@ public final class SignShopManager {
             this.pendingPlayerShopCreations.merge(player.getUniqueId(), 1, Integer::sum);
         }
 
-        ItemStack normalizedItem = normalizeTemplateItem(templateItem);
+        ItemStack normalizedItem = normalizeTemplateItem(resolvedTemplateItem);
         BlockPosition chestPosition = type == ShopType.PLAYER && initialChest != null ? BlockPosition.from(initialChest) : null;
         SignShop shop = new SignShop(
                 0L,
@@ -224,7 +230,10 @@ public final class SignShopManager {
                 });
         Block signBlock = shop.getSignPosition().resolveBlock(this.plugin.getServer());
         if (signBlock != null && signBlock.getState() instanceof Sign sign) {
-            sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacySection().deserialize(""));
+            for (int lineIndex = 0; lineIndex < 4; lineIndex++) {
+                sign.getSide(Side.FRONT).line(lineIndex, LegacyComponentSerializer.legacySection().deserialize(""));
+            }
+            sign.setWaxed(false);
             sign.update(true, false);
         }
     }
@@ -323,10 +332,12 @@ public final class SignShopManager {
         if (isShopSign(clickedBlock)) {
             SignShop shop = getShop(clickedBlock);
             if (shop == null || shop.getType() != ShopType.PLAYER) {
+                cancelLinkSessionOnError(player.getUniqueId(), session);
                 this.plugin.getMessageConfig().sendMessage(player, "shop.link.not-player-shop");
                 return true;
             }
             if (!canModify(player, shop)) {
+                cancelLinkSessionOnError(player.getUniqueId(), session);
                 this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
                 return true;
             }
@@ -340,6 +351,7 @@ public final class SignShopManager {
         }
 
         if (session == null || session.shopId() == null) {
+            cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.link.select-sign-first");
             return true;
         }
@@ -353,10 +365,12 @@ public final class SignShopManager {
 
         ItemStack templateItem = findFirstTemplateItem(clickedBlock);
         if (templateItem == null) {
+            cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.link.chest-empty");
             return true;
         }
         if (isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
+            cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
             return true;
         }
@@ -932,10 +946,11 @@ public final class SignShopManager {
         String label = shop.getType() == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
         String buyValue = shop.getBuyPrice() == null ? "-" : trimPrice(shop.getBuyPrice());
         String sellValue = shop.getSellPrice() == null ? "-" : trimPrice(shop.getSellPrice());
-        sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacySection().deserialize(color + label));
-        sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacySection().deserialize("&f" + shop.getItemName()));
-        sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacySection().deserialize(color + "B " + buyValue + " &8| " + color + "S " + sellValue));
-        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacySection().deserialize("&7" + shop.getNote()));
+        sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacyAmpersand().deserialize(color + label));
+        sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getItemName()));
+        sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacyAmpersand().deserialize(
+                color + "B " + buyValue + " &8| " + color + "S " + sellValue));
+        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&7" + shop.getNote()));
         sign.setWaxed(true);
         sign.update(true, false);
     }
@@ -1160,6 +1175,20 @@ public final class SignShopManager {
         return clone;
     }
 
+    private @Nullable ItemStack resolveCreationTemplateItem(
+            ShopType type,
+            @Nullable Block initialChest,
+            @Nullable ItemStack templateItem) {
+        if (initialChest == null) {
+            return templateItem;
+        }
+        ItemStack chestItem = findFirstTemplateItem(initialChest);
+        if (type == ShopType.SERVER) {
+            return chestItem;
+        }
+        return chestItem == null ? templateItem : chestItem;
+    }
+
     private @Nullable Double normalizePrice(@Nullable Double price) {
         if (price == null || !Double.isFinite(price) || price <= 0.0D) {
             return null;
@@ -1189,6 +1218,12 @@ public final class SignShopManager {
 
     private void decrementPendingPlayerShopCreation(UUID ownerUuid) {
         this.pendingPlayerShopCreations.computeIfPresent(ownerUuid, (ignored, count) -> count <= 1 ? null : count - 1);
+    }
+
+    private void cancelLinkSessionOnError(UUID playerId, @Nullable LinkSession session) {
+        if (session != null && session.commandMode()) {
+            this.linkSessions.remove(playerId);
+        }
     }
 
     private String trimPrice(double price) {
