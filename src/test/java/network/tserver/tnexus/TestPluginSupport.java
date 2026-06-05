@@ -1,9 +1,18 @@
 package network.tserver.tnexus;
 
 import java.io.StringReader;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.DatabaseManager;
+import net.milkbowl.vault.economy.Economy;
+import net.milkbowl.vault.economy.EconomyResponse;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.PluginDescriptionFile;
+import org.bukkit.plugin.ServicePriority;
 import org.junit.jupiter.api.Assertions;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
@@ -37,6 +46,7 @@ public final class TestPluginSupport {
     public static ServerMock mockServerWithRequiredPlugins() {
         ServerMock server = MockBukkit.mock();
         registerRequiredPlugins(server);
+        registerEconomyProvider(server);
         return server;
     }
 
@@ -65,6 +75,25 @@ public final class TestPluginSupport {
                 .build();
         server.getPluginManager().registerLoadedPlugin(dependencyPlugin);
         server.getPluginManager().enablePlugin(dependencyPlugin);
+    }
+
+    /**
+     * Registers a basic Vault economy provider for tests.
+     *
+     * @param server mocked server
+     */
+    public static void registerEconomyProvider(ServerMock server) {
+        PluginMock providerPlugin = PluginMock.builder()
+                .withPluginName("EssentialsX")
+                .withPluginVersion("1.0.0")
+                .build();
+        server.getPluginManager().registerLoadedPlugin(providerPlugin);
+        server.getPluginManager().enablePlugin(providerPlugin);
+        server.getServicesManager().register(
+                Economy.class,
+                createEconomyProxy(),
+                providerPlugin,
+                ServicePriority.Normal);
     }
 
     /**
@@ -110,5 +139,76 @@ public final class TestPluginSupport {
         public synchronized boolean initialize() {
             return true;
         }
+    }
+
+    private static Economy createEconomyProxy() {
+        Map<UUID, Double> balances = new ConcurrentHashMap<>();
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "getBalance" -> balances.getOrDefault(getPlayerId(args), 0.0D);
+            case "has" -> balances.getOrDefault(getPlayerId(args), 0.0D) >= getAmount(args);
+            case "depositPlayer" -> applyDelta(balances, getPlayerId(args), getAmount(args));
+            case "withdrawPlayer" -> withdraw(balances, getPlayerId(args), getAmount(args));
+            case "currencyNamePlural" -> "Coins";
+            case "currencyNameSingular" -> "Coin";
+            case "isEnabled" -> true;
+            case "hasBankSupport" -> false;
+            case "fractionalDigits" -> 2;
+            case "format" -> String.format("%.2f", ((Number) args[0]).doubleValue());
+            case "getName" -> "MockEconomy";
+            case "hasAccount", "createPlayerAccount" -> true;
+            default -> defaultValue(method.getReturnType());
+        };
+        return (Economy) Proxy.newProxyInstance(
+                Economy.class.getClassLoader(),
+                new Class<?>[]{Economy.class},
+                handler);
+    }
+
+    private static UUID getPlayerId(Object[] args) {
+        for (Object arg : args) {
+            if (arg instanceof OfflinePlayer player) {
+                return player.getUniqueId();
+            }
+        }
+        throw new IllegalArgumentException("OfflinePlayer argument is required");
+    }
+
+    private static double getAmount(Object[] args) {
+        for (Object arg : args) {
+            if (arg instanceof Number number) {
+                return number.doubleValue();
+            }
+        }
+        throw new IllegalArgumentException("Numeric amount argument is required");
+    }
+
+    private static EconomyResponse applyDelta(Map<UUID, Double> balances, UUID playerId, double amount) {
+        double newBalance = balances.getOrDefault(playerId, 0.0D) + amount;
+        balances.put(playerId, newBalance);
+        return new EconomyResponse(amount, newBalance, EconomyResponse.ResponseType.SUCCESS, null);
+    }
+
+    private static EconomyResponse withdraw(Map<UUID, Double> balances, UUID playerId, double amount) {
+        double currentBalance = balances.getOrDefault(playerId, 0.0D);
+        if (currentBalance < amount) {
+            return new EconomyResponse(amount, currentBalance, EconomyResponse.ResponseType.FAILURE, "Insufficient funds");
+        }
+
+        double newBalance = currentBalance - amount;
+        balances.put(playerId, newBalance);
+        return new EconomyResponse(amount, newBalance, EconomyResponse.ResponseType.SUCCESS, null);
+    }
+
+    private static Object defaultValue(Class<?> returnType) {
+        if (returnType == boolean.class) {
+            return false;
+        }
+        if (returnType == int.class) {
+            return 0;
+        }
+        if (returnType == double.class) {
+            return 0.0D;
+        }
+        return null;
     }
 }
