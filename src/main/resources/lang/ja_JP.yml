@@ -21,6 +21,27 @@ command:
     version: "&e/tnexus version &7- Show plugin version"
   version:
     info: "&aT-Nexus version: &f{0}"
+economy:
+  balance:
+    self: "&7現在の残高: &a{0}"
+    usage: "&c使い方: /balance"
+  pay:
+    usage: "&c使い方: /pay <player>"
+    anvil-title: "&6{0} に送金"
+    target-not-found: "&cプレイヤー {0} は見つかりません"
+    confirmation: "&7{0} さんへ &a{1}&7 を送金します。よろしいですか？"
+    confirm-button: "&a[承認]"
+    confirm-hover: "&aクリックして送金を確定します"
+    cancel-button: "&c[拒否]"
+    cancel-hover: "&cクリックして送金をキャンセルします"
+    invalid-amount: "&c0より大きい有効な金額を入力してください"
+    insufficient-funds: "&c残高が不足しています"
+    sender-success: "&a{0} さんへ {1} を送金しました"
+    receiver-online: "&a{0} さんから {1} を受け取りました"
+    receiver-offline-delivery: "&a{0} さんから {1} を受け取りました"
+    cancelled: "&e送金をキャンセルしました"
+    expired: "&c送金確認の有効期限が切れました。もう一度実行してください"
+    failed: "&c送金処理に失敗しました"
 gui:
   main-menu:
     stub:

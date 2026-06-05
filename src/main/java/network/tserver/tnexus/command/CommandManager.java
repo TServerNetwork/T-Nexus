@@ -9,13 +9,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.command.subcommand.HelpCommand;
 import network.tserver.tnexus.command.subcommand.MenuCommand;
 import network.tserver.tnexus.command.subcommand.ReloadCommand;
 import network.tserver.tnexus.command.subcommand.VersionCommand;
+import network.tserver.tnexus.manager.PaymentManager;
+import network.tserver.tnexus.manager.PaymentManager.ConfirmationResult;
+import network.tserver.tnexus.manager.PaymentManager.QueueResult;
+import network.tserver.tnexus.util.CurrencyFormatter;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -28,6 +39,9 @@ public final class CommandManager {
     private static final String COMMAND_NAME = "tnexus";
     private static final String COMMAND_DESCRIPTION = "T-Nexus main command";
     private static final List<String> COMMAND_ALIASES = List.of("tn", "nexus");
+    private static final String BALANCE_COMMAND_NAME = "balance";
+    private static final String PAY_COMMAND_NAME = "pay";
+    private static final String USE_PERMISSION = "tnexus.use";
 
     private final TNexus plugin;
     private final BaseCommand rootCommand;
@@ -70,6 +84,25 @@ public final class CommandManager {
                         null,
                         COMMAND_NAME,
                         args);
+            }
+                });
+
+        commands.register(BALANCE_COMMAND_NAME, "Show your balance", List.of("bal"), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onBalanceCommand(commandSourceStack.getSender(), args);
+            }
+        });
+
+        commands.register(PAY_COMMAND_NAME, "Pay another player", List.of(), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onPayCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onPayTabComplete(commandSourceStack.getSender(), args);
             }
         });
     }
@@ -163,5 +196,217 @@ public final class CommandManager {
 
     private String normalize(String input) {
         return input.toLowerCase(Locale.ROOT);
+    }
+
+    private void onBalanceCommand(CommandSender sender, String[] args) {
+        if (!canUseEconomyCommand(sender)) {
+            return;
+        }
+        if (args.length > 0) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.usage");
+            return;
+        }
+
+        Player player = (Player) sender;
+        this.plugin.getEconomyManager().getBalance(player.getUniqueId())
+                .whenComplete((balance, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(player, "economy.pay.failed");
+                        return;
+                    }
+                    this.plugin.getMessageConfig().sendMessage(
+                            player,
+                            "economy.balance.self",
+                            CurrencyFormatter.format(this.plugin, balance));
+                }));
+    }
+
+    private void onPayCommand(CommandSender sender, String[] args) {
+        if (!canUseEconomyCommand(sender)) {
+            return;
+        }
+
+        if (args.length == 0) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.usage");
+            return;
+        }
+
+        Player player = (Player) sender;
+        if (args.length >= 2 && "confirm".equalsIgnoreCase(args[0])) {
+            confirmPayment(player, args[1]);
+            return;
+        }
+        if (args.length >= 2 && "cancel".equalsIgnoreCase(args[0])) {
+            cancelPayment(player, args[1]);
+            return;
+        }
+        if (args.length != 1) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.usage");
+            return;
+        }
+
+        OfflinePlayer target = resolveTarget(args[0]);
+        if (target == null) {
+            this.plugin.getMessageConfig().sendMessage(player, "economy.pay.target-not-found", args[0]);
+            return;
+        }
+
+        String targetName = PaymentManager.resolveName(target);
+        this.plugin.getAnvilGuiManager().openNumberInput(
+                player,
+                this.plugin.getMessageConfig().getMessage("economy.pay.anvil-title", targetName),
+                amount -> queuePayment(player, target, amount));
+    }
+
+    private Collection<String> onPayTabComplete(CommandSender sender, String[] args) {
+        if (!canTabUseEconomyCommand(sender)) {
+            return List.of();
+        }
+        if (args.length <= 1) {
+            String input = args.length == 0 ? "" : normalize(args[0]);
+            List<String> completions = new ArrayList<>();
+            for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
+                String name = onlinePlayer.getName();
+                if (!name.equalsIgnoreCase(sender.getName()) && normalize(name).startsWith(input)) {
+                    completions.add(name);
+                }
+            }
+            return completions;
+        }
+        return List.of();
+    }
+
+    private void queuePayment(Player sender, OfflinePlayer target, double amount) {
+        this.plugin.getPaymentManager().queuePayment(sender, target, amount)
+                .whenComplete((result, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.failed");
+                        return;
+                    }
+                    handleQueueResult(sender, Objects.requireNonNull(result, "result"), target, amount);
+                }));
+    }
+
+    private void confirmPayment(Player sender, String token) {
+        this.plugin.getPaymentManager().confirmPayment(sender, token)
+                .whenComplete((result, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.failed");
+                        return;
+                    }
+                    handleConfirmationResult(sender, Objects.requireNonNull(result, "result"));
+                }));
+    }
+
+    private void cancelPayment(Player sender, String token) {
+        this.plugin.getPaymentManager().cancelPayment(sender, token)
+                .whenComplete((result, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.failed");
+                        return;
+                    }
+                    ConfirmationResult confirmationResult = Objects.requireNonNull(result, "result");
+                    if (confirmationResult.status() == PaymentManager.ConfirmationStatus.CANCELLED) {
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.cancelled");
+                    } else if (confirmationResult.status() == PaymentManager.ConfirmationStatus.EXPIRED) {
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.expired");
+                    } else {
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.failed");
+                    }
+                }));
+    }
+
+    private void handleQueueResult(Player sender, QueueResult result, OfflinePlayer target, double amount) {
+        switch (result.status()) {
+            case INVALID_AMOUNT -> this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.invalid-amount");
+            case INSUFFICIENT_FUNDS -> this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.insufficient-funds");
+            case QUEUED -> sendPaymentConfirmationMessage(
+                    sender,
+                    Objects.requireNonNull(result.entry(), "entry").token(),
+                    PaymentManager.resolveName(target),
+                    amount);
+        }
+    }
+
+    private void handleConfirmationResult(Player sender, ConfirmationResult result) {
+        switch (result.status()) {
+            case SUCCESS -> {
+                OfflinePlayer target = Objects.requireNonNull(result.target(), "target");
+                String formattedAmount = CurrencyFormatter.format(this.plugin, result.amount());
+                String targetName = PaymentManager.resolveName(target);
+                this.plugin.getMessageConfig().sendMessage(
+                        sender,
+                        "economy.pay.sender-success",
+                        targetName,
+                        formattedAmount);
+                if (target.isOnline() && target.getPlayer() != null) {
+                    this.plugin.getMessageConfig().sendMessage(
+                            target.getPlayer(),
+                            "economy.pay.receiver-online",
+                            sender.getName(),
+                            formattedAmount);
+                }
+            }
+            case EXPIRED -> this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.expired");
+            case INSUFFICIENT_FUNDS -> this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.insufficient-funds");
+            default -> this.plugin.getMessageConfig().sendMessage(sender, "economy.pay.failed");
+        }
+    }
+
+    private void sendPaymentConfirmationMessage(Player sender, String token, String targetName, double amount) {
+        String formattedAmount = CurrencyFormatter.format(this.plugin, amount);
+        TextComponent message = LegacyComponentSerializer.legacySection().deserialize(
+                this.plugin.getMessageConfig().getMessage("prefix")
+                        + this.plugin.getMessageConfig().getMessage("economy.pay.confirmation", targetName, formattedAmount))
+                .append(Component.space())
+                .append(createActionComponent(
+                        this.plugin.getMessageConfig().getMessage("economy.pay.confirm-button"),
+                        this.plugin.getMessageConfig().getMessage("economy.pay.confirm-hover"),
+                        "/tnexus:pay confirm " + token))
+                .append(Component.space())
+                .append(createActionComponent(
+                        this.plugin.getMessageConfig().getMessage("economy.pay.cancel-button"),
+                        this.plugin.getMessageConfig().getMessage("economy.pay.cancel-hover"),
+                        "/tnexus:pay cancel " + token));
+        sender.sendMessage(message);
+    }
+
+    private Component createActionComponent(String text, String hoverText, String command) {
+        return LegacyComponentSerializer.legacySection().deserialize(text)
+                .hoverEvent(HoverEvent.showText(LegacyComponentSerializer.legacySection().deserialize(hoverText)))
+                .clickEvent(ClickEvent.runCommand(command));
+    }
+
+    private OfflinePlayer resolveTarget(String name) {
+        Player onlineTarget = this.plugin.getServer().getPlayerExact(name);
+        if (onlineTarget != null) {
+            return onlineTarget;
+        }
+
+        OfflinePlayer offlineTarget = this.plugin.getServer().getOfflinePlayer(name);
+        if (offlineTarget.isOnline() || offlineTarget.hasPlayedBefore()) {
+            return offlineTarget;
+        }
+        return null;
+    }
+
+    private boolean canUseEconomyCommand(CommandSender sender) {
+        if (!sender.hasPermission(USE_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return false;
+        }
+        if (!(sender instanceof Player)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean canTabUseEconomyCommand(CommandSender sender) {
+        return sender.hasPermission(USE_PERMISSION) && sender instanceof Player;
+    }
+
+    private void runSync(Runnable runnable) {
+        this.plugin.getServer().getScheduler().runTask(this.plugin, runnable);
     }
 }

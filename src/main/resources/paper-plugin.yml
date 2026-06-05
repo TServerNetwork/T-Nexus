@@ -20,6 +20,13 @@ commands:
     description: T-Nexus main command
     usage: "/<command> [help|reload|version]"
     aliases: [tn, nexus]
+  balance:
+    description: Show your balance
+    usage: "/<command>"
+    aliases: [bal]
+  pay:
+    description: Pay another player
+    usage: "/<command> <player>"
 
 permissions:
   tnexus.use:

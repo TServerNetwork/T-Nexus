@@ -6,14 +6,18 @@ import network.tserver.tnexus.command.CommandManager;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
+import network.tserver.tnexus.database.repository.PayQueueRepository;
+import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.gui.AnvilGuiManager;
 import network.tserver.tnexus.gui.GuiManager;
 import network.tserver.tnexus.manager.EconomyManager;
+import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PluginHookManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
 import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
+import network.tserver.tnexus.listener.PaymentNotificationListener;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -30,6 +34,8 @@ public class TNexus extends JavaPlugin {
     private CommandManager commandManager;
     private PluginHookManager pluginHookManager;
     private EconomyManager economyManager;
+    private PaymentManager paymentManager;
+    private PaymentNotificationListener paymentNotificationListener;
 
     @Override
     public void onEnable() {
@@ -61,6 +67,8 @@ public class TNexus extends JavaPlugin {
 
         this.guiManager = new GuiManager(this);
         this.anvilGuiManager = new AnvilGuiManager(this);
+        this.paymentManager = createPaymentManager();
+        this.paymentNotificationListener = new PaymentNotificationListener(this);
         registerCommands();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
     }
@@ -81,6 +89,8 @@ public class TNexus extends JavaPlugin {
         this.commandManager = null;
         this.pluginHookManager = null;
         this.economyManager = null;
+        this.paymentManager = null;
+        this.paymentNotificationListener = null;
     }
 
     /**
@@ -156,6 +166,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the payment manager instance.
+     *
+     * @return payment manager
+     */
+    public PaymentManager getPaymentManager() {
+        return this.paymentManager;
+    }
+
+    /**
      * Creates the plugin hook manager used during startup.
      *
      * @return plugin hook manager
@@ -192,6 +211,19 @@ public class TNexus extends JavaPlugin {
      */
     protected EconomyManager createEconomyManager() {
         return new EconomyManager(this);
+    }
+
+    /**
+     * Creates the payment manager used during startup.
+     *
+     * @return payment manager
+     */
+    protected PaymentManager createPaymentManager() {
+        return new PaymentManager(
+                this,
+                this.economyManager,
+                new PayQueueRepository(this.databaseManager),
+                new TransactionRepository(this.databaseManager));
     }
 
     /**
