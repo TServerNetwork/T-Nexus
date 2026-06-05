@@ -49,6 +49,11 @@ class DatabaseManagerTest {
                 assertEquals("initial setup", resultSet.getString("description"));
             }
         }
+
+        assertMigrationRecorded(2, "economy schema");
+        assertTableExists("tnexus_transactions");
+        assertTableExists("tnexus_server_shops");
+        assertTableExists("tnexus_player_shops");
     }
 
     @Test
@@ -72,7 +77,25 @@ class DatabaseManagerTest {
         }).get(5, TimeUnit.SECONDS);
 
         assertFalse(ranOnPrimaryThread);
-        assertEquals(1, migrationCount);
+        assertEquals(2, migrationCount);
+    }
+
+    @Test
+    void shouldSkipAlreadyAppliedMigrations() throws SQLException {
+        TNexus plugin = loadPlugin();
+        this.databaseManager = createH2DatabaseManager(plugin, "database_reinitialize");
+        assertTrue(this.databaseManager.initialize());
+        this.databaseManager.shutdown();
+
+        this.databaseManager = createH2DatabaseManager(plugin, "database_reinitialize");
+        assertTrue(this.databaseManager.initialize());
+
+        try (var connection = this.databaseManager.getConnection();
+             var statement = connection.createStatement();
+             var resultSet = statement.executeQuery("SELECT COUNT(*) FROM tnexus_schema_version")) {
+            resultSet.next();
+            assertEquals(2, resultSet.getInt(1));
+        }
     }
 
     @Test
@@ -116,5 +139,24 @@ class DatabaseManagerTest {
         configuration.set("tnexus.database.table-prefix", "tnexus_");
         configuration.set("tnexus.database.pool-size", 4);
         return new DatabaseManager(plugin, plugin.getConfigManager());
+    }
+
+    private void assertMigrationRecorded(int version, String description) throws SQLException {
+        try (var connection = this.databaseManager.getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT description FROM tnexus_schema_version WHERE version = ?")) {
+            statement.setInt(1, version);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertTrue(resultSet.next());
+                assertEquals(description, resultSet.getString("description"));
+            }
+        }
+    }
+
+    private void assertTableExists(String tableName) throws SQLException {
+        try (var connection = this.databaseManager.getConnection();
+             var resultSet = connection.getMetaData().getTables(null, null, tableName.toUpperCase(), null)) {
+            assertTrue(resultSet.next());
+        }
     }
 }
