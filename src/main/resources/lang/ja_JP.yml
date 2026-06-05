@@ -26,6 +26,11 @@ gui:
     stub:
       name: "&6Main Menu"
       lore: "&7BaseGui stub for Issue #5"
+  anvil:
+    cancelled: "&7入力をキャンセルしました"
+    number:
+      placeholder: "0"
+      invalid: "&c数値を入力してください"
   navigation:
     previous:
       enabled:

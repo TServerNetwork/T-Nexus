@@ -6,6 +6,7 @@ import network.tserver.tnexus.command.CommandManager;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
+import network.tserver.tnexus.gui.AnvilGuiManager;
 import network.tserver.tnexus.gui.GuiManager;
 import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PluginHookManager;
@@ -25,6 +26,7 @@ public class TNexus extends JavaPlugin {
     private MessageConfig messageConfig;
     private DatabaseManager databaseManager;
     private GuiManager guiManager;
+    private AnvilGuiManager anvilGuiManager;
     private CommandManager commandManager;
     private PluginHookManager pluginHookManager;
     private EconomyManager economyManager;
@@ -58,6 +60,7 @@ public class TNexus extends JavaPlugin {
         }
 
         this.guiManager = new GuiManager(this);
+        this.anvilGuiManager = new AnvilGuiManager(this);
         registerCommands();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
     }
@@ -74,6 +77,7 @@ public class TNexus extends JavaPlugin {
         this.messageConfig = null;
         this.configManager = null;
         this.guiManager = null;
+        this.anvilGuiManager = null;
         this.commandManager = null;
         this.pluginHookManager = null;
         this.economyManager = null;
@@ -113,6 +117,15 @@ public class TNexus extends JavaPlugin {
      */
     public GuiManager getGuiManager() {
         return this.guiManager;
+    }
+
+    /**
+     * Returns the anvil GUI manager instance.
+     *
+     * @return anvil GUI manager
+     */
+    public AnvilGuiManager getAnvilGuiManager() {
+        return this.anvilGuiManager;
     }
 
     /**
