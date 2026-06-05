@@ -1,3 +1,10 @@
+## [0.8.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.0...v0.8.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* update paper-plugin.yml dependencies to new Paper plugin format ([7781ea8](https://github.com/TServerNetwork/T-Nexus/commit/7781ea8cf6ac7f25f3b4643ab6e3619e18838f7d))
+
 # [0.8.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.7.0...v0.8.0) (2026-06-05)
 
 
