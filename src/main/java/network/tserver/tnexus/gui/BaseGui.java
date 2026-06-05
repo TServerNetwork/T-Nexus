@@ -87,6 +87,13 @@ public abstract class BaseGui implements InventoryHolder {
     }
 
     /**
+     * Re-renders the current inventory contents in place.
+     */
+    public final void refresh() {
+        render();
+    }
+
+    /**
      * Returns the GUI title.
      *
      * @return title

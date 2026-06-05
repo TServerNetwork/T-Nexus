@@ -501,6 +501,20 @@ public final class SignShopManager {
      * @param amount requested amount
      */
     public void executeTrade(Player player, SignShop shop, TradeAction action, int amount) {
+        executeTrade(player, shop, action, amount, () -> {
+        });
+    }
+
+    /**
+     * Executes a trade and invokes a callback after a successful completion on the main thread.
+     *
+     * @param player actor
+     * @param shop target shop
+     * @param action trade direction
+     * @param amount requested amount
+     * @param successCallback callback invoked after success
+     */
+    public void executeTrade(Player player, SignShop shop, TradeAction action, int amount, Runnable successCallback) {
         if (amount <= 0) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.trade.invalid-amount");
             return;
@@ -525,8 +539,8 @@ public final class SignShopManager {
         double totalPrice = unitPrice * finalAmount;
 
         switch (action) {
-            case BUY -> executeBuy(player, shop, template, finalAmount, totalPrice);
-            case SELL -> executeSell(player, shop, template, finalAmount, totalPrice);
+            case BUY -> executeBuy(player, shop, template, finalAmount, totalPrice, successCallback);
+            case SELL -> executeSell(player, shop, template, finalAmount, totalPrice, successCallback);
         }
     }
 
@@ -583,6 +597,42 @@ public final class SignShopManager {
                 yield Math.max(0, priceLimited);
             }
         };
+    }
+
+    /**
+     * Returns the current available stock for display in the browse GUI.
+     *
+     * @param shop target shop
+     * @return available stock, or {@link Integer#MAX_VALUE} for server shops
+     */
+    public int getCurrentStock(SignShop shop) {
+        if (shop.getType() == ShopType.SERVER) {
+            return Integer.MAX_VALUE;
+        }
+        ItemStack template = shop.getItemStack();
+        if (template == null) {
+            return 0;
+        }
+        Inventory chestInventory = resolveLinkedChestInventory(shop);
+        return chestInventory == null ? 0 : countMatchingItems(chestInventory, template);
+    }
+
+    /**
+     * Returns the current available sell capacity for display in the browse GUI.
+     *
+     * @param shop target shop
+     * @return available capacity, or {@link Integer#MAX_VALUE} for server shops
+     */
+    public int getCurrentCapacity(SignShop shop) {
+        if (shop.getType() == ShopType.SERVER) {
+            return Integer.MAX_VALUE;
+        }
+        ItemStack template = shop.getItemStack();
+        if (template == null) {
+            return 0;
+        }
+        Inventory chestInventory = resolveLinkedChestInventory(shop);
+        return chestInventory == null ? 0 : calculateInventoryFit(chestInventory, template);
     }
 
     /**
@@ -664,7 +714,13 @@ public final class SignShopManager {
         return positions;
     }
 
-    private void executeBuy(Player player, SignShop shop, ItemStack template, int amount, double totalPrice) {
+    private void executeBuy(
+            Player player,
+            SignShop shop,
+            ItemStack template,
+            int amount,
+            double totalPrice,
+            Runnable successCallback) {
         this.economyManager.withdraw(player.getUniqueId(), totalPrice)
                 .thenCompose(withdrawn -> {
                     if (!withdrawn) {
@@ -697,6 +753,7 @@ public final class SignShopManager {
                     }
                     recordTradeAudit(player, shop, TransactionType.SHOP_BUY, totalPrice, amount, "Bought from shop");
                     refreshShopDisplay(shop);
+                    successCallback.run();
                     this.plugin.getMessageConfig().sendMessage(
                             player,
                             "shop.trade.buy-success",
@@ -706,7 +763,13 @@ public final class SignShopManager {
                 }));
     }
 
-    private void executeSell(Player player, SignShop shop, ItemStack template, int amount, double totalPrice) {
+    private void executeSell(
+            Player player,
+            SignShop shop,
+            ItemStack template,
+            int amount,
+            double totalPrice,
+            Runnable successCallback) {
         if (shop.getType() == ShopType.SERVER && !isServerShopSellToVoidEnabled()) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
             return;
@@ -748,6 +811,7 @@ public final class SignShopManager {
                 }
                 recordTradeAudit(player, shop, TransactionType.SHOP_SELL, totalPrice, amount, "Sold to shop");
                 refreshShopDisplay(shop);
+                successCallback.run();
                 this.plugin.getMessageConfig().sendMessage(
                         player,
                         "shop.trade.sell-success",
