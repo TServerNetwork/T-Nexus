@@ -224,7 +224,10 @@ public final class SignShopManager {
                 });
         Block signBlock = shop.getSignPosition().resolveBlock(this.plugin.getServer());
         if (signBlock != null && signBlock.getState() instanceof Sign sign) {
-            sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacySection().deserialize(""));
+            for (int lineIndex = 0; lineIndex < 4; lineIndex++) {
+                sign.getSide(Side.FRONT).line(lineIndex, LegacyComponentSerializer.legacySection().deserialize(""));
+            }
+            sign.setWaxed(false);
             sign.update(true, false);
         }
     }

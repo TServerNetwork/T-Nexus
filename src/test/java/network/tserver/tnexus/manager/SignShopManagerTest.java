@@ -283,6 +283,38 @@ class SignShopManagerTest {
     }
 
     @Test
+    void shouldReleaseSignProtectionAfterDeletingShop() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(37, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(38, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Delete",
+                chestBlock,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        manager.deleteShop(shop);
+
+        Sign sign = (Sign) signBlock.getState();
+        assertFalse(sign.isWaxed());
+        assertEquals("", LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(0)));
+        assertNull(manager.getShop(signBlock));
+    }
+
+    @Test
     void shouldPersistServerShopItemAndAllowBuyingAfterChestRemoval() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
