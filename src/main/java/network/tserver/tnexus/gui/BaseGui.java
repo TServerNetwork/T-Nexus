@@ -143,6 +143,62 @@ public abstract class BaseGui implements InventoryHolder {
     }
 
     /**
+     * Returns whether the previous-page button should be visible.
+     *
+     * @return {@code true} when visible
+     */
+    protected boolean showPreviousPageButton() {
+        return true;
+    }
+
+    /**
+     * Returns whether the next-page button should be visible.
+     *
+     * @return {@code true} when visible
+     */
+    protected boolean showNextPageButton() {
+        return true;
+    }
+
+    /**
+     * Returns whether the back button should be visible.
+     *
+     * @return {@code true} when visible
+     */
+    protected boolean showBackButton() {
+        return true;
+    }
+
+    /**
+     * Returns whether the current-location indicator should be visible.
+     *
+     * @return {@code true} when visible
+     */
+    protected boolean showCurrentLocationIndicator() {
+        return true;
+    }
+
+    /**
+     * Returns whether the close button should be visible.
+     *
+     * @return {@code true} when visible
+     */
+    protected boolean showCloseButton() {
+        return true;
+    }
+
+    /**
+     * Returns the close-button handler.
+     *
+     * @return close-button handler
+     */
+    protected Consumer<InventoryClickEvent> getCloseHandler() {
+        return event -> Bukkit.getScheduler().runTask(
+                this.plugin,
+                () -> event.getWhoClicked().closeInventory());
+    }
+
+    /**
      * Sets a static item and optional click handler at the absolute slot.
      *
      * @param slot target slot
@@ -266,23 +322,34 @@ public abstract class BaseGui implements InventoryHolder {
             this.inventory.setItem(slot, filler.clone());
         }
 
-        setItem(resolveNavigationSlot(this.guiSettings.closeButtonSlot()),
-                createItem(Material.RED_BED,
-                        this.messageConfig.getMessage("gui.navigation.close.name"),
-                        List.of(this.messageConfig.getMessage("gui.navigation.close.lore"))),
-                event -> Bukkit.getScheduler().runTask(
-                        this.plugin,
-                        () -> event.getWhoClicked().closeInventory()));
+        int closeSlot = resolveNavigationSlot(this.guiSettings.closeButtonSlot());
+        if (showCloseButton()) {
+            setItem(closeSlot,
+                    createItem(Material.RED_BED,
+                            this.messageConfig.getMessage("gui.navigation.close.name"),
+                            List.of(this.messageConfig.getMessage("gui.navigation.close.lore"))),
+                    getCloseHandler());
+        } else {
+            this.inventory.setItem(closeSlot, filler.clone());
+            this.clickHandlers.remove(closeSlot);
+        }
 
-        setItem(resolveNavigationSlot(this.guiSettings.currentLocationSlot()),
-                createItem(Material.EMERALD,
-                        this.messageConfig.getMessage("gui.navigation.current.name", this.title),
-                        List.of(this.messageConfig.getMessage("gui.navigation.current.lore", this.title))),
-                null);
+        int currentLocationSlot = resolveNavigationSlot(this.guiSettings.currentLocationSlot());
+        if (showCurrentLocationIndicator()) {
+            setItem(currentLocationSlot,
+                    createItem(Material.EMERALD,
+                            this.messageConfig.getMessage("gui.navigation.current.name", this.title),
+                            List.of(this.messageConfig.getMessage("gui.navigation.current.lore", this.title))),
+                    null);
+        } else {
+            this.inventory.setItem(currentLocationSlot, filler.clone());
+            this.clickHandlers.remove(currentLocationSlot);
+        }
 
         renderBackButton(filler);
         renderPagerButton(resolveNavigationSlot(this.guiSettings.prevPageSlot()),
                 this.guiSettings.pagerSettings().previous(),
+                showPreviousPageButton(),
                 this.currentPage > 0,
                 "gui.navigation.previous",
                 event -> {
@@ -291,6 +358,7 @@ public abstract class BaseGui implements InventoryHolder {
                 });
         renderPagerButton(resolveNavigationSlot(this.guiSettings.nextPageSlot()),
                 this.guiSettings.pagerSettings().next(),
+                showNextPageButton(),
                 this.currentPage + 1 < this.totalPages,
                 "gui.navigation.next",
                 event -> {
@@ -301,7 +369,7 @@ public abstract class BaseGui implements InventoryHolder {
 
     private void renderBackButton(ItemStack filler) {
         int slot = resolveNavigationSlot(this.guiSettings.backButtonSlot());
-        if (this.backHandler == null) {
+        if (!showBackButton() || this.backHandler == null) {
             this.inventory.setItem(slot, filler.clone());
             this.clickHandlers.remove(slot);
             return;
@@ -317,9 +385,16 @@ public abstract class BaseGui implements InventoryHolder {
     private void renderPagerButton(
             int slot,
             PagerTexture configuredTexture,
+            boolean visible,
             boolean enabled,
             String messageKeyPrefix,
             Consumer<InventoryClickEvent> handler) {
+        if (!visible) {
+            ItemStack filler = createBlankItem(resolveMaterial(this.guiSettings.borderItem(), Material.GRAY_STAINED_GLASS_PANE));
+            this.inventory.setItem(slot, filler);
+            this.clickHandlers.remove(slot);
+            return;
+        }
         PagerTexture texture = new PagerTexture(
                 configuredTexture.enabledTexture(),
                 configuredTexture.disabledTexture());

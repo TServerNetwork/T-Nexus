@@ -10,6 +10,7 @@ import network.tserver.tnexus.database.repository.PayQueueRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.gui.AnvilGuiManager;
 import network.tserver.tnexus.gui.GuiManager;
+import network.tserver.tnexus.manager.AuditLogManager;
 import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PluginHookManager;
@@ -35,6 +36,7 @@ public class TNexus extends JavaPlugin {
     private AnvilGuiManager anvilGuiManager;
     private CommandManager commandManager;
     private PluginHookManager pluginHookManager;
+    private AuditLogManager auditLogManager;
     private EconomyManager economyManager;
     private PaymentManager paymentManager;
     private PaymentNotificationListener paymentNotificationListener;
@@ -71,6 +73,7 @@ public class TNexus extends JavaPlugin {
 
         this.guiManager = new GuiManager(this);
         this.anvilGuiManager = new AnvilGuiManager(this);
+        this.auditLogManager = new AuditLogManager(this);
         this.paymentManager = createPaymentManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.signShopManager = new SignShopManager(this);
@@ -95,6 +98,7 @@ public class TNexus extends JavaPlugin {
         this.anvilGuiManager = null;
         this.commandManager = null;
         this.pluginHookManager = null;
+        this.auditLogManager = null;
         this.economyManager = null;
         this.paymentManager = null;
         this.paymentNotificationListener = null;
@@ -163,6 +167,15 @@ public class TNexus extends JavaPlugin {
      */
     public PluginHookManager getPluginHookManager() {
         return this.pluginHookManager;
+    }
+
+    /**
+     * Returns the audit-log manager instance.
+     *
+     * @return audit-log manager
+     */
+    public AuditLogManager getAuditLogManager() {
+        return this.auditLogManager;
     }
 
     /**
