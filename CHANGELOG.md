@@ -1,3 +1,12 @@
+## [0.8.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.1...v0.8.2) (2026-06-05)
+
+
+### Bug Fixes
+
+* **command:** register /bal alias to override EssentialsX ([d9a0318](https://github.com/TServerNetwork/T-Nexus/commit/d9a031805f2ec76244078b9fdd188e234bc83818))
+* **i18n:** resolve message keys not loading from ja_JP.yml ([64d9e64](https://github.com/TServerNetwork/T-Nexus/commit/64d9e6453c8553bca686e5c0c281a4b945405cf8))
+* **shop:** remove chest requirement at sign placement, guide player to link ([199bade](https://github.com/TServerNetwork/T-Nexus/commit/199bade6a01e96cfdbfaa95cf0d1664150c6f416))
+
 ## [0.8.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.0...v0.8.1) (2026-06-05)
 
 
