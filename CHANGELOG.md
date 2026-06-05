@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.5.0...v0.6.0) (2026-06-05)
+
+
+### Features
+
+* **economy:** implement sign shop foundation ([#27](https://github.com/TServerNetwork/T-Nexus/issues/27)) ([270c5cd](https://github.com/TServerNetwork/T-Nexus/commit/270c5cd13896ea9d420376acf8b75d366f5569f0))
+
 # [0.5.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.4.0...v0.5.0) (2026-06-05)
 
 
