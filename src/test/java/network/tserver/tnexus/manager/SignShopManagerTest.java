@@ -38,7 +38,7 @@ class SignShopManagerTest {
         SignShopManager manager = plugin.getSignShopManager();
         PlayerMock owner = this.server.addPlayer("Owner");
         PlayerMock buyer = this.server.addPlayer("Buyer");
-        owner.addAttachment(plugin, "tnexus.shop.use", true);
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
         buyer.addAttachment(plugin, "tnexus.shop.use", true);
         plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
 
@@ -72,6 +72,71 @@ class SignShopManagerTest {
         assertEquals(40.0D, plugin.getEconomyManager().getBalance(owner.getUniqueId()).get(5, TimeUnit.SECONDS));
         assertEquals(6, countItems(((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory(), Material.DIAMOND));
         assertEquals(1, countTransactions(plugin, buyer, "SHOP_BUY"));
+    }
+
+    @Test
+    void shouldRejectPlayerShopCreationWithoutAdjacentChest() {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock player = this.server.addPlayer("Owner");
+        player.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = player.getWorld();
+        Block signBlock = world.getBlockAt(5, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(
+                player,
+                signBlock,
+                ShopType.PLAYER,
+                "",
+                null,
+                null);
+
+        assertNull(shop);
+    }
+
+    @Test
+    void shouldEnforceLuckPermsPlayerShopLimit() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        TestPluginSupport.setLuckPermsMeta(owner.getUniqueId(), "tnexus.shop.limit", "1");
+
+        World world = owner.getWorld();
+        Block firstChest = world.getBlockAt(60, 64, 0);
+        firstChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block firstSign = world.getBlockAt(61, 64, 0);
+        firstSign.setType(Material.OAK_SIGN);
+
+        SignShop firstShop = manager.createShop(
+                owner,
+                firstSign,
+                ShopType.PLAYER,
+                "",
+                firstChest,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(firstShop);
+
+        Block secondChest = world.getBlockAt(62, 64, 0);
+        secondChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory().addItem(new ItemStack(Material.GOLD_INGOT, 1));
+        Block secondSign = world.getBlockAt(63, 64, 0);
+        secondSign.setType(Material.OAK_SIGN);
+
+        SignShop secondShop = manager.createShop(
+                owner,
+                secondSign,
+                ShopType.PLAYER,
+                "",
+                secondChest,
+                new ItemStack(Material.GOLD_INGOT));
+
+        assertNull(secondShop);
+        waitUntil(() -> manager.getShop(firstSign) != null);
+        assertEquals(1, manager.getOwnedShops(owner.getUniqueId()).size());
     }
 
     @Test

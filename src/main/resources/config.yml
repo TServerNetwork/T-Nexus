@@ -32,6 +32,8 @@ tnexus:
         enabled: "REPLACE_NEXT_ENABLED_TEXTURE"
         disabled: "REPLACE_NEXT_DISABLED_TEXTURE"
   shop:
+    player-shop:
+      default-limit: 5
     link-tool:
       material: "STICK"
     server-shop:

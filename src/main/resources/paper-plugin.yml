@@ -30,6 +30,9 @@ commands:
   shop:
     description: Manage sign shops
     usage: "/<command> link"
+  shops:
+    description: List player shops
+    usage: "/<command> [player]"
 
 permissions:
   tnexus.use:
@@ -39,7 +42,10 @@ permissions:
     description: Allows reloading T-Nexus configuration
     default: op
   tnexus.shop.use:
-    description: Allows creating and using SignShops
+    description: Allows using SignShops and management commands
+    default: true
+  tnexus.shop.player:
+    description: Allows creating and managing personal SignShops
     default: true
   tnexus.shop.admin:
     description: Allows editing and removing all SignShops

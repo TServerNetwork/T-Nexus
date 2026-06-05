@@ -79,8 +79,18 @@ gui:
 shop:
   command:
     usage: "&cUsage: /shop link"
+  list:
+    usage: "&cUsage: /shops [player]"
+    header-self: "&6Your Shops"
+    header-other: "&6{0}'s Shops"
+    empty-self: "&7You do not own any player shops."
+    empty-other: "&7{0} does not own any player shops."
+    player-not-found: "&cPlayer {0} was not found."
+    entry: "&e[{0}] &f{1} &7@ &f{2} {3}, {4}, {5}"
   create:
     success: "&aSignShop created."
+    player-requires-chest: "&cPlayer shops require an adjacent chest with an item."
+    limit-reached: "&cYou have reached your shop limit ({0}/{1})."
     server-requires-chest: "&cServerShop requires an adjacent chest with an item."
     banned-material: "&c{0} cannot be sold in a SignShop."
   sign:
