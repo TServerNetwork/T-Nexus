@@ -1,3 +1,10 @@
+# [0.2.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.5...v0.2.0) (2026-06-05)
+
+
+### Features
+
+* **economy:** implement Vault-backed economy manager ([#23](https://github.com/TServerNetwork/T-Nexus/issues/23)) ([ec067d8](https://github.com/TServerNetwork/T-Nexus/commit/ec067d8cceb5b124b30f45445966c2db20ba0ec8))
+
 ## [0.1.5](https://github.com/TServerNetwork/T-Nexus/compare/v0.1.4...v0.1.5) (2026-06-04)
 
 
