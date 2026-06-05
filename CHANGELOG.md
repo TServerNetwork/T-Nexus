@@ -1,3 +1,14 @@
+## [0.8.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.2...v0.8.3) (2026-06-05)
+
+
+### Bug Fixes
+
+* **economy:** fix /pay confirm clickevent command ([b20f919](https://github.com/TServerNetwork/T-Nexus/commit/b20f919d932c9f8538e7ea0118156d0b783c7738))
+* **shop:** apply color codes to sign text ([330c7f9](https://github.com/TServerNetwork/T-Nexus/commit/330c7f926ad85ea3631bca5f1a92bf7b73faaf1f))
+* **shop:** cancel link mode on error ([ba97dec](https://github.com/TServerNetwork/T-Nexus/commit/ba97deca886faf1b09c76ca25ee4b41d30fd1e65))
+* **shop:** release sign protection after shop deletion ([268077d](https://github.com/TServerNetwork/T-Nexus/commit/268077d3aa4f6d21b9abdaaa65b9721aa568407d))
+* **shop:** ServerShop only requires chest at creation time ([405181d](https://github.com/TServerNetwork/T-Nexus/commit/405181d4585b7716704b3fed2667ab70163dc21e))
+
 ## [0.8.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.1...v0.8.2) (2026-06-05)
 
 
