@@ -1,3 +1,11 @@
+# [0.7.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.6.0...v0.7.0) (2026-06-05)
+
+
+### Features
+
+* **economy:** implement player shop system ([#29](https://github.com/TServerNetwork/T-Nexus/issues/29)) ([3bf5842](https://github.com/TServerNetwork/T-Nexus/commit/3bf58420d27150c4afed357875f2c9d10c3929d7))
+* **economy:** implement server shop logic ([#28](https://github.com/TServerNetwork/T-Nexus/issues/28)) ([cfa2cea](https://github.com/TServerNetwork/T-Nexus/commit/cfa2ceafbef5b64474938a6e2e3ff2150db3c7da))
+
 # [0.6.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.5.0...v0.6.0) (2026-06-05)
 
 
