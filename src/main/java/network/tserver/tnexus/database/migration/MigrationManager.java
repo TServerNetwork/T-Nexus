@@ -140,11 +140,20 @@ public final class MigrationManager {
 
     private List<String> splitStatements(String sql) {
         String normalized = sql.replace("${table_prefix}", getTablePrefix());
-        String[] parts = normalized.split(";\\s*(?:\\R|$)");
+        StringBuilder uncommentedSql = new StringBuilder();
+        for (String line : normalized.split("\\R")) {
+            String trimmedLine = line.trim();
+            if (trimmedLine.startsWith("--")) {
+                continue;
+            }
+            uncommentedSql.append(line).append('\n');
+        }
+
+        String[] parts = uncommentedSql.toString().split(";\\s*(?:\\R|$)");
         List<String> statements = new ArrayList<>();
         for (String part : parts) {
             String trimmed = part.trim();
-            if (!trimmed.isEmpty() && !trimmed.startsWith("--")) {
+            if (!trimmed.isEmpty()) {
                 statements.add(trimmed);
             }
         }
