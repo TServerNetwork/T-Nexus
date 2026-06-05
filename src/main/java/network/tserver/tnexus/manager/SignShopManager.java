@@ -323,10 +323,12 @@ public final class SignShopManager {
         if (isShopSign(clickedBlock)) {
             SignShop shop = getShop(clickedBlock);
             if (shop == null || shop.getType() != ShopType.PLAYER) {
+                cancelLinkSessionOnError(player.getUniqueId(), session);
                 this.plugin.getMessageConfig().sendMessage(player, "shop.link.not-player-shop");
                 return true;
             }
             if (!canModify(player, shop)) {
+                cancelLinkSessionOnError(player.getUniqueId(), session);
                 this.plugin.getMessageConfig().sendMessage(player, "general.no-permission");
                 return true;
             }
@@ -340,6 +342,7 @@ public final class SignShopManager {
         }
 
         if (session == null || session.shopId() == null) {
+            cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.link.select-sign-first");
             return true;
         }
@@ -353,10 +356,12 @@ public final class SignShopManager {
 
         ItemStack templateItem = findFirstTemplateItem(clickedBlock);
         if (templateItem == null) {
+            cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.link.chest-empty");
             return true;
         }
         if (isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
+            cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
             return true;
         }
@@ -1189,6 +1194,12 @@ public final class SignShopManager {
 
     private void decrementPendingPlayerShopCreation(UUID ownerUuid) {
         this.pendingPlayerShopCreations.computeIfPresent(ownerUuid, (ignored, count) -> count <= 1 ? null : count - 1);
+    }
+
+    private void cancelLinkSessionOnError(UUID playerId, @Nullable LinkSession session) {
+        if (session != null && session.commandMode()) {
+            this.linkSessions.remove(playerId);
+        }
     }
 
     private String trimPrice(double price) {

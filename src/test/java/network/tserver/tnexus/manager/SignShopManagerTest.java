@@ -19,6 +19,7 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,6 +100,38 @@ class SignShopManagerTest {
         waitUntil(() -> manager.getShop(signBlock) != null);
         assertEquals("§8[§6T-Nexus§8] §aSignShop created.", player.nextMessage());
         assertEquals("§8[§6T-Nexus§8] §eUse the link tool to connect this shop to a chest.", player.nextMessage());
+    }
+
+    @Test
+    void shouldCancelCommandLinkModeAfterChestValidationError() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock player = this.server.addPlayer("Owner");
+        player.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = player.getWorld();
+        Block sourceChest = world.getBlockAt(15, 64, 0);
+        sourceChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) sourceChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(16, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+        Block emptyChest = world.getBlockAt(17, 64, 0);
+        emptyChest.setType(Material.CHEST);
+
+        SignShop shop = manager.createShop(
+                player,
+                signBlock,
+                ShopType.PLAYER,
+                "",
+                sourceChest,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        manager.beginLinkMode(player);
+        assertTrue(manager.handleLinkInteraction(player, signBlock, false));
+        assertTrue(manager.handleLinkInteraction(player, emptyChest, false));
+        assertFalse(manager.handleLinkInteraction(player, emptyChest, false));
     }
 
     @Test
