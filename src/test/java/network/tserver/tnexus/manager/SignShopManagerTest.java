@@ -1,6 +1,7 @@
 package network.tserver.tnexus.manager;
 
 import java.sql.ResultSet;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import network.tserver.tnexus.TNexus;
@@ -19,6 +20,7 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SignShopManagerTest {
@@ -72,6 +74,122 @@ class SignShopManagerTest {
         assertEquals(1, countTransactions(plugin, buyer, "SHOP_BUY"));
     }
 
+    @Test
+    void shouldRejectServerShopCreationWithoutAdminPermission() {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock player = this.server.addPlayer("Builder");
+
+        World world = player.getWorld();
+        Block signBlock = world.getBlockAt(10, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+        Block chestBlock = world.getBlockAt(11, 64, 0);
+        chestBlock.setType(Material.CHEST);
+
+        SignShop shop = manager.createShop(
+                player,
+                signBlock,
+                ShopType.SERVER,
+                "",
+                chestBlock,
+                new ItemStack(Material.DIAMOND));
+
+        assertNull(shop);
+    }
+
+    @Test
+    void shouldRejectBannedServerShopMaterialWithoutBypass() {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        World world = admin.getWorld();
+        Block signBlock = world.getBlockAt(20, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+        Block chestBlock = world.getBlockAt(21, 64, 0);
+        chestBlock.setType(Material.CHEST);
+
+        SignShop shop = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "",
+                chestBlock,
+                new ItemStack(Material.BARRIER));
+
+        assertNull(shop);
+    }
+
+    @Test
+    void shouldAllowBannedServerShopMaterialWithBypass() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+        admin.addAttachment(plugin, "tnexus.shop.bypass.ban", true);
+
+        World world = admin.getWorld();
+        Block signBlock = world.getBlockAt(30, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+        Block chestBlock = world.getBlockAt(31, 64, 0);
+        chestBlock.setType(Material.CHEST);
+
+        SignShop shop = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "",
+                chestBlock,
+                new ItemStack(Material.BARRIER));
+
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+    }
+
+    @Test
+    void shouldPersistServerShopItemAndAllowBuyingAfterChestRemoval() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = admin.getWorld();
+        Block chestBlock = world.getBlockAt(40, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(41, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop created = manager.createShop(
+                admin,
+                signBlock,
+                ShopType.SERVER,
+                "Server stock",
+                chestBlock,
+                new ItemStack(Material.DIAMOND));
+        assertNotNull(created);
+
+        waitUntil(() -> manager.getShop(signBlock) != null
+                && countServerShopRows(plugin, created.getOwnerUuid()) == 1
+                && hasSerializedItem(plugin, created.getOwnerUuid()));
+
+        chestBlock.setType(Material.AIR);
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 5);
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 5));
+
+        assertEquals(50.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
+        assertEquals(1, countTransactions(plugin, buyer, "SHOP_BUY"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -111,6 +229,39 @@ class SignShopManagerTest {
                 resultSet.next();
                 return resultSet.getInt(1);
             }
+        }
+    }
+
+    private int countServerShopRows(TNexus plugin, UUID ownerUuid) {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT COUNT(*) FROM tnexus_shops WHERE owner_uuid = ? AND shop_type = ?")) {
+            statement.setString(1, ownerUuid.toString());
+            statement.setString(2, ShopType.SERVER.name());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            }
+        } catch (Exception exception) {
+            return 0;
+        }
+    }
+
+    private boolean hasSerializedItem(TNexus plugin, UUID ownerUuid) {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT item_stack FROM tnexus_shops WHERE owner_uuid = ? AND shop_type = ?")) {
+            statement.setString(1, ownerUuid.toString());
+            statement.setString(2, ShopType.SERVER.name());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return false;
+                }
+                String serialized = resultSet.getString(1);
+                return serialized != null && !serialized.isBlank();
+            }
+        } catch (Exception exception) {
+            return false;
         }
     }
 
