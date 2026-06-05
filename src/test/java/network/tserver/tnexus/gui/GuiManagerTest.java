@@ -81,8 +81,8 @@ class GuiManagerTest {
         gui.open();
 
         assertEquals(3, gui.getTotalPages());
-        assertEquals("§8Previous Page", getDisplayName(player, 45));
-        assertEquals("§eNext Page", getDisplayName(player, 53));
+        assertEquals("§8前のページ", getDisplayName(player, 45));
+        assertEquals("§e次のページ", getDisplayName(player, 53));
 
         InventoryClickEvent firstNextClick = createClickEvent(player, 53);
         this.server.getPluginManager().callEvent(firstNextClick);
@@ -96,7 +96,7 @@ class GuiManagerTest {
         Thread.sleep(250L);
         this.server.getPluginManager().callEvent(createClickEvent(player, 53));
         assertEquals(2, gui.getCurrentPage());
-        assertEquals("§8Next Page", getDisplayName(player, 53));
+        assertEquals("§8次のページ", getDisplayName(player, 53));
 
         Thread.sleep(250L);
         this.server.getPluginManager().callEvent(createClickEvent(player, 45));

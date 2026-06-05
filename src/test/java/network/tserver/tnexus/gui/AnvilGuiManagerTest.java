@@ -62,7 +62,7 @@ class AnvilGuiManagerTest {
         runActions(actions);
 
         assertNull(completedValue.get());
-        assertEquals("§8[§6T-Nexus§8] §cEnter a valid number.", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §c有効な数値を入力してください。", player.nextMessage());
         assertEquals(AnvilGuiManager.BuilderActionType.RUN, actions.get(0).type());
         assertEquals(AnvilGuiManager.BuilderActionType.REPLACE_INPUT_TEXT, actions.get(1).type());
         assertEquals("0", actions.get(1).replacementText());
@@ -81,7 +81,7 @@ class AnvilGuiManagerTest {
         builderFactory.builder.onClose.run();
 
         assertNull(completedValue.get());
-        assertEquals("§8[§6T-Nexus§8] §7Input cancelled.", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §7入力をキャンセルしました。", player.nextMessage());
     }
 
     @Test
