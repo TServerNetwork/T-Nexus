@@ -75,7 +75,7 @@ class SignShopManagerTest {
     }
 
     @Test
-    void shouldRejectPlayerShopCreationWithoutAdjacentChest() {
+    void shouldCreateUnlinkedPlayerShopWithoutAdjacentChest() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
         PlayerMock player = this.server.addPlayer("Owner");
@@ -93,7 +93,12 @@ class SignShopManagerTest {
                 null,
                 null);
 
-        assertNull(shop);
+        assertNotNull(shop);
+        assertNull(shop.getLinkedChestPosition());
+        assertNull(shop.getItemStack());
+        waitUntil(() -> manager.getShop(signBlock) != null);
+        assertEquals("§8[§6T-Nexus§8] §aSignShop created.", player.nextMessage());
+        assertEquals("§8[§6T-Nexus§8] §eUse the link tool to connect this shop to a chest.", player.nextMessage());
     }
 
     @Test
