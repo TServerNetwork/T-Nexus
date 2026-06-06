@@ -3,6 +3,7 @@ package network.tserver.tnexus.command;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.text.Component;
@@ -190,6 +191,84 @@ class CommandManagerTest {
 
         assertIterableEquals(List.of(), completions);
         assertNull(player.nextMessage());
+    }
+
+    @Test
+    void shouldProvideAdminBalanceTabCompletions() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        this.server.addPlayer("BalanceTarget");
+        admin.addAttachment(plugin, "tnexus.admin.balance", true);
+
+        assertIterableEquals(
+                List.of("add"),
+                invokeTabCompletion(plugin, "onBalanceTabComplete", admin, new String[]{"a"}));
+        assertIterableEquals(
+                List.of("BalanceTarget"),
+                invokeTabCompletion(plugin, "onBalanceTabComplete", admin, new String[]{"add", "Balance"}));
+        assertIterableEquals(
+                List.of(),
+                invokeTabCompletion(plugin, "onBalanceTabComplete", admin, new String[]{"add", "BalanceTarget", "10"}));
+    }
+
+    @Test
+    void shouldHideBalanceTabCompletionsWithoutPermission() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("User");
+
+        assertIterableEquals(
+                List.of(),
+                invokeTabCompletion(plugin, "onBalanceTabComplete", player, new String[]{"a"}));
+    }
+
+    @Test
+    void shouldProvidePayTabCompletionsForPlayersAndActions() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock sender = this.server.addPlayer("Sender");
+        this.server.addPlayer("Receiver");
+        sender.addAttachment(plugin, "tnexus.use", true);
+
+        assertIterableEquals(
+                List.of("Receiver"),
+                invokeTabCompletion(plugin, "onPayTabComplete", sender, new String[]{"Re"}));
+        assertIterableEquals(
+                List.of("Receiver", "confirm", "cancel"),
+                invokeTabCompletion(plugin, "onPayTabComplete", sender, new String[]{""}));
+    }
+
+    @Test
+    void shouldProvideShopAndAdminPlayerTabCompletions() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        this.server.addPlayer("Owner");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        assertIterableEquals(
+                List.of("linkitem"),
+                invokeTabCompletion(plugin, "onShopTabComplete", admin, new String[]{"l"}));
+        assertIterableEquals(
+                List.of("Owner"),
+                invokeTabCompletion(plugin, "onShopsTabComplete", admin, new String[]{"Ow"}));
+        assertIterableEquals(
+                List.of(),
+                invokeTabCompletion(plugin, "onShopsTabComplete", admin, new String[]{"Owner", "extra"}));
+    }
+
+    @Test
+    void shouldProvideHistoryPlayerTabCompletionForAuditAdmins() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        this.server.addPlayer("Target");
+        admin.addAttachment(plugin, "tnexus.audit.admin", true);
+
+        assertIterableEquals(
+                List.of("Target"),
+                invokeTabCompletion(plugin, "onHistoryTabComplete", admin, new String[]{"Ta"}));
     }
 
     @Test
@@ -475,5 +554,17 @@ class CommandManagerTest {
             }
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> invokeTabCompletion(
+            TNexus plugin,
+            String methodName,
+            CommandSender sender,
+            String[] args) throws Exception {
+        Method method = CommandManager.class.getDeclaredMethod(methodName, CommandSender.class, String[].class);
+        method.setAccessible(true);
+        Collection<String> completions = (Collection<String>) method.invoke(plugin.getCommandManager(), sender, args);
+        return List.copyOf(completions);
     }
 }

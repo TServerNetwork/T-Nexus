@@ -5,6 +5,7 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,6 +30,7 @@ import network.tserver.tnexus.manager.PaymentManager.ConfirmationResult;
 import network.tserver.tnexus.manager.PaymentManager.QueueResult;
 import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.util.CurrencyFormatter;
+import network.tserver.tnexus.util.TabCompleterUtil;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.OfflinePlayer;
@@ -50,6 +52,9 @@ public final class CommandManager {
     private static final String SHOP_COMMAND_NAME = "shop";
     private static final String SHOPS_COMMAND_NAME = "shops";
     private static final String HISTORY_COMMAND_NAME = "history";
+    private static final List<String> BALANCE_ACTIONS = List.of("add", "set", "take");
+    private static final List<String> PAY_ACTIONS = List.of("confirm", "cancel");
+    private static final List<String> SHOP_ACTIONS = List.of("linkitem");
     private static final String USE_PERMISSION = "tnexus.use";
     private static final String BALANCE_ADMIN_PERMISSION = "tnexus.admin.balance";
     private static final String SHOP_ADMIN_PERMISSION = "tnexus.shop.admin";
@@ -104,6 +109,11 @@ public final class CommandManager {
             @Override
             public void execute(CommandSourceStack commandSourceStack, String[] args) {
                 CommandManager.this.onBalanceCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onBalanceTabComplete(commandSourceStack.getSender(), args);
             }
         };
         commands.register(BALANCE_COMMAND_NAME, "Show your balance", List.of(BALANCE_ALIAS_COMMAND_NAME), balanceCommand);
@@ -191,12 +201,12 @@ public final class CommandManager {
                     completions.add(subcommand.getName());
                 }
             }
-            return completions;
+            return completions.isEmpty() ? Collections.emptyList() : completions;
         }
 
         BaseCommand subcommand = this.subcommands.get(normalize(args[0]));
         if (subcommand == null || !canTabComplete(sender, subcommand)) {
-            return List.of();
+            return Collections.emptyList();
         }
         return subcommand.getTabCompletions(sender, sliceArgs(args));
     }
@@ -318,15 +328,13 @@ public final class CommandManager {
 
     private Collection<String> onShopTabComplete(CommandSender sender, String[] args) {
         if (!sender.hasPermission(SHOP_PLAYER_PERMISSION) && !sender.hasPermission(SHOP_ADMIN_PERMISSION)) {
-            return List.of();
+            return Collections.emptyList();
         }
         if (args.length <= 1) {
-            String input = args.length == 0 ? "" : normalize(args[0]);
-            return List.of("linkitem").stream()
-                    .filter(option -> option.startsWith(input))
-                    .toList();
+            String input = args.length == 0 ? "" : args[0];
+            return TabCompleterUtil.filter(SHOP_ACTIONS, input);
         }
-        return List.of();
+        return Collections.emptyList();
     }
 
     private void onShopsCommand(CommandSender sender, String[] args) {
@@ -363,40 +371,27 @@ public final class CommandManager {
     private Collection<String> onShopsTabComplete(CommandSender sender, String[] args) {
         if (args.length <= 1) {
             if (args.length == 0) {
-                return List.of();
+                return Collections.emptyList();
             }
             if (!sender.hasPermission(SHOP_ADMIN_PERMISSION)) {
-                return List.of();
+                return Collections.emptyList();
             }
-            String input = normalize(args[0]);
-            List<String> completions = new ArrayList<>();
-            for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
-                String name = onlinePlayer.getName();
-                if (normalize(name).startsWith(input)) {
-                    completions.add(name);
-                }
-            }
-            return completions;
+            return TabCompleterUtil.filterPlayers(args[0]);
         }
-        return List.of();
+        return Collections.emptyList();
     }
 
     private Collection<String> onPayTabComplete(CommandSender sender, String[] args) {
         if (!canTabUseEconomyCommand(sender)) {
-            return List.of();
+            return Collections.emptyList();
         }
         if (args.length <= 1) {
-            String input = args.length == 0 ? "" : normalize(args[0]);
-            List<String> completions = new ArrayList<>();
-            for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
-                String name = onlinePlayer.getName();
-                if (!name.equalsIgnoreCase(sender.getName()) && normalize(name).startsWith(input)) {
-                    completions.add(name);
-                }
-            }
-            return completions;
+            List<String> completions = new ArrayList<>(TabCompleterUtil.filterPlayers(args.length == 0 ? "" : args[0]));
+            completions.removeIf(name -> name.equalsIgnoreCase(sender.getName()));
+            completions.addAll(TabCompleterUtil.filter(PAY_ACTIONS, args.length == 0 ? "" : args[0]));
+            return completions.isEmpty() ? Collections.emptyList() : completions;
         }
-        return List.of();
+        return Collections.emptyList();
     }
 
     private void onHistoryCommand(CommandSender sender, String[] args) {
@@ -432,19 +427,27 @@ public final class CommandManager {
     private Collection<String> onHistoryTabComplete(CommandSender sender, String[] args) {
         if (args.length <= 1) {
             if (args.length == 0 || !sender.hasPermission(AUDIT_ADMIN_PERMISSION)) {
-                return List.of();
+                return Collections.emptyList();
             }
-            String input = normalize(args[0]);
-            List<String> completions = new ArrayList<>();
-            for (Player onlinePlayer : this.plugin.getServer().getOnlinePlayers()) {
-                String name = onlinePlayer.getName();
-                if (normalize(name).startsWith(input)) {
-                    completions.add(name);
-                }
-            }
-            return completions;
+            return TabCompleterUtil.filterPlayers(args[0]);
         }
-        return List.of();
+        return Collections.emptyList();
+    }
+
+    private Collection<String> onBalanceTabComplete(CommandSender sender, String[] args) {
+        if (args.length == 0) {
+            return Collections.emptyList();
+        }
+        if (!sender.hasPermission(BALANCE_ADMIN_PERMISSION)) {
+            return Collections.emptyList();
+        }
+        if (args.length == 1) {
+            return TabCompleterUtil.filter(BALANCE_ACTIONS, args[0]);
+        }
+        if (args.length == 2) {
+            return TabCompleterUtil.filterPlayers(args[1]);
+        }
+        return Collections.emptyList();
     }
 
     private void queuePayment(Player sender, OfflinePlayer target, double amount) {
