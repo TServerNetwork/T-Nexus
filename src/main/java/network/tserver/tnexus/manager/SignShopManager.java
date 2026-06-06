@@ -190,7 +190,7 @@ public final class SignShopManager {
                 normalizedItem == null ? DEFAULT_UNLINKED_NAME : resolveItemName(normalizedItem),
                 null,
                 null,
-                note == null ? DEFAULT_NOTE : note,
+                note == null ? DEFAULT_NOTE : sanitizeNote(note),
                 true);
         applySignWax(signBlock, true);
         applySignLines(shop, ShopStatus.UNAVAILABLE);
@@ -415,6 +415,16 @@ public final class SignShopManager {
     }
 
     /**
+     * Opens the buyer-facing preview GUI for a shop owner or admin.
+     *
+     * @param player target player
+     * @param shop target shop
+     */
+    public void openPreviewGui(Player player, SignShop shop) {
+        openBrowseGui(player, shop);
+    }
+
+    /**
      * Opens the delete confirmation GUI.
      *
      * @param player target player
@@ -470,6 +480,28 @@ public final class SignShopManager {
     }
 
     /**
+     * Updates the rendered sign note and persists the change.
+     *
+     * @param player editor
+     * @param shop target shop
+     * @param note updated note
+     */
+    public void updateNote(Player player, SignShop shop, String note) {
+        shop.setNote(sanitizeNote(note));
+        this.signShopRepository.update(shop)
+                .whenComplete((ignored, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        this.plugin.getLogger().log(Level.SEVERE, "Failed to update SignShop note.", throwable);
+                        this.plugin.getMessageConfig().sendMessage(player, "shop.edit.note.failed");
+                        return;
+                    }
+                    refreshShopDisplay(shop);
+                    this.plugin.getMessageConfig().sendMessage(player, "shop.edit.note.updated");
+                    openEditGui(player, shop);
+                }));
+    }
+
+    /**
      * Toggles the enabled state for a shop.
      *
      * @param player editor
@@ -490,6 +522,20 @@ public final class SignShopManager {
                             shop.isEnabled() ? "shop.edit.toggle.enabled" : "shop.edit.toggle.disabled");
                     openEditGui(player, shop);
                 }));
+    }
+
+    /**
+     * Opens the note editor for a shop.
+     *
+     * @param player editor
+     * @param shop target shop
+     */
+    public void openNoteEditor(Player player, SignShop shop) {
+        this.plugin.getAnvilGuiManager().openInput(
+                player,
+                this.plugin.getMessageConfig().getMessage("shop.edit.note.title"),
+                shop.getNote(),
+                note -> updateNote(player, shop, note));
     }
 
     /**
@@ -519,18 +565,25 @@ public final class SignShopManager {
             this.plugin.getMessageConfig().sendMessage(player, "shop.trade.invalid-amount");
             return;
         }
-        ItemStack template = shop.getItemStack();
-        if (template == null) {
-            this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
+        TradeEligibility eligibility = evaluateTradeEligibility(player, shop, action);
+        if (!eligibility.available()) {
+            this.plugin.getMessageConfig().sendMessage(player, eligibility.unavailableMessageKey());
             return;
         }
 
-        int maxAmount = computeMaxTradeAmount(player, shop, action);
-        if (maxAmount <= 0) {
-            this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
+        ItemStack template = Objects.requireNonNull(eligibility.template(), "trade template");
+        int maxAmount = eligibility.maxAmount();
+        int finalAmount = Math.min(amount, maxAmount);
+        if (finalAmount <= 0) {
+            this.plugin.getMessageConfig().sendMessage(player, eligibility.unavailableMessageKey());
             return;
         }
-        int finalAmount = Math.min(amount, maxAmount);
+        if (amount > finalAmount) {
+            this.plugin.getMessageConfig().sendMessage(
+                    player,
+                    Objects.requireNonNull(eligibility.adjustmentMessageKey(), "trade adjustment message"),
+                    finalAmount);
+        }
         double unitPrice = action == TradeAction.BUY ? nullablePrice(shop.getBuyPrice()) : nullablePrice(shop.getSellPrice());
         if (unitPrice <= 0.0D) {
             this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
@@ -553,50 +606,105 @@ public final class SignShopManager {
      * @return maximum amount
      */
     public int computeMaxTradeAmount(Player player, SignShop shop, TradeAction action) {
+        return evaluateTradeEligibility(player, shop, action).maxAmount();
+    }
+
+    private TradeEligibility evaluateTradeEligibility(Player player, SignShop shop, TradeAction action) {
         ItemStack template = shop.getItemStack();
-        if (template == null || !shop.isEnabled()) {
-            return 0;
+        if (template == null) {
+            return TradeEligibility.unavailable("shop.trade.unavailable");
+        }
+        if (!shop.isEnabled()) {
+            return TradeEligibility.unavailable("shop.trade.unavailable-disabled");
         }
 
         return switch (action) {
-            case BUY -> {
-                int fitAmount = calculateInventoryFit(player.getInventory(), template);
-                if (fitAmount <= 0) {
-                    yield 0;
-                }
-                if (shop.getType() == ShopType.SERVER) {
-                    yield fitAmount;
-                }
-                Inventory chestInventory = resolveLinkedChestInventory(shop);
-                if (chestInventory == null) {
-                    yield 0;
-                }
-                yield Math.min(fitAmount, countMatchingItems(chestInventory, template));
-            }
-            case SELL -> {
-                if (shop.getType() == ShopType.SERVER && !isServerShopSellToVoidEnabled()) {
-                    yield 0;
-                }
-                if (shop.getSellPrice() == null) {
-                    yield 0;
-                }
-                int ownedAmount = countMatchingItems(player.getInventory(), template);
-                if (ownedAmount <= 0) {
-                    yield 0;
-                }
-                int priceLimited = ownedAmount;
-                if (shop.getType() == ShopType.PLAYER) {
-                    Inventory chestInventory = resolveLinkedChestInventory(shop);
-                    if (chestInventory == null) {
-                        yield 0;
-                    }
-                    priceLimited = Math.min(
-                            ownedAmount,
-                            calculateInventoryFit(chestInventory, template));
-                }
-                yield Math.max(0, priceLimited);
-            }
+            case BUY -> evaluateBuyEligibility(player, shop, template);
+            case SELL -> evaluateSellEligibility(player, shop, template);
         };
+    }
+
+    private TradeEligibility evaluateBuyEligibility(Player player, SignShop shop, ItemStack template) {
+        Double unitPrice = shop.getBuyPrice();
+        if (unitPrice == null) {
+            return TradeEligibility.unavailable("shop.trade.unavailable");
+        }
+
+        List<TradeConstraint> constraints = new ArrayList<>();
+        constraints.add(new TradeConstraint(
+                calculateInventoryFit(player.getInventory(), template),
+                "shop.trade.adjusted.inv-max",
+                "shop.trade.unavailable"));
+        constraints.add(new TradeConstraint(
+                computeAffordableAmount(this.economyManager.getBalanceNow(player.getUniqueId()), unitPrice),
+                "shop.trade.adjusted.balance",
+                "shop.trade.insufficient-funds"));
+        if (shop.getType() == ShopType.PLAYER) {
+            Inventory chestInventory = resolveLinkedChestInventory(shop);
+            if (chestInventory == null) {
+                return TradeEligibility.unavailable("shop.trade.unavailable");
+            }
+            constraints.add(new TradeConstraint(
+                    countMatchingItems(chestInventory, template),
+                    "shop.trade.adjusted.stock",
+                    "shop.trade.out-of-stock"));
+        }
+        return resolveTradeEligibility(template, constraints);
+    }
+
+    private TradeEligibility evaluateSellEligibility(Player player, SignShop shop, ItemStack template) {
+        if (shop.getType() == ShopType.SERVER && !isServerShopSellToVoidEnabled()) {
+            return TradeEligibility.unavailable("shop.trade.unavailable");
+        }
+
+        Double unitPrice = shop.getSellPrice();
+        if (unitPrice == null) {
+            return TradeEligibility.unavailable("shop.trade.unavailable");
+        }
+
+        List<TradeConstraint> constraints = new ArrayList<>();
+        constraints.add(new TradeConstraint(
+                countMatchingItems(player.getInventory(), template),
+                "shop.trade.adjusted.player-items",
+                "shop.trade.unavailable"));
+        if (shop.getType() == ShopType.PLAYER) {
+            Inventory chestInventory = resolveLinkedChestInventory(shop);
+            if (chestInventory == null) {
+                return TradeEligibility.unavailable("shop.trade.unavailable");
+            }
+            constraints.add(new TradeConstraint(
+                    calculateInventoryFit(chestInventory, template),
+                    "shop.trade.adjusted.capacity",
+                    "shop.trade.chest-full"));
+            constraints.add(new TradeConstraint(
+                    computeAffordableAmount(this.economyManager.getBalanceNow(shop.getOwnerUuid()), unitPrice),
+                    "shop.trade.adjusted.owner-funds",
+                    "shop.trade.owner-funds"));
+        }
+        return resolveTradeEligibility(template, constraints);
+    }
+
+    private TradeEligibility resolveTradeEligibility(ItemStack template, List<TradeConstraint> constraints) {
+        int maxAmount = Integer.MAX_VALUE;
+        TradeConstraint limitingConstraint = null;
+        for (TradeConstraint constraint : constraints) {
+            if (constraint.amount() < maxAmount) {
+                maxAmount = constraint.amount();
+                limitingConstraint = constraint;
+            }
+        }
+        if (limitingConstraint == null || maxAmount <= 0) {
+            String messageKey = limitingConstraint == null
+                    ? "shop.trade.unavailable"
+                    : limitingConstraint.unavailableMessageKey();
+            return TradeEligibility.unavailable(messageKey);
+        }
+        return new TradeEligibility(
+                maxAmount,
+                limitingConstraint.adjustmentMessageKey(),
+                null,
+                true,
+                template);
     }
 
     /**
@@ -748,7 +856,9 @@ public final class SignShopManager {
 
                     if (!finishBuyOnMainThread(player, shop, template, amount, totalPrice)) {
                         rollbackBuy(shop, player, totalPrice);
-                        this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
+                        this.plugin.getMessageConfig().sendMessage(
+                                player,
+                                evaluateTradeEligibility(player, shop, TradeAction.BUY).unavailableMessageKey());
                         return;
                     }
                     recordTradeAudit(player, shop, TransactionType.SHOP_BUY, totalPrice, amount, "Bought from shop");
@@ -778,12 +888,18 @@ public final class SignShopManager {
                 ? this.economyManager.has(shop.getOwnerUuid(), totalPrice)
                 : CompletableFuture.completedFuture(true);
         ownerFundsFuture.whenComplete((ownerHasFunds, throwable) -> runSync(() -> {
-            if (throwable != null || ownerHasFunds == null || !ownerHasFunds) {
-                this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
+            if (throwable != null || ownerHasFunds == null) {
+                this.plugin.getMessageConfig().sendMessage(player, "shop.trade.failed");
+                return;
+            }
+            if (!ownerHasFunds) {
+                this.plugin.getMessageConfig().sendMessage(player, "shop.trade.owner-funds");
                 return;
             }
             if (!finishSellInventoryStage(player, shop, template, amount)) {
-                this.plugin.getMessageConfig().sendMessage(player, "shop.trade.unavailable");
+                this.plugin.getMessageConfig().sendMessage(
+                        player,
+                        evaluateTradeEligibility(player, shop, TradeAction.SELL).unavailableMessageKey());
                 return;
             }
             CompletableFuture<Boolean> moneyFuture = this.economyManager.deposit(player.getUniqueId(), totalPrice);
@@ -1260,8 +1376,19 @@ public final class SignShopManager {
         return price;
     }
 
+    private String sanitizeNote(@Nullable String note) {
+        return ChatColor.stripColor(note == null ? "" : note).trim();
+    }
+
     private double nullablePrice(@Nullable Double price) {
         return price == null ? 0.0D : price;
+    }
+
+    private int computeAffordableAmount(double balance, double unitPrice) {
+        if (!Double.isFinite(balance) || !Double.isFinite(unitPrice) || unitPrice <= 0.0D) {
+            return 0;
+        }
+        return Math.max(0, (int) Math.floor(balance / unitPrice));
     }
 
     private @Nullable Integer parsePositiveInteger(@Nullable String value) {
@@ -1299,6 +1426,21 @@ public final class SignShopManager {
 
     private void runSync(Runnable runnable) {
         Bukkit.getScheduler().runTask(this.plugin, runnable);
+    }
+
+    private record TradeConstraint(int amount, String adjustmentMessageKey, String unavailableMessageKey) {
+    }
+
+    private record TradeEligibility(
+            int maxAmount,
+            @Nullable String adjustmentMessageKey,
+            String unavailableMessageKey,
+            boolean available,
+            @Nullable ItemStack template) {
+
+        private static TradeEligibility unavailable(String unavailableMessageKey) {
+            return new TradeEligibility(0, null, unavailableMessageKey, false, null);
+        }
     }
 
     private record SyncAvailability(

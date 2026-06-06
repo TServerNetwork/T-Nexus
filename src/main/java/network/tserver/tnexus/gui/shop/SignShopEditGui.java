@@ -17,9 +17,11 @@ public final class SignShopEditGui extends BaseGui {
 
     private static final int ROWS = 3;
     private static final int PREVIEW_SLOT = 4;
-    private static final int PRICE_SLOT = 11;
-    private static final int TOGGLE_SLOT = 13;
-    private static final int DELETE_SLOT = 15;
+    private static final int PRICE_SLOT = 10;
+    private static final int NOTE_SLOT = 12;
+    private static final int TOGGLE_SLOT = 14;
+    private static final int PREVIEW_MODE_SLOT = 16;
+    private static final int DELETE_SLOT = 17;
 
     private final SignShopManager shopManager;
     private final Player player;
@@ -51,6 +53,13 @@ public final class SignShopEditGui extends BaseGui {
                         List.of(getPlugin().getMessageConfig().getMessage("shop.gui.edit.price.lore"))),
                 event -> this.shopManager.openPriceFlow(this.player, this.shop));
         setItem(
+                NOTE_SLOT,
+                createItem(
+                        Material.WRITABLE_BOOK,
+                        getPlugin().getMessageConfig().getMessage("shop.gui.edit.note.name"),
+                        List.of(getPlugin().getMessageConfig().getMessage("shop.gui.edit.note.lore"))),
+                event -> this.shopManager.openNoteEditor(this.player, this.shop));
+        setItem(
                 TOGGLE_SLOT,
                 createItem(
                         this.shop.isEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
@@ -58,6 +67,13 @@ public final class SignShopEditGui extends BaseGui {
                                 this.shop.isEnabled() ? "shop.gui.edit.toggle.enabled" : "shop.gui.edit.toggle.disabled"),
                         List.of(getPlugin().getMessageConfig().getMessage("shop.gui.edit.toggle.lore"))),
                 event -> this.shopManager.toggleEnabled(this.player, this.shop));
+        setItem(
+                PREVIEW_MODE_SLOT,
+                createItem(
+                        Material.ENDER_EYE,
+                        getPlugin().getMessageConfig().getMessage("shop.gui.edit.preview-mode.name"),
+                        List.of(getPlugin().getMessageConfig().getMessage("shop.gui.edit.preview-mode.lore"))),
+                event -> this.shopManager.openPreviewGui(this.player, this.shop));
         setItem(
                 DELETE_SLOT,
                 createItem(
