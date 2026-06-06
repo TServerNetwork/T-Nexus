@@ -2,6 +2,7 @@ package network.tserver.tnexus.database.repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -15,6 +16,7 @@ public final class PlayerStatsRepository {
     private final DatabaseManager databaseManager;
     private final String tableName;
     private final String deathStatsTableName;
+    private final String distanceStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -25,6 +27,7 @@ public final class PlayerStatsRepository {
         this.databaseManager = Objects.requireNonNull(databaseManager, "databaseManager");
         this.tableName = this.databaseManager.getTablePrefix() + "player_stats";
         this.deathStatsTableName = this.databaseManager.getTablePrefix() + "death_stats";
+        this.distanceStatsTableName = this.databaseManager.getTablePrefix() + "distance_stats";
     }
 
     /**
@@ -78,6 +81,55 @@ public final class PlayerStatsRepository {
                 return null;
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to update player play time", exception);
+            }
+        });
+    }
+
+    /**
+     * Adds aggregate distance statistics for one or more players.
+     *
+     * @param totalDistances total distance by player id
+     * @param travelDistances travel-type distance by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addDistanceStats(
+            Map<UUID, Double> totalDistances,
+            Map<UUID, Map<String, Double>> travelDistances) {
+        Objects.requireNonNull(totalDistances, "totalDistances");
+        Objects.requireNonNull(travelDistances, "travelDistances");
+        if (totalDistances.isEmpty() && travelDistances.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String totalDistanceSql = """
+                INSERT INTO %s (player_uuid, distance)
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE distance = distance + VALUES(distance)
+                """.formatted(this.tableName);
+        String travelDistanceSql = """
+                INSERT INTO %s (player_uuid, travel_type, distance)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE distance = distance + VALUES(distance)
+                """.formatted(this.distanceStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try (var totalDistanceStatement = connection.prepareStatement(totalDistanceSql);
+                     var travelDistanceStatement = connection.prepareStatement(travelDistanceSql)) {
+                    addTotalDistanceBatch(totalDistanceStatement, totalDistances);
+                    addTravelDistanceBatch(travelDistanceStatement, travelDistances);
+                    totalDistanceStatement.executeBatch();
+                    travelDistanceStatement.executeBatch();
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player distance stats", exception);
             }
         });
     }
@@ -148,5 +200,28 @@ public final class PlayerStatsRepository {
                 throw new IllegalStateException("Failed to update player stat column " + columnName, exception);
             }
         });
+    }
+
+    private void addTotalDistanceBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Double> totalDistances) throws Exception {
+        for (Map.Entry<UUID, Double> entry : totalDistances.entrySet()) {
+            statement.setString(1, entry.getKey().toString());
+            statement.setDouble(2, entry.getValue());
+            statement.addBatch();
+        }
+    }
+
+    private void addTravelDistanceBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, Double>> travelDistances) throws Exception {
+        for (Map.Entry<UUID, Map<String, Double>> playerEntry : travelDistances.entrySet()) {
+            for (Map.Entry<String, Double> travelEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, travelEntry.getKey());
+                statement.setDouble(3, travelEntry.getValue());
+                statement.addBatch();
+            }
+        }
     }
 }
