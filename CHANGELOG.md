@@ -1,3 +1,10 @@
+# [0.16.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.15.0...v0.16.0) (2026-06-06)
+
+
+### Features
+
+* **db:** add stats schema migrations ([#64](https://github.com/TServerNetwork/T-Nexus/issues/64)) ([271d19c](https://github.com/TServerNetwork/T-Nexus/commit/271d19c1b33117b7c37d4fe212fea56d0674224e))
+
 # [0.15.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.14.1...v0.15.0) (2026-06-06)
 
 
