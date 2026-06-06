@@ -288,6 +288,7 @@ class CommandManagerTest {
         assertNotNull(entry);
         assertTrue(header.contains("あなたのショップ一覧"));
         assertTrue(entry.contains("Diamond"));
+        assertTrue(entry.contains("1"));
         assertTrue(entry.contains(world.getName()));
     }
 
@@ -326,6 +327,7 @@ class CommandManagerTest {
         assertNotNull(entry);
         assertTrue(header.contains("Owner"));
         assertTrue(entry.contains("Emerald"));
+        assertTrue(entry.contains("1"));
     }
 
     @Test

@@ -53,8 +53,10 @@ class DatabaseManagerTest {
         assertMigrationRecorded(2, "economy schema");
         assertMigrationRecorded(3, "pay queue");
         assertMigrationRecorded(4, "sign shop schema");
+        assertMigrationRecorded(5, "shop chest links");
         assertTableExists("tnexus_transactions");
         assertTableExists("tnexus_shops");
+        assertTableExists("tnexus_shop_chests");
         assertTableExists("tnexus_pay_queue");
     }
 
@@ -79,7 +81,7 @@ class DatabaseManagerTest {
         }).get(5, TimeUnit.SECONDS);
 
         assertFalse(ranOnPrimaryThread);
-        assertEquals(4, migrationCount);
+        assertEquals(5, migrationCount);
     }
 
     @Test
@@ -96,7 +98,7 @@ class DatabaseManagerTest {
              var statement = connection.createStatement();
              var resultSet = statement.executeQuery("SELECT COUNT(*) FROM tnexus_schema_version")) {
             resultSet.next();
-            assertEquals(4, resultSet.getInt(1));
+            assertEquals(5, resultSet.getInt(1));
         }
     }
 

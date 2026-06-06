@@ -80,6 +80,156 @@ class SignShopManagerTest {
     }
 
     @Test
+    void shouldLinkMultipleChestsAndPersistEachLink() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block firstChest = world.getBlockAt(2, 64, 0);
+        firstChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 2));
+        Block secondChest = world.getBlockAt(3, 64, 0);
+        secondChest.setType(Material.CHEST);
+        Block signBlock = world.getBlockAt(4, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", firstChest, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        assertTrue(manager.handleLinkInteraction(owner, signBlock, true));
+        assertTrue(manager.handleLinkInteraction(owner, secondChest, true));
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        waitUntil(() -> liveShop.getLinkedChestCount() == 2 && countLinkedChestRows(plugin, liveShop.getId()) == 2);
+
+        assertEquals(2, liveShop.getLinkedChestCount());
+        assertEquals(BlockPosition.from(firstChest), liveShop.getLinkedChestPositions().get(0));
+        assertEquals(BlockPosition.from(secondChest), liveShop.getLinkedChestPositions().get(1));
+    }
+
+    @Test
+    void shouldAggregateStockAcrossMultipleLinkedChests() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = owner.getWorld();
+        Block firstChest = world.getBlockAt(5, 64, 0);
+        firstChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 2));
+        Block secondChest = world.getBlockAt(6, 64, 0);
+        secondChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 3));
+        Block signBlock = world.getBlockAt(7, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", firstChest, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.addLinkedChestPosition(BlockPosition.from(secondChest));
+        liveShop.setBuyPrice(10.0D);
+
+        assertEquals(5, manager.getCurrentStock(liveShop));
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 4);
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 4));
+
+        assertEquals(0, countItems(((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory(), Material.DIAMOND));
+        assertEquals(1, countItems(((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory(), Material.DIAMOND));
+    }
+
+    @Test
+    void shouldStoreSoldItemsUsingLinkedChestOrder() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock seller = this.server.addPlayer("Seller");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        seller.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(owner.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+        seller.getInventory().addItem(new ItemStack(Material.DIAMOND, 4));
+
+        World world = owner.getWorld();
+        Block firstChest = world.getBlockAt(8, 64, 0);
+        firstChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 63));
+        Block secondChest = world.getBlockAt(9, 64, 0);
+        secondChest.setType(Material.CHEST);
+        Block signBlock = world.getBlockAt(10, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", firstChest, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.addLinkedChestPosition(BlockPosition.from(secondChest));
+        liveShop.setSellPrice(5.0D);
+
+        manager.executeTrade(seller, liveShop, TradeAction.SELL, 4);
+
+        waitUntil(() -> countItems(((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory(), Material.DIAMOND) == 64
+                && countItems(((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory(), Material.DIAMOND) == 3);
+
+        assertEquals(20.0D, plugin.getEconomyManager().getBalance(seller.getUniqueId()).get(5, TimeUnit.SECONDS));
+        assertEquals(64, countItems(((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory(), Material.DIAMOND));
+        assertEquals(3, countItems(((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory(), Material.DIAMOND));
+    }
+
+    @Test
+    void shouldKeepShopWorkingAfterRemovingOneLinkedChest() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = owner.getWorld();
+        Block firstChest = world.getBlockAt(11, 64, 0);
+        firstChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) firstChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 2));
+        Block secondChest = world.getBlockAt(12, 64, 0);
+        secondChest.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 2));
+        Block signBlock = world.getBlockAt(13, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", firstChest, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.addLinkedChestPosition(BlockPosition.from(secondChest));
+        liveShop.setBuyPrice(10.0D);
+
+        firstChest.setType(Material.AIR);
+
+        assertEquals(2, manager.getCurrentStock(liveShop));
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 2);
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 2));
+
+        assertEquals(0, countItems(((org.bukkit.block.Chest) secondChest.getState()).getBlockInventory(), Material.DIAMOND));
+    }
+
+    @Test
     void shouldCreateUnlinkedPlayerShopWithoutAdjacentChest() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
@@ -732,6 +882,20 @@ class SignShopManagerTest {
             }
         } catch (Exception exception) {
             return false;
+        }
+    }
+
+    private int countLinkedChestRows(TNexus plugin, long shopId) {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT COUNT(*) FROM tnexus_shop_chests WHERE shop_id = ?")) {
+            statement.setLong(1, shopId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            }
+        } catch (Exception exception) {
+            return 0;
         }
     }
 
