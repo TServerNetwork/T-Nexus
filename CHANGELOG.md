@@ -1,3 +1,10 @@
+## [0.14.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.14.0...v0.14.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **command:** show balance tab completions on empty input ([1f6b9ae](https://github.com/TServerNetwork/T-Nexus/commit/1f6b9ae5631df8bbcb6a6fb1bad81044c5f390ed))
+
 # [0.14.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.13.2...v0.14.0) (2026-06-06)
 
 
