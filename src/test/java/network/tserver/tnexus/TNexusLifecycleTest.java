@@ -1,8 +1,13 @@
 package network.tserver.tnexus;
 
 import java.io.StringReader;
+import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.DatabaseManager;
+import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import network.tserver.tnexus.manager.PlayerStatsManager;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -75,11 +80,36 @@ class TNexusLifecycleTest {
         assertFalse(plugin.isEnabled());
     }
 
+    @Test
+    void shouldFlushPlayerSessionsBeforeDatabaseShutdown() throws Exception {
+        this.server = MockBukkit.mock();
+        registerRequiredPlugins();
+
+        TrackingLifecycleTNexus plugin = loadTrackingPlugin();
+
+        this.server.getPluginManager().disablePlugin(plugin);
+
+        assertTrue(plugin.trackingPlayerStatsManager.flushCalled);
+        assertTrue(plugin.trackingDatabaseManager.shutdownCalled);
+        assertTrue(plugin.flushCompletedBeforeShutdown);
+    }
+
     private LifecycleTNexus loadPlugin() throws Exception {
         PluginDescriptionFile description = new PluginDescriptionFile(new StringReader(TEST_PLUGIN_YAML));
         PluginManagerMock pluginManager = (PluginManagerMock) this.server.getPluginManager();
         LifecycleTNexus plugin = (LifecycleTNexus) pluginManager.loadPlugin(
                 LifecycleTNexus.class,
+                description,
+                new Object[0]);
+        pluginManager.enablePlugin(plugin);
+        return plugin;
+    }
+
+    private TrackingLifecycleTNexus loadTrackingPlugin() throws Exception {
+        PluginDescriptionFile description = new PluginDescriptionFile(new StringReader(TEST_PLUGIN_YAML));
+        PluginManagerMock pluginManager = (PluginManagerMock) this.server.getPluginManager();
+        TrackingLifecycleTNexus plugin = (TrackingLifecycleTNexus) pluginManager.loadPlugin(
+                TrackingLifecycleTNexus.class,
                 description,
                 new Object[0]);
         pluginManager.enablePlugin(plugin);
@@ -117,6 +147,27 @@ class TNexusLifecycleTest {
         }
     }
 
+    public static class TrackingLifecycleTNexus extends TNexus {
+
+        private TrackingDatabaseManager trackingDatabaseManager;
+        private TrackingPlayerStatsManager trackingPlayerStatsManager;
+        private boolean flushCompletedBeforeShutdown;
+
+        @Override
+        protected DatabaseManager createDatabaseManager() {
+            this.trackingDatabaseManager = new TrackingDatabaseManager(this, getConfigManager());
+            return this.trackingDatabaseManager;
+        }
+
+        @Override
+        protected PlayerStatsManager createPlayerStatsManager() {
+            this.trackingPlayerStatsManager = new TrackingPlayerStatsManager(
+                    this,
+                    new PlayerStatsRepository(getDatabaseManager()));
+            return this.trackingPlayerStatsManager;
+        }
+    }
+
     private static final class TestDatabaseManager extends DatabaseManager {
 
         private final boolean initializeResult;
@@ -129,6 +180,44 @@ class TNexusLifecycleTest {
         @Override
         public synchronized boolean initialize() {
             return this.initializeResult;
+        }
+    }
+
+    private static final class TrackingDatabaseManager extends DatabaseManager {
+
+        private final TrackingLifecycleTNexus plugin;
+        private boolean shutdownCalled;
+
+        private TrackingDatabaseManager(TrackingLifecycleTNexus plugin, ConfigManager configManager) {
+            super(plugin, configManager);
+            this.plugin = plugin;
+        }
+
+        @Override
+        public synchronized boolean initialize() {
+            return true;
+        }
+
+        @Override
+        public synchronized void shutdown() {
+            this.shutdownCalled = true;
+            this.plugin.flushCompletedBeforeShutdown = this.plugin.trackingPlayerStatsManager != null
+                    && this.plugin.trackingPlayerStatsManager.flushCalled;
+        }
+    }
+
+    private static final class TrackingPlayerStatsManager extends PlayerStatsManager {
+
+        private boolean flushCalled;
+
+        private TrackingPlayerStatsManager(TNexus plugin, PlayerStatsRepository repository) {
+            super(plugin, repository);
+        }
+
+        @Override
+        public CompletableFuture<Void> flushOnlineSessions(Collection<? extends Player> onlinePlayers) {
+            this.flushCalled = true;
+            return CompletableFuture.completedFuture(null);
         }
     }
 }
