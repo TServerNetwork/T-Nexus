@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.14.1...v0.15.0) (2026-06-06)
+
+
+### Features
+
+* **gui:** improve sign display formatting ([#58](https://github.com/TServerNetwork/T-Nexus/issues/58)) ([29d2e3d](https://github.com/TServerNetwork/T-Nexus/commit/29d2e3d9b2d0b8b3e0d5d9790b396630cfa948c3))
+
 ## [0.14.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.14.0...v0.14.1) (2026-06-06)
 
 
