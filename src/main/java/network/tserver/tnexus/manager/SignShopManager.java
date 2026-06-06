@@ -405,6 +405,28 @@ public final class SignShopManager {
     }
 
     /**
+     * Returns whether a non-owner viewer should be blocked from opening the browse GUI.
+     *
+     * @param shop target shop
+     * @return {@code true} when the shop is currently rendered as unavailable
+     */
+    public boolean isBrowseUnavailable(SignShop shop) {
+        return resolveRenderedAvailabilityNow(shop).status() == ShopStatus.UNAVAILABLE;
+    }
+
+    /**
+     * Sends the current unavailable reason(s) for a shop without opening the GUI.
+     *
+     * @param player viewer
+     * @param shop target shop
+     */
+    public void sendBrowseUnavailableMessage(Player player, SignShop shop) {
+        for (String messageKey : resolveBrowseUnavailableMessageKeys(shop)) {
+            this.plugin.getMessageConfig().sendMessage(player, messageKey);
+        }
+    }
+
+    /**
      * Opens the edit GUI for a player.
      *
      * @param player target player
@@ -1155,6 +1177,71 @@ public final class SignShopManager {
                 ? CompletableFuture.completedFuture(true)
                 : this.economyManager.has(shop.getOwnerUuid(), shop.getSellPrice());
         return new SyncAvailability(buySideAvailable, sellSideCapacity, true, ownerHasFunds);
+    }
+
+    private RenderedAvailability resolveRenderedAvailabilityNow(SignShop shop) {
+        if (!shop.isEnabled()) {
+            return RenderedAvailability.disabled();
+        }
+        if (shop.getItemStack() == null) {
+            return RenderedAvailability.unavailable();
+        }
+        if (shop.getType() == ShopType.SERVER) {
+            boolean buyAvailable = shop.getBuyPrice() != null;
+            boolean sellAvailable = shop.getSellPrice() != null && isServerShopSellToVoidEnabled();
+            ShopStatus status = buyAvailable || sellAvailable ? ShopStatus.AVAILABLE : ShopStatus.UNAVAILABLE;
+            return new RenderedAvailability(status, buyAvailable, sellAvailable);
+        }
+
+        Inventory chestInventory = resolveLinkedChestInventory(shop);
+        if (chestInventory == null) {
+            return RenderedAvailability.unavailable();
+        }
+
+        ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
+        boolean buyAvailable = shop.getBuyPrice() != null && countMatchingItems(chestInventory, template) > 0;
+        boolean sellAvailable = shop.getSellPrice() != null
+                && calculateInventoryFit(chestInventory, template) > 0
+                && this.economyManager.getBalanceNow(shop.getOwnerUuid()) >= shop.getSellPrice();
+        ShopStatus status = buyAvailable || sellAvailable ? ShopStatus.AVAILABLE : ShopStatus.UNAVAILABLE;
+        return new RenderedAvailability(status, buyAvailable, sellAvailable);
+    }
+
+    private List<String> resolveBrowseUnavailableMessageKeys(SignShop shop) {
+        if (!shop.isEnabled()) {
+            return List.of("shop.trade.unavailable-disabled");
+        }
+
+        RenderedAvailability availability = resolveRenderedAvailabilityNow(shop);
+        if (availability.status() != ShopStatus.UNAVAILABLE) {
+            return List.of("shop.trade.unavailable");
+        }
+
+        if (shop.getType() == ShopType.SERVER) {
+            return List.of("shop.trade.unavailable");
+        }
+
+        Inventory chestInventory = resolveLinkedChestInventory(shop);
+        ItemStack template = shop.getItemStack();
+        if (chestInventory == null || template == null) {
+            return List.of("shop.trade.unavailable");
+        }
+
+        List<String> messageKeys = new ArrayList<>();
+        if (shop.getBuyPrice() != null && !availability.buyAvailable()) {
+            messageKeys.add("shop.trade.out-of-stock");
+        }
+        if (shop.getSellPrice() != null && !availability.sellAvailable()) {
+            if (calculateInventoryFit(chestInventory, template) <= 0) {
+                messageKeys.add("shop.trade.chest-full");
+            } else if (this.economyManager.getBalanceNow(shop.getOwnerUuid()) < shop.getSellPrice()) {
+                messageKeys.add("shop.trade.owner-funds");
+            } else {
+                messageKeys.add("shop.trade.unavailable");
+            }
+        }
+
+        return messageKeys.isEmpty() ? List.of("shop.trade.unavailable") : messageKeys.stream().distinct().toList();
     }
 
     private void applySignLines(SignShop shop, RenderedAvailability availability) {

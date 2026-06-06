@@ -118,6 +118,10 @@ public final class SignShopListener implements Listener {
 
         if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
             event.setCancelled(true);
+            if (!this.shopManager.canModify(event.getPlayer(), shop) && this.shopManager.isBrowseUnavailable(shop)) {
+                this.shopManager.sendBrowseUnavailableMessage(event.getPlayer(), shop);
+                return;
+            }
             this.shopManager.openBrowseGui(event.getPlayer(), shop);
             return;
         }
@@ -127,6 +131,10 @@ public final class SignShopListener implements Listener {
             if (this.shopManager.canModify(event.getPlayer(), shop)) {
                 this.shopManager.openEditGui(event.getPlayer(), shop);
             } else {
+                if (this.shopManager.isBrowseUnavailable(shop)) {
+                    this.shopManager.sendBrowseUnavailableMessage(event.getPlayer(), shop);
+                    return;
+                }
                 this.shopManager.openBrowseGui(event.getPlayer(), shop);
             }
         }

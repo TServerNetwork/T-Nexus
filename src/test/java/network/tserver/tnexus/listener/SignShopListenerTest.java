@@ -90,6 +90,79 @@ class SignShopListenerTest {
         assertFalse(event.isCancelled());
     }
 
+    @Test
+    void shouldSkipBrowseGuiAndShowMessageWhenUnavailableShopIsClicked() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        viewer.addAttachment(plugin, "tnexus.shop.use", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = createChestWithItem(world, 20, Material.DIAMOND, 0);
+        Block signBlock = createSign(world, 21);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setSellPrice(null);
+        manager.refreshShopDisplay(liveShop);
+
+        PlayerInteractEvent event = new PlayerInteractEvent(
+                viewer,
+                Action.RIGHT_CLICK_BLOCK,
+                null,
+                signBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+        assertFalse(plugin.getGuiManager().hasOpenGui(viewer));
+        assertTrue(waitForNextMessage(viewer).contains("在庫"));
+    }
+
+    @Test
+    void shouldStillOpenEditGuiForOwnerWhenUnavailableShopIsClicked() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = createChestWithItem(world, 30, Material.DIAMOND, 0);
+        Block signBlock = createSign(world, 31);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setSellPrice(null);
+        manager.refreshShopDisplay(liveShop);
+
+        PlayerInteractEvent event = new PlayerInteractEvent(
+                owner,
+                Action.RIGHT_CLICK_BLOCK,
+                null,
+                signBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+        assertTrue(plugin.getGuiManager().hasOpenGui(owner));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
@@ -98,7 +171,9 @@ class SignShopListenerTest {
     private Block createChestWithItem(World world, int x, Material material, int amount) {
         Block chestBlock = world.getBlockAt(x, 64, 0);
         chestBlock.setType(Material.CHEST);
-        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(material, amount));
+        if (amount > 0) {
+            ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(material, amount));
+        }
         return chestBlock;
     }
 
