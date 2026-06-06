@@ -1,3 +1,10 @@
+## [0.13.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.13.0...v0.13.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **shop:** stop empty link chest access loop ([5367251](https://github.com/TServerNetwork/T-Nexus/commit/5367251bc9c22bb6ed8b71192653b94718f3dd67))
+
 # [0.13.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.12.1...v0.13.0) (2026-06-06)
 
 
