@@ -819,6 +819,7 @@ public final class CommandManager {
                     "shop.list.entry",
                     shop.getId(),
                     shop.getItemName(),
+                    shop.getLinkedChestCount(),
                     shop.getSignPosition().worldName(),
                     shop.getSignPosition().x(),
                     shop.getSignPosition().y(),

@@ -19,6 +19,7 @@ public final class SignShopRepository {
 
     private final DatabaseManager databaseManager;
     private final String tableName;
+    private final String chestTableName;
 
     /**
      * Creates a new shop repository.
@@ -28,6 +29,7 @@ public final class SignShopRepository {
     public SignShopRepository(DatabaseManager databaseManager) {
         this.databaseManager = Objects.requireNonNull(databaseManager, "databaseManager");
         this.tableName = this.databaseManager.getTablePrefix() + "shops";
+        this.chestTableName = this.databaseManager.getTablePrefix() + "shop_chests";
     }
 
     /**
@@ -45,6 +47,7 @@ public final class SignShopRepository {
                 while (resultSet.next()) {
                     shops.add(mapShop(resultSet));
                 }
+                loadLinkedChests(connection, shops);
                 return shops;
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to load sign shops", exception);
@@ -84,11 +87,15 @@ public final class SignShopRepository {
         return this.databaseManager.queryAsync(() -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                connection.setAutoCommit(false);
                 bindShop(statement, shop);
                 statement.executeUpdate();
                 try (var generatedKeys = statement.getGeneratedKeys()) {
                     if (generatedKeys.next()) {
-                        return generatedKeys.getLong(1);
+                        long shopId = generatedKeys.getLong(1);
+                        insertLinkedChests(connection, shopId, shop.getLinkedChestPositions());
+                        connection.commit();
+                        return shopId;
                     }
                 }
                 throw new IllegalStateException("Shop insert did not return a generated key");
@@ -123,6 +130,7 @@ public final class SignShopRepository {
         return this.databaseManager.queryAsync(() -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql)) {
+                connection.setAutoCommit(false);
                 BlockPosition chestPosition = shop.getLinkedChestPosition();
                 if (chestPosition == null) {
                     statement.setString(1, null);
@@ -151,6 +159,9 @@ public final class SignShopRepository {
                 statement.setBoolean(10, shop.isEnabled());
                 statement.setLong(11, shop.getId());
                 statement.executeUpdate();
+                deleteLinkedChests(connection, shop.getId());
+                insertLinkedChests(connection, shop.getId(), shop.getLinkedChestPositions());
+                connection.commit();
                 return null;
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to update sign shop", exception);
@@ -169,13 +180,85 @@ public final class SignShopRepository {
         return this.databaseManager.queryAsync(() -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql)) {
+                connection.setAutoCommit(false);
+                deleteLinkedChests(connection, shopId);
                 statement.setLong(1, shopId);
                 statement.executeUpdate();
+                connection.commit();
                 return null;
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to delete sign shop", exception);
             }
         });
+    }
+
+    private void loadLinkedChests(java.sql.Connection connection, List<SignShop> shops) throws Exception {
+        if (shops.isEmpty()) {
+            return;
+        }
+
+        String sql = """
+                SELECT shop_id, chest_world, chest_x, chest_y, chest_z
+                FROM %s
+                ORDER BY shop_id ASC, chest_order ASC
+                """.formatted(this.chestTableName);
+        java.util.Map<Long, List<BlockPosition>> positionsByShopId = new java.util.HashMap<>();
+        try (var statement = connection.prepareStatement(sql);
+             var resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                positionsByShopId.computeIfAbsent(resultSet.getLong("shop_id"), ignored -> new ArrayList<>())
+                        .add(new BlockPosition(
+                                resultSet.getString("chest_world"),
+                                resultSet.getInt("chest_x"),
+                                resultSet.getInt("chest_y"),
+                                resultSet.getInt("chest_z")));
+            }
+        }
+
+        for (SignShop shop : shops) {
+            List<BlockPosition> positions = positionsByShopId.get(shop.getId());
+            if (positions != null && !positions.isEmpty()) {
+                shop.setLinkedChestPositions(positions);
+            }
+        }
+    }
+
+    private void insertLinkedChests(java.sql.Connection connection, long shopId, List<BlockPosition> positions) throws Exception {
+        if (positions.isEmpty()) {
+            return;
+        }
+
+        String sql = """
+                INSERT INTO %s (
+                    shop_id,
+                    chest_order,
+                    chest_world,
+                    chest_x,
+                    chest_y,
+                    chest_z
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """.formatted(this.chestTableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < positions.size(); index++) {
+                BlockPosition position = positions.get(index);
+                statement.setLong(1, shopId);
+                statement.setInt(2, index);
+                statement.setString(3, position.worldName());
+                statement.setInt(4, position.x());
+                statement.setInt(5, position.y());
+                statement.setInt(6, position.z());
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private void deleteLinkedChests(java.sql.Connection connection, long shopId) throws Exception {
+        String sql = "DELETE FROM %s WHERE shop_id = ?".formatted(this.chestTableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, shopId);
+            statement.executeUpdate();
+        }
     }
 
     private void bindShop(java.sql.PreparedStatement statement, SignShop shop) throws Exception {

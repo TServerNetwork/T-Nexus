@@ -135,7 +135,7 @@ shop:
     empty-self: "&7あなたは PlayerShop を所有していません。"
     empty-other: "&7{0} は PlayerShop を所有していません。"
     player-not-found: "&cプレイヤー {0} は見つかりませんでした。"
-    entry: "&e[{0}] &f{1} &7@ &f{2} {3}, {4}, {5}"
+    entry: "&e[{0}] &f{1} &7(リンク {2}) @ &f{3} {4}, {5}, {6}"
   create:
     success: "&aSignShop を作成しました。"
     player-requires-chest: "&cPlayerShop にはアイテム入りの隣接チェストが必要です。"

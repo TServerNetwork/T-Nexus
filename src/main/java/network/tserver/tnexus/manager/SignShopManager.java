@@ -185,7 +185,7 @@ public final class SignShopManager {
                 player.getUniqueId(),
                 player.getName(),
                 BlockPosition.from(signBlock),
-                chestPosition,
+                chestPosition == null ? List.of() : List.of(chestPosition),
                 normalizedItem,
                 normalizedItem == null ? DEFAULT_UNLINKED_NAME : resolveItemName(normalizedItem),
                 null,
@@ -207,7 +207,7 @@ public final class SignShopManager {
                     cacheShop(shop);
                     refreshShopDisplay(shop);
                     this.plugin.getMessageConfig().sendMessage(player, "shop.create.success");
-                    if (shop.getType() == ShopType.PLAYER && shop.getLinkedChestPosition() == null) {
+                    if (shop.getType() == ShopType.PLAYER && shop.getLinkedChestCount() == 0) {
                         this.plugin.getMessageConfig().sendMessage(player, "shop.create.link-guidance");
                     }
                 }));
@@ -364,21 +364,24 @@ public final class SignShopManager {
         }
 
         ItemStack templateItem = findFirstTemplateItem(clickedBlock);
-        if (templateItem == null) {
-            cancelLinkSessionOnError(player.getUniqueId(), session);
-            this.plugin.getMessageConfig().sendMessage(player, "shop.link.chest-empty");
-            return true;
-        }
-        if (isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
-            cancelLinkSessionOnError(player.getUniqueId(), session);
-            this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
-            return true;
+        if (shop.getItemStack() == null) {
+            if (templateItem == null) {
+                cancelLinkSessionOnError(player.getUniqueId(), session);
+                this.plugin.getMessageConfig().sendMessage(player, "shop.link.chest-empty");
+                return true;
+            }
+            if (isBannedMaterial(templateItem.getType()) && !player.hasPermission(BYPASS_BAN_PERMISSION)) {
+                cancelLinkSessionOnError(player.getUniqueId(), session);
+                this.plugin.getMessageConfig().sendMessage(player, "shop.create.banned-material", templateItem.getType().name());
+                return true;
+            }
+
+            ItemStack normalizedItem = normalizeTemplateItem(templateItem);
+            shop.setItemStack(normalizedItem);
+            shop.setItemName(resolveItemName(normalizedItem));
         }
 
-        shop.setLinkedChestPosition(BlockPosition.from(clickedBlock));
-        ItemStack normalizedItem = normalizeTemplateItem(templateItem);
-        shop.setItemStack(normalizedItem);
-        shop.setItemName(resolveItemName(normalizedItem));
+        shop.addLinkedChestPosition(BlockPosition.from(clickedBlock));
         this.linkSessions.remove(player.getUniqueId());
         reindexChest(shop);
         this.signShopRepository.update(shop)
@@ -662,12 +665,12 @@ public final class SignShopManager {
                 "shop.trade.adjusted.balance",
                 "shop.trade.insufficient-funds"));
         if (shop.getType() == ShopType.PLAYER) {
-            Inventory chestInventory = resolveLinkedChestInventory(shop);
-            if (chestInventory == null) {
+            int stock = countLinkedChestItems(shop, template);
+            if (stock <= 0) {
                 return TradeEligibility.unavailable("shop.trade.unavailable");
             }
             constraints.add(new TradeConstraint(
-                    countMatchingItems(chestInventory, template),
+                    stock,
                     "shop.trade.adjusted.stock",
                     "shop.trade.out-of-stock"));
         }
@@ -690,12 +693,12 @@ public final class SignShopManager {
                 "shop.trade.adjusted.player-items",
                 "shop.trade.unavailable"));
         if (shop.getType() == ShopType.PLAYER) {
-            Inventory chestInventory = resolveLinkedChestInventory(shop);
-            if (chestInventory == null) {
+            int capacity = calculateLinkedChestFit(shop, template);
+            if (capacity <= 0) {
                 return TradeEligibility.unavailable("shop.trade.unavailable");
             }
             constraints.add(new TradeConstraint(
-                    calculateInventoryFit(chestInventory, template),
+                    capacity,
                     "shop.trade.adjusted.capacity",
                     "shop.trade.chest-full"));
             constraints.add(new TradeConstraint(
@@ -743,8 +746,7 @@ public final class SignShopManager {
         if (template == null) {
             return 0;
         }
-        Inventory chestInventory = resolveLinkedChestInventory(shop);
-        return chestInventory == null ? 0 : countMatchingItems(chestInventory, template);
+        return countLinkedChestItems(shop, template);
     }
 
     /**
@@ -761,8 +763,7 @@ public final class SignShopManager {
         if (template == null) {
             return 0;
         }
-        Inventory chestInventory = resolveLinkedChestInventory(shop);
-        return chestInventory == null ? 0 : calculateInventoryFit(chestInventory, template);
+        return calculateLinkedChestFit(shop, template);
     }
 
     /**
@@ -1016,11 +1017,10 @@ public final class SignShopManager {
             return false;
         }
         if (shop.getType() == ShopType.PLAYER) {
-            Inventory chestInventory = resolveLinkedChestInventory(shop);
-            if (chestInventory == null || countMatchingItems(chestInventory, template) < amount) {
+            if (countLinkedChestItems(shop, template) < amount) {
                 return false;
             }
-            removeMatchingItems(chestInventory, template, amount);
+            removeMatchingItemsFromLinkedChests(shop, template, amount);
         }
         addMatchingItems(playerInventory, template, amount);
         return true;
@@ -1032,11 +1032,10 @@ public final class SignShopManager {
             return false;
         }
         if (shop.getType() == ShopType.PLAYER) {
-            Inventory chestInventory = resolveLinkedChestInventory(shop);
-            if (chestInventory == null || calculateInventoryFit(chestInventory, template) < amount) {
+            if (calculateLinkedChestFit(shop, template) < amount) {
                 return false;
             }
-            addMatchingItems(chestInventory, template, amount);
+            addMatchingItemsToLinkedChests(shop, template, amount);
         }
         removeMatchingItems(playerInventory, template, amount);
         return true;
@@ -1045,10 +1044,7 @@ public final class SignShopManager {
     private void revertSellInventoryStage(Player player, SignShop shop, ItemStack template, int amount) {
         addMatchingItems(player.getInventory(), template, amount);
         if (shop.getType() == ShopType.PLAYER) {
-            Inventory chestInventory = resolveLinkedChestInventory(shop);
-            if (chestInventory != null) {
-                removeMatchingItems(chestInventory, template, amount);
-            }
+            removeMatchingItemsFromLinkedChests(shop, template, amount);
         }
     }
 
@@ -1074,13 +1070,16 @@ public final class SignShopManager {
                 });
     }
 
-    private Inventory resolveLinkedChestInventory(SignShop shop) {
-        BlockPosition chestPosition = shop.getLinkedChestPosition();
-        if (chestPosition == null) {
-            return null;
+    private List<Inventory> resolveLinkedChestInventories(SignShop shop) {
+        List<Inventory> inventories = new ArrayList<>();
+        for (BlockPosition chestPosition : shop.getLinkedChestPositions()) {
+            Block chestBlock = chestPosition.resolveBlock(this.plugin.getServer());
+            Inventory inventory = chestBlock == null ? null : resolveContainerInventory(chestBlock);
+            if (inventory != null) {
+                inventories.add(inventory);
+            }
         }
-        Block chestBlock = chestPosition.resolveBlock(this.plugin.getServer());
-        return chestBlock == null ? null : resolveContainerInventory(chestBlock);
+        return inventories;
     }
 
     private @Nullable Inventory resolveContainerInventory(Block block) {
@@ -1133,6 +1132,50 @@ public final class SignShopManager {
         inventory.setStorageContents(contents);
     }
 
+    private int countLinkedChestItems(SignShop shop, ItemStack template) {
+        return resolveLinkedChestInventories(shop).stream()
+                .mapToInt(inventory -> countMatchingItems(inventory, template))
+                .sum();
+    }
+
+    private int calculateLinkedChestFit(SignShop shop, ItemStack template) {
+        return resolveLinkedChestInventories(shop).stream()
+                .mapToInt(inventory -> calculateInventoryFit(inventory, template))
+                .sum();
+    }
+
+    private void removeMatchingItemsFromLinkedChests(SignShop shop, ItemStack template, int amount) {
+        int remaining = amount;
+        for (Inventory inventory : resolveLinkedChestInventories(shop)) {
+            if (remaining <= 0) {
+                return;
+            }
+            int available = countMatchingItems(inventory, template);
+            if (available <= 0) {
+                continue;
+            }
+            int removal = Math.min(remaining, available);
+            removeMatchingItems(inventory, template, removal);
+            remaining -= removal;
+        }
+    }
+
+    private void addMatchingItemsToLinkedChests(SignShop shop, ItemStack template, int amount) {
+        int remaining = amount;
+        for (Inventory inventory : resolveLinkedChestInventories(shop)) {
+            if (remaining <= 0) {
+                return;
+            }
+            int fit = calculateInventoryFit(inventory, template);
+            if (fit <= 0) {
+                continue;
+            }
+            int toAdd = Math.min(remaining, fit);
+            addMatchingItems(inventory, template, toAdd);
+            remaining -= toAdd;
+        }
+    }
+
     private void addMatchingItems(Inventory inventory, ItemStack template, int amount) {
         int remaining = amount;
         while (remaining > 0) {
@@ -1165,14 +1208,15 @@ public final class SignShopManager {
             return new SyncAvailability(buySideAvailable, sellSideAvailable, false, CompletableFuture.completedFuture(true));
         }
 
-        Inventory chestInventory = resolveLinkedChestInventory(shop);
-        if (chestInventory == null) {
+        ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
+        int stock = countLinkedChestItems(shop, template);
+        int capacity = calculateLinkedChestFit(shop, template);
+        if (stock <= 0 && capacity <= 0) {
             return SyncAvailability.unavailable();
         }
 
-        ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
-        boolean buySideAvailable = shop.getBuyPrice() != null && countMatchingItems(chestInventory, template) > 0;
-        boolean sellSideCapacity = shop.getSellPrice() != null && calculateInventoryFit(chestInventory, template) > 0;
+        boolean buySideAvailable = shop.getBuyPrice() != null && stock > 0;
+        boolean sellSideCapacity = shop.getSellPrice() != null && capacity > 0;
         CompletableFuture<Boolean> ownerHasFunds = shop.getSellPrice() == null
                 ? CompletableFuture.completedFuture(true)
                 : this.economyManager.has(shop.getOwnerUuid(), shop.getSellPrice());
@@ -1193,15 +1237,16 @@ public final class SignShopManager {
             return new RenderedAvailability(status, buyAvailable, sellAvailable);
         }
 
-        Inventory chestInventory = resolveLinkedChestInventory(shop);
-        if (chestInventory == null) {
+        ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
+        int stock = countLinkedChestItems(shop, template);
+        int capacity = calculateLinkedChestFit(shop, template);
+        if (stock <= 0 && capacity <= 0) {
             return RenderedAvailability.unavailable();
         }
 
-        ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
-        boolean buyAvailable = shop.getBuyPrice() != null && countMatchingItems(chestInventory, template) > 0;
+        boolean buyAvailable = shop.getBuyPrice() != null && stock > 0;
         boolean sellAvailable = shop.getSellPrice() != null
-                && calculateInventoryFit(chestInventory, template) > 0
+                && capacity > 0
                 && this.economyManager.getBalanceNow(shop.getOwnerUuid()) >= shop.getSellPrice();
         ShopStatus status = buyAvailable || sellAvailable ? ShopStatus.AVAILABLE : ShopStatus.UNAVAILABLE;
         return new RenderedAvailability(status, buyAvailable, sellAvailable);
@@ -1221,18 +1266,18 @@ public final class SignShopManager {
             return List.of("shop.trade.unavailable");
         }
 
-        Inventory chestInventory = resolveLinkedChestInventory(shop);
         ItemStack template = shop.getItemStack();
-        if (chestInventory == null || template == null) {
+        if (template == null) {
             return List.of("shop.trade.unavailable");
         }
+        int capacity = calculateLinkedChestFit(shop, template);
 
         List<String> messageKeys = new ArrayList<>();
         if (shop.getBuyPrice() != null && !availability.buyAvailable()) {
             messageKeys.add("shop.trade.out-of-stock");
         }
         if (shop.getSellPrice() != null && !availability.sellAvailable()) {
-            if (calculateInventoryFit(chestInventory, template) <= 0) {
+            if (capacity <= 0) {
                 messageKeys.add("shop.trade.chest-full");
             } else if (this.economyManager.getBalanceNow(shop.getOwnerUuid()) < shop.getSellPrice()) {
                 messageKeys.add("shop.trade.owner-funds");
@@ -1293,8 +1338,7 @@ public final class SignShopManager {
         for (Set<Long> shopIds : this.chestIndex.values()) {
             shopIds.remove(shop.getId());
         }
-        BlockPosition chestPosition = shop.getLinkedChestPosition();
-        if (chestPosition != null) {
+        for (BlockPosition chestPosition : shop.getLinkedChestPositions()) {
             this.chestIndex.computeIfAbsent(chestPosition, ignored -> ConcurrentHashMap.newKeySet()).add(shop.getId());
         }
     }

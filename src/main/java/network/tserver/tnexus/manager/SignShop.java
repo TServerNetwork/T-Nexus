@@ -1,5 +1,8 @@
 package network.tserver.tnexus.manager;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import network.tserver.tnexus.util.BlockPosition;
@@ -16,7 +19,7 @@ public final class SignShop {
     private final UUID ownerUuid;
     private final String ownerName;
     private final BlockPosition signPosition;
-    private @Nullable BlockPosition linkedChestPosition;
+    private final List<BlockPosition> linkedChestPositions;
     private @Nullable ItemStack itemStack;
     private String itemName;
     private @Nullable Double buyPrice;
@@ -53,12 +56,56 @@ public final class SignShop {
             @Nullable Double sellPrice,
             String note,
             boolean enabled) {
+        this(
+                id,
+                type,
+                ownerUuid,
+                ownerName,
+                signPosition,
+                linkedChestPosition == null ? List.of() : List.of(linkedChestPosition),
+                itemStack,
+                itemName,
+                buyPrice,
+                sellPrice,
+                note,
+                enabled);
+    }
+
+    /**
+     * Creates a new sign shop.
+     *
+     * @param id database id
+     * @param type shop type
+     * @param ownerUuid owner UUID
+     * @param ownerName owner name
+     * @param signPosition sign position
+     * @param linkedChestPositions linked chest positions in insertion order
+     * @param itemStack template item
+     * @param itemName rendered item name
+     * @param buyPrice buy price
+     * @param sellPrice sell price
+     * @param note sign note
+     * @param enabled enabled flag
+     */
+    public SignShop(
+            long id,
+            ShopType type,
+            UUID ownerUuid,
+            String ownerName,
+            BlockPosition signPosition,
+            List<BlockPosition> linkedChestPositions,
+            @Nullable ItemStack itemStack,
+            String itemName,
+            @Nullable Double buyPrice,
+            @Nullable Double sellPrice,
+            String note,
+            boolean enabled) {
         this.id = id;
         this.type = Objects.requireNonNull(type, "type");
         this.ownerUuid = Objects.requireNonNull(ownerUuid, "ownerUuid");
         this.ownerName = Objects.requireNonNull(ownerName, "ownerName");
         this.signPosition = Objects.requireNonNull(signPosition, "signPosition");
-        this.linkedChestPosition = linkedChestPosition;
+        this.linkedChestPositions = new ArrayList<>(Objects.requireNonNull(linkedChestPositions, "linkedChestPositions"));
         this.itemStack = itemStack == null ? null : itemStack.clone();
         this.itemName = Objects.requireNonNull(itemName, "itemName");
         this.buyPrice = buyPrice;
@@ -127,7 +174,7 @@ public final class SignShop {
      * @return linked chest position or {@code null}
      */
     public @Nullable BlockPosition getLinkedChestPosition() {
-        return this.linkedChestPosition;
+        return this.linkedChestPositions.isEmpty() ? null : this.linkedChestPositions.getFirst();
     }
 
     /**
@@ -136,7 +183,63 @@ public final class SignShop {
      * @param linkedChestPosition linked chest position
      */
     public void setLinkedChestPosition(@Nullable BlockPosition linkedChestPosition) {
-        this.linkedChestPosition = linkedChestPosition;
+        this.linkedChestPositions.clear();
+        if (linkedChestPosition != null) {
+            this.linkedChestPositions.add(linkedChestPosition);
+        }
+    }
+
+    /**
+     * Returns linked chest positions in insertion order.
+     *
+     * @return immutable linked chest positions
+     */
+    public List<BlockPosition> getLinkedChestPositions() {
+        return Collections.unmodifiableList(this.linkedChestPositions);
+    }
+
+    /**
+     * Replaces all linked chest positions.
+     *
+     * @param linkedChestPositions linked chest positions
+     */
+    public void setLinkedChestPositions(List<BlockPosition> linkedChestPositions) {
+        this.linkedChestPositions.clear();
+        this.linkedChestPositions.addAll(Objects.requireNonNull(linkedChestPositions, "linkedChestPositions"));
+    }
+
+    /**
+     * Adds a linked chest position when it is not already linked.
+     *
+     * @param linkedChestPosition linked chest position
+     * @return {@code true} when the chest was newly added
+     */
+    public boolean addLinkedChestPosition(BlockPosition linkedChestPosition) {
+        Objects.requireNonNull(linkedChestPosition, "linkedChestPosition");
+        if (this.linkedChestPositions.contains(linkedChestPosition)) {
+            return false;
+        }
+        return this.linkedChestPositions.add(linkedChestPosition);
+    }
+
+    /**
+     * Removes a linked chest position.
+     *
+     * @param linkedChestPosition linked chest position
+     * @return {@code true} when removed
+     */
+    public boolean removeLinkedChestPosition(BlockPosition linkedChestPosition) {
+        Objects.requireNonNull(linkedChestPosition, "linkedChestPosition");
+        return this.linkedChestPositions.remove(linkedChestPosition);
+    }
+
+    /**
+     * Returns the number of linked chest positions.
+     *
+     * @return linked chest count
+     */
+    public int getLinkedChestCount() {
+        return this.linkedChestPositions.size();
     }
 
     /**
