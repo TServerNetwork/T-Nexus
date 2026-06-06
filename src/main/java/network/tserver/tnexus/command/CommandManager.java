@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -24,6 +27,7 @@ import network.tserver.tnexus.manager.AuditLogFilter;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PaymentManager.ConfirmationResult;
 import network.tserver.tnexus.manager.PaymentManager.QueueResult;
+import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.util.CurrencyFormatter;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -47,7 +51,9 @@ public final class CommandManager {
     private static final String SHOPS_COMMAND_NAME = "shops";
     private static final String HISTORY_COMMAND_NAME = "history";
     private static final String USE_PERMISSION = "tnexus.use";
+    private static final String BALANCE_ADMIN_PERMISSION = "tnexus.admin.balance";
     private static final String SHOP_ADMIN_PERMISSION = "tnexus.shop.admin";
+    private static final String SHOP_PLAYER_PERMISSION = "tnexus.shop.player";
     private static final String AUDIT_ADMIN_PERMISSION = "tnexus.audit.admin";
 
     private final TNexus plugin;
@@ -244,26 +250,16 @@ public final class CommandManager {
     }
 
     private void onBalanceCommand(CommandSender sender, String[] args) {
-        if (!canUseEconomyCommand(sender)) {
-            return;
-        }
-        if (args.length > 0) {
-            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.usage");
+        if (args.length == 0) {
+            showOwnBalance(sender);
             return;
         }
 
-        Player player = (Player) sender;
-        this.plugin.getEconomyManager().getBalance(player.getUniqueId())
-                .whenComplete((balance, throwable) -> runSync(() -> {
-                    if (throwable != null) {
-                        this.plugin.getMessageConfig().sendMessage(player, "economy.pay.failed");
-                        return;
-                    }
-                    this.plugin.getMessageConfig().sendMessage(
-                            player,
-                            "economy.balance.self",
-                            CurrencyFormatter.format(this.plugin, balance));
-                }));
+        if (!sender.hasPermission(BALANCE_ADMIN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return;
+        }
+        handleAdminBalanceCommand(sender, args);
     }
 
     private void onPayCommand(CommandSender sender, String[] args) {
@@ -304,7 +300,7 @@ public final class CommandManager {
     }
 
     private void onShopCommand(CommandSender sender, String[] args) {
-        if (!this.plugin.getSignShopManager().canUseShops(sender)) {
+        if (!sender.hasPermission(SHOP_PLAYER_PERMISSION) && !sender.hasPermission(SHOP_ADMIN_PERMISSION)) {
             this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
             return;
         }
@@ -312,20 +308,21 @@ public final class CommandManager {
             this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
             return;
         }
-        if (args.length != 1 || !"link".equalsIgnoreCase(args[0])) {
+        if (args.length != 1 || !"linkitem".equalsIgnoreCase(args[0])) {
             this.plugin.getMessageConfig().sendMessage(sender, "shop.command.usage");
             return;
         }
-        this.plugin.getSignShopManager().beginLinkMode(player);
+        player.getInventory().addItem(this.plugin.getSignShopManager().createLinkTool());
+        this.plugin.getMessageConfig().sendMessage(player, "shop.link.tool-granted");
     }
 
     private Collection<String> onShopTabComplete(CommandSender sender, String[] args) {
-        if (!this.plugin.getSignShopManager().canUseShops(sender)) {
+        if (!sender.hasPermission(SHOP_PLAYER_PERMISSION) && !sender.hasPermission(SHOP_ADMIN_PERMISSION)) {
             return List.of();
         }
         if (args.length <= 1) {
             String input = args.length == 0 ? "" : normalize(args[0]);
-            return List.of("link").stream()
+            return List.of("linkitem").stream()
                     .filter(option -> option.startsWith(input))
                     .toList();
         }
@@ -564,6 +561,228 @@ public final class CommandManager {
         return null;
     }
 
+    private @Nullable OfflinePlayer resolveBalanceTarget(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+
+        Player onlineTarget = this.plugin.getServer().getPlayerExact(name);
+        if (onlineTarget != null) {
+            return onlineTarget;
+        }
+
+        OfflinePlayer offlineTarget = this.plugin.getServer().getOfflinePlayer(name);
+        if (offlineTarget.getName() == null || offlineTarget.getName().isBlank()) {
+            return null;
+        }
+        return offlineTarget;
+    }
+
+    private void showOwnBalance(CommandSender sender) {
+        if (!canUseEconomyCommand(sender)) {
+            return;
+        }
+
+        Player player = (Player) sender;
+        this.plugin.getEconomyManager().getBalance(player.getUniqueId())
+                .whenComplete((balance, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(player, "economy.pay.failed");
+                        return;
+                    }
+                    this.plugin.getMessageConfig().sendMessage(
+                            player,
+                            "economy.balance.self",
+                            CurrencyFormatter.format(this.plugin, balance));
+                }));
+    }
+
+    private void handleAdminBalanceCommand(CommandSender sender, String[] args) {
+        if (args.length != 3) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.usage");
+            return;
+        }
+
+        String action = normalize(args[0]);
+        OfflinePlayer target = resolveBalanceTarget(args[1]);
+        if (target == null) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.player-not-found", args[1]);
+            return;
+        }
+
+        Double amount = parseAmount(args[2]);
+        if (amount == null) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.invalid-amount", args[2]);
+            return;
+        }
+        if (!isValidBalanceAmount(action, amount)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.invalid-amount", args[2]);
+            return;
+        }
+
+        switch (action) {
+            case "add" -> adjustBalance(sender, target, amount);
+            case "take" -> takeBalance(sender, target, amount);
+            case "set" -> setBalance(sender, target, amount);
+            default -> this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.usage");
+        }
+    }
+
+    private void adjustBalance(CommandSender sender, OfflinePlayer target, double amount) {
+        CompletableFuture<Boolean> operation = this.plugin.getEconomyManager().deposit(target.getUniqueId(), amount);
+        completeAdminBalanceChange(
+                sender,
+                target,
+                operation,
+                TransactionType.DEPOSIT,
+                amount,
+                "economy.balance.admin.add.success",
+                buildAuditDescription(sender, "balance add", amount));
+    }
+
+    private void takeBalance(CommandSender sender, OfflinePlayer target, double amount) {
+        CompletableFuture<Boolean> operation = this.plugin.getEconomyManager().withdraw(target.getUniqueId(), amount);
+        completeAdminBalanceChange(
+                sender,
+                target,
+                operation,
+                TransactionType.WITHDRAW,
+                amount,
+                "economy.balance.admin.take.success",
+                buildAuditDescription(sender, "balance take", amount));
+    }
+
+    private void setBalance(CommandSender sender, OfflinePlayer target, double amount) {
+        this.plugin.getEconomyManager().getBalance(target.getUniqueId())
+                .thenCompose(beforeBalance -> this.plugin.getEconomyManager().setBalance(target.getUniqueId(), amount)
+                        .thenCompose(updated -> {
+                            if (!updated) {
+                                return CompletableFuture.completedFuture(AdminBalanceResult.failed());
+                            }
+                            return this.plugin.getEconomyManager().getBalance(target.getUniqueId())
+                                    .thenApply(afterBalance -> {
+                                        double delta = afterBalance - beforeBalance;
+                                        TransactionType type = delta < 0.0D ? TransactionType.WITHDRAW : TransactionType.DEPOSIT;
+                                        return AdminBalanceResult.success(type, Math.abs(delta), afterBalance);
+                                    });
+                        }))
+                .whenComplete((result, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        logAdminBalanceFailure("Failed to set balance for " + target.getUniqueId(), throwable);
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.failed");
+                        return;
+                    }
+                    handleAdminBalanceResult(
+                            sender,
+                            target,
+                            Objects.requireNonNull(result, "result"),
+                            "economy.balance.admin.set.success",
+                            buildAuditDescription(sender, "balance set", amount));
+                }));
+    }
+
+    private void completeAdminBalanceChange(
+            CommandSender sender,
+            OfflinePlayer target,
+            CompletableFuture<Boolean> operation,
+            TransactionType type,
+            double amount,
+            String successMessageKey,
+            String auditDescription) {
+        operation.thenCompose(updated -> {
+            if (!updated) {
+                return CompletableFuture.completedFuture(AdminBalanceResult.failed());
+            }
+            return this.plugin.getEconomyManager().getBalance(target.getUniqueId())
+                    .thenApply(balanceAfter -> AdminBalanceResult.success(type, amount, balanceAfter));
+        }).whenComplete((result, throwable) -> runSync(() -> {
+            if (throwable != null) {
+                logAdminBalanceFailure("Failed to update balance for " + target.getUniqueId(), throwable);
+                this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.failed");
+                return;
+            }
+            handleAdminBalanceResult(
+                    sender,
+                    target,
+                    Objects.requireNonNull(result, "result"),
+                    successMessageKey,
+                    auditDescription);
+        }));
+    }
+
+    private void handleAdminBalanceResult(
+            CommandSender sender,
+            OfflinePlayer target,
+            AdminBalanceResult result,
+            String successMessageKey,
+            String auditDescription) {
+        if (!result.success()) {
+            this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.failed");
+            return;
+        }
+
+        this.plugin.getAuditLogManager().recordEntry(
+                target.getUniqueId(),
+                result.transactionType(),
+                result.amount(),
+                result.balanceAfter(),
+                auditDescription,
+                resolveCounterpartUuid(sender))
+                .whenComplete((ignored, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        logAdminBalanceFailure("Failed to write admin balance audit for " + target.getUniqueId(), throwable);
+                        this.plugin.getMessageConfig().sendMessage(sender, "economy.balance.admin.failed");
+                        return;
+                    }
+                    this.plugin.getMessageConfig().sendMessage(
+                            sender,
+                            successMessageKey,
+                            resolveTargetName(target),
+                            CurrencyFormatter.format(this.plugin, result.amount()),
+                            CurrencyFormatter.format(this.plugin, result.balanceAfter()));
+                }));
+    }
+
+    private @Nullable Double parseAmount(String rawAmount) {
+        try {
+            double parsed = Double.parseDouble(rawAmount);
+            return Double.isFinite(parsed) ? parsed : null;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private boolean isValidBalanceAmount(String action, double amount) {
+        if (amount < 0.0D) {
+            return false;
+        }
+        if ("add".equals(action) || "take".equals(action)) {
+            return amount > 0.0D;
+        }
+        return true;
+    }
+
+    private String buildAuditDescription(CommandSender sender, String action, double amount) {
+        return action + " by " + sender.getName() + " (" + amount + ")";
+    }
+
+    private String resolveTargetName(OfflinePlayer target) {
+        return target.getName() == null || target.getName().isBlank()
+                ? target.getUniqueId().toString()
+                : target.getName();
+    }
+
+    private @Nullable UUID resolveCounterpartUuid(CommandSender sender) {
+        if (sender instanceof Player player) {
+            return player.getUniqueId();
+        }
+        return null;
+    }
+
+    private void logAdminBalanceFailure(String message, Throwable throwable) {
+        this.plugin.getLogger().log(Level.SEVERE, message, throwable);
+    }
+
     private boolean canUseEconomyCommand(CommandSender sender) {
         if (!sender.hasPermission(USE_PERMISSION)) {
             this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
@@ -609,5 +828,20 @@ public final class CommandManager {
 
     private void runSync(Runnable runnable) {
         this.plugin.getServer().getScheduler().runTask(this.plugin, runnable);
+    }
+
+    private record AdminBalanceResult(
+            boolean success,
+            @Nullable TransactionType transactionType,
+            double amount,
+            double balanceAfter) {
+
+        private static AdminBalanceResult success(TransactionType transactionType, double amount, double balanceAfter) {
+            return new AdminBalanceResult(true, transactionType, amount, balanceAfter);
+        }
+
+        private static AdminBalanceResult failed() {
+            return new AdminBalanceResult(false, null, 0.0D, 0.0D);
+        }
     }
 }

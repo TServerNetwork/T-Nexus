@@ -25,6 +25,14 @@ economy:
   balance:
     self: "&7所持金: &a{0}"
     usage: "&c使い方: /balance"
+    admin:
+      usage: "&c使い方: /balance <add|set|take> <player> <amount>"
+      player-not-found: "&cプレイヤー {0} は見つかりませんでした。"
+      invalid-amount: "&c0 以上の有効な金額を入力してください。"
+      add.success: "&a{0} の残高に {1} を加算しました。現在の残高: {2}"
+      set.success: "&a{0} の残高を {2} に設定しました。"
+      take.success: "&a{0} の残高から {1} を減算しました。現在の残高: {2}"
+      failed: "&c残高操作に失敗しました。"
   pay:
     usage: "&c使い方: /pay <player>"
     anvil-title: "&6{0} に送金"
@@ -119,7 +127,7 @@ gui:
       lore: "&8現在地 &7> &a{0}"
 shop:
   command:
-    usage: "&c使い方: /shop link"
+    usage: "&c使い方: /shop linkitem"
   list:
     usage: "&c使い方: /shops [player]"
     header-self: "&6あなたのショップ一覧"
@@ -141,6 +149,7 @@ shop:
     denied: "&cこのショップを破壊できるのは所有者または tnexus.shop.admin のみです。"
   link:
     mode-started: "&eリンクモードを開始しました。ショップ看板を右クリックし、その後チェストを右クリックしてください。"
+    tool-granted: "&aSignShop リンクツールを付与しました。"
     tool-name: "&eSignShop リンクツール"
     tool-lore: "&7PlayerShop の看板を右クリックし、その後チェストを右クリックします。"
     not-player-shop: "&cチェストにリンクできるのは PlayerShop のみです。"

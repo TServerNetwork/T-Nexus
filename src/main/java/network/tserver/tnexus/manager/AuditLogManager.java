@@ -7,10 +7,13 @@ import java.util.concurrent.CompletableFuture;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository.AuditEntry;
+import network.tserver.tnexus.database.repository.TransactionRepository.AuditRecord;
+import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.gui.audit.AuditLogGui;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Coordinates audit-log retrieval and GUI opening.
@@ -41,6 +44,36 @@ public final class AuditLogManager {
         Objects.requireNonNull(playerUuid, "playerUuid");
         Objects.requireNonNull(filter, "filter");
         return this.transactionRepository.findByPlayerUuid(playerUuid, filter.getTransactionType());
+    }
+
+    /**
+     * Records an audit entry for a player's transaction history.
+     *
+     * @param playerUuid affected player UUID
+     * @param type transaction type
+     * @param amount transaction amount
+     * @param balanceAfter balance after the transaction
+     * @param description audit description
+     * @param counterpartUuid optional counterpart UUID
+     * @return future resolving when the record has been persisted
+     */
+    public CompletableFuture<Void> recordEntry(
+            UUID playerUuid,
+            TransactionType type,
+            double amount,
+            double balanceAfter,
+            String description,
+            @Nullable UUID counterpartUuid) {
+        Objects.requireNonNull(playerUuid, "playerUuid");
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(description, "description");
+        return this.transactionRepository.insert(new AuditRecord(
+                playerUuid,
+                type,
+                amount,
+                balanceAfter,
+                description,
+                counterpartUuid));
     }
 
     /**

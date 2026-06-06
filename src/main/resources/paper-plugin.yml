@@ -31,16 +31,16 @@ commands:
     aliases: [tn, nexus]
   balance:
     description: Show your balance
-    usage: "/<command>"
+    usage: "/<command> [add|set|take <player> <amount>]"
   bal:
     description: Show your balance
-    usage: "/<command>"
+    usage: "/<command> [add|set|take <player> <amount>]"
   pay:
     description: Pay another player
     usage: "/<command> <player>"
   shop:
     description: Manage sign shops
-    usage: "/<command> link"
+    usage: "/<command> linkitem"
   shops:
     description: List player shops
     usage: "/<command> [player]"
@@ -66,6 +66,9 @@ permissions:
     default: op
   tnexus.audit.admin:
     description: Allows viewing other players audit history
+    default: op
+  tnexus.admin.balance:
+    description: Allows administrating player balances
     default: op
   tnexus.shop.bypass.ban:
     description: Allows creating banned-material SignShops

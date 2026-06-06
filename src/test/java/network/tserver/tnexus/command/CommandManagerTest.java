@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -192,16 +193,66 @@ class CommandManagerTest {
     }
 
     @Test
-    void shouldStartShopLinkMode() {
+    void shouldGrantShopLinkTool() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         PlayerMock player = this.server.addPlayer();
-        player.addAttachment(plugin, "tnexus.shop.use", true);
+        player.addAttachment(plugin, "tnexus.shop.player", true);
 
-        assertTrue(this.server.dispatchCommand(player, "shop link"));
+        assertTrue(this.server.dispatchCommand(player, "shop linkitem"));
         assertEquals(
-                "§8[§6T-Nexus§8] §eリンクモードを開始しました。ショップ看板を右クリックし、その後チェストを右クリックしてください。",
+                "§8[§6T-Nexus§8] §aSignShop リンクツールを付与しました。",
                 player.nextMessage());
+        assertTrue(plugin.getSignShopManager().isLinkTool(player.getInventory().getItemInMainHand()));
+    }
+
+    @Test
+    void shouldAllowAdminsToAddBalanceAndWriteAudit() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock target = this.server.addPlayer("Target");
+        admin.addAttachment(plugin, "tnexus.admin.balance", true);
+
+        assertTrue(this.server.dispatchCommand(admin, "balance add Target 50"));
+        String message = waitForNextMessage(admin);
+        assertNotNull(message);
+        assertTrue(message.contains("Target"));
+        assertTrue(message.contains("50"));
+        assertEquals(50.0D, plugin.getEconomyManager().getBalance(target.getUniqueId()).get(5, TimeUnit.SECONDS));
+
+        List<TransactionRepository.AuditEntry> entries = plugin.getAuditLogManager()
+                .getHistory(target.getUniqueId(), network.tserver.tnexus.manager.AuditLogFilter.DEPOSIT)
+                .get(5, TimeUnit.SECONDS);
+        assertEquals(1, entries.size());
+        assertEquals(TransactionType.DEPOSIT, entries.getFirst().type());
+        assertEquals(50.0D, entries.getFirst().amount());
+        assertEquals(admin.getUniqueId(), entries.getFirst().counterpartUuid());
+    }
+
+    @Test
+    void shouldAllowAdminsToSetOfflinePlayerBalanceAndWriteWithdrawAudit() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock target = this.server.addPlayer("Target");
+        admin.addAttachment(plugin, "tnexus.admin.balance", true);
+        plugin.getEconomyManager().deposit(target.getUniqueId(), 120.0D).get(5, TimeUnit.SECONDS);
+        target.disconnect();
+
+        assertTrue(this.server.dispatchCommand(admin, "balance set Target 40"));
+        String message = waitForNextMessage(admin);
+        assertNotNull(message);
+        assertTrue(message.contains("40"));
+        assertEquals(40.0D, plugin.getEconomyManager().getBalance(target.getUniqueId()).get(5, TimeUnit.SECONDS));
+
+        List<TransactionRepository.AuditEntry> entries = plugin.getAuditLogManager()
+                .getHistory(target.getUniqueId(), network.tserver.tnexus.manager.AuditLogFilter.WITHDRAW)
+                .get(5, TimeUnit.SECONDS);
+        assertEquals(1, entries.size());
+        assertEquals(TransactionType.WITHDRAW, entries.getFirst().type());
+        assertEquals(80.0D, entries.getFirst().amount());
+        assertEquals(admin.getUniqueId(), entries.getFirst().counterpartUuid());
     }
 
     @Test

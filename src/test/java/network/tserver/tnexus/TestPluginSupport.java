@@ -43,16 +43,16 @@ public final class TestPluginSupport {
                 usage: "/tnexus"
               balance:
                 description: test balance command
-                usage: "/balance"
+                usage: "/balance [add|set|take <player> <amount>]"
               bal:
                 description: test balance alias command
-                usage: "/bal"
+                usage: "/bal [add|set|take <player> <amount>]"
               pay:
                 description: test pay command
                 usage: "/pay <player>"
               shop:
                 description: test shop command
-                usage: "/shop link"
+                usage: "/shop linkitem"
               shops:
                 description: test shops command
                 usage: "/shops [player]"
