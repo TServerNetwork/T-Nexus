@@ -350,7 +350,11 @@ public final class SignShopManager {
             return false;
         }
 
-        if (session == null || session.shopId() == null) {
+        if (session == null) {
+            return false;
+        }
+
+        if (session.shopId() == null) {
             cancelLinkSessionOnError(player.getUniqueId(), session);
             this.plugin.getMessageConfig().sendMessage(player, "shop.link.select-sign-first");
             return true;
@@ -1597,7 +1601,7 @@ public final class SignShopManager {
     }
 
     private void cancelLinkSessionOnError(UUID playerId, @Nullable LinkSession session) {
-        if (session != null && session.commandMode()) {
+        if (session != null) {
             this.linkSessions.remove(playerId);
         }
     }
