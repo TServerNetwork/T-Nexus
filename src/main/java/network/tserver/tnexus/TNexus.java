@@ -27,6 +27,7 @@ import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
 import network.tserver.tnexus.listener.PlayerDeathStatsListener;
+import network.tserver.tnexus.listener.PlayerMovementStatsListener;
 import network.tserver.tnexus.listener.PlayerSessionListener;
 import network.tserver.tnexus.listener.SignShopListener;
 import org.bukkit.ChatColor;
@@ -51,6 +52,7 @@ public class TNexus extends JavaPlugin {
     private PaymentNotificationListener paymentNotificationListener;
     private PlayerSessionListener playerSessionListener;
     private PlayerDeathStatsListener playerDeathStatsListener;
+    private PlayerMovementStatsListener playerMovementStatsListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
 
@@ -90,6 +92,7 @@ public class TNexus extends JavaPlugin {
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.playerSessionListener = new PlayerSessionListener(this);
         this.playerDeathStatsListener = new PlayerDeathStatsListener(this);
+        this.playerMovementStatsListener = new PlayerMovementStatsListener(this);
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
         this.signShopManager.initialize();
@@ -120,6 +123,7 @@ public class TNexus extends JavaPlugin {
         this.paymentNotificationListener = null;
         this.playerSessionListener = null;
         this.playerDeathStatsListener = null;
+        this.playerMovementStatsListener = null;
         this.signShopManager = null;
         this.signShopListener = null;
     }
@@ -319,12 +323,12 @@ public class TNexus extends JavaPlugin {
         }
 
         try {
-            this.playerStatsManager.flushOnlineSessions(getServer().getOnlinePlayers()).get(10, TimeUnit.SECONDS);
+            this.playerStatsManager.shutdown(getServer().getOnlinePlayers()).get(10, TimeUnit.SECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            getLogger().log(Level.SEVERE, "Interrupted while flushing player sessions during shutdown.", exception);
+            getLogger().log(Level.SEVERE, "Interrupted while flushing player stats during shutdown.", exception);
         } catch (ExecutionException | TimeoutException exception) {
-            getLogger().log(Level.SEVERE, "Failed to flush player sessions during shutdown.", exception);
+            getLogger().log(Level.SEVERE, "Failed to flush player stats during shutdown.", exception);
         }
     }
 }
