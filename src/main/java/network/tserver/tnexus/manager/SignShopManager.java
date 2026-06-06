@@ -1124,8 +1124,8 @@ public final class SignShopManager {
             case UNAVAILABLE -> "&c";
             case DISABLED -> "&8";
         };
-        String buyColor = availability.buyAvailable() ? "&a" : "&c";
-        String sellColor = availability.sellAvailable() ? "&a" : "&c";
+        String buyColor = resolveTradeDisplayColor(shop.getBuyPrice(), availability.buyAvailable());
+        String sellColor = resolveTradeDisplayColor(shop.getSellPrice(), availability.sellAvailable());
         String label = shop.getType() == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
         String buyValue = shop.getBuyPrice() == null ? "-" : trimPrice(shop.getBuyPrice());
         String sellValue = shop.getSellPrice() == null ? "-" : trimPrice(shop.getSellPrice());
@@ -1143,6 +1143,13 @@ public final class SignShopManager {
             sign.setWaxed(waxed);
             sign.update(true, false);
         }
+    }
+
+    private String resolveTradeDisplayColor(@Nullable Double price, boolean available) {
+        if (price == null) {
+            return "&8";
+        }
+        return available ? "&a" : "&c";
     }
 
     private void cacheShop(SignShop shop) {
