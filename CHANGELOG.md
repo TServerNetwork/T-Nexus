@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.13.2...v0.14.0) (2026-06-06)
+
+
+### Features
+
+* **command:** add tab completers for commands (#XX) ([cac3723](https://github.com/TServerNetwork/T-Nexus/commit/cac3723c2a97b5bb3cb27e2f3dbf22022a2a2f35)), closes [#XX](https://github.com/TServerNetwork/T-Nexus/issues/XX)
+
 ## [0.13.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.13.1...v0.13.2) (2026-06-06)
 
 
