@@ -85,6 +85,33 @@ public class PlayerStatsManager {
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 
+    /**
+     * Records a player death and its cause.
+     *
+     * @param player dead player
+     * @param cause death cause label
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordDeath(Player player, String cause) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(cause, "cause");
+        UUID playerId = player.getUniqueId();
+        return CompletableFuture.allOf(
+                this.playerStatsRepository.incrementDeaths(playerId),
+                this.playerStatsRepository.incrementDeathCause(playerId, cause));
+    }
+
+    /**
+     * Records a player respawn.
+     *
+     * @param player respawning player
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordRespawn(Player player) {
+        Objects.requireNonNull(player, "player");
+        return this.playerStatsRepository.incrementRespawns(player.getUniqueId());
+    }
+
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
         Instant sessionStart = this.sessionStartTimes.remove(playerId);
         if (sessionStart == null) {

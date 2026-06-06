@@ -26,6 +26,7 @@ import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
+import network.tserver.tnexus.listener.PlayerDeathStatsListener;
 import network.tserver.tnexus.listener.PlayerSessionListener;
 import network.tserver.tnexus.listener.SignShopListener;
 import org.bukkit.ChatColor;
@@ -49,6 +50,7 @@ public class TNexus extends JavaPlugin {
     private PlayerStatsManager playerStatsManager;
     private PaymentNotificationListener paymentNotificationListener;
     private PlayerSessionListener playerSessionListener;
+    private PlayerDeathStatsListener playerDeathStatsListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
 
@@ -87,6 +89,7 @@ public class TNexus extends JavaPlugin {
         this.playerStatsManager = createPlayerStatsManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.playerSessionListener = new PlayerSessionListener(this);
+        this.playerDeathStatsListener = new PlayerDeathStatsListener(this);
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
         this.signShopManager.initialize();
@@ -116,6 +119,7 @@ public class TNexus extends JavaPlugin {
         this.playerStatsManager = null;
         this.paymentNotificationListener = null;
         this.playerSessionListener = null;
+        this.playerDeathStatsListener = null;
         this.signShopManager = null;
         this.signShopListener = null;
     }
