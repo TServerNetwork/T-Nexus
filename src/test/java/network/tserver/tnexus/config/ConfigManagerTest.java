@@ -40,6 +40,7 @@ class ConfigManagerTest {
         assertEquals(50, configManager.getGuiSettings().currentLocationSlot());
         assertTrue(plugin.getConfig().getStringList("tnexus.shop.banned-materials")
                 .contains(configManager.getString("tnexus.shop.link-tool.material")));
+        assertEquals(13, configManager.getInt("tnexus.shop.sign-display.item-name-max-length"));
 
         ConfigurationSection section = configManager.getSection("tnexus.database");
         assertNotNull(section);

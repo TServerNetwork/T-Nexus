@@ -56,6 +56,7 @@ public final class SignShopManager {
     private static final String BYPASS_BAN_PERMISSION = "tnexus.shop.bypass.ban";
     private static final String SHOP_LIMIT_META_KEY = "tnexus.shop.limit";
     private static final int DEFAULT_PLAYER_SHOP_LIMIT = 5;
+    private static final int DEFAULT_SIGN_ITEM_NAME_MAX_LENGTH = 13;
 
     private final TNexus plugin;
     private final EconomyManager economyManager;
@@ -1325,12 +1326,13 @@ public final class SignShopManager {
         String buyColor = resolveTradeDisplayColor(shop.getBuyPrice(), availability.buyAvailable());
         String sellColor = resolveTradeDisplayColor(shop.getSellPrice(), availability.sellAvailable());
         String label = shop.getType() == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
-        String buyValue = shop.getBuyPrice() == null ? "-" : trimPrice(shop.getBuyPrice());
-        String sellValue = shop.getSellPrice() == null ? "-" : trimPrice(shop.getSellPrice());
+        String buyValue = shop.getBuyPrice() == null ? "-" : CurrencyFormatter.formatCompact(this.plugin, shop.getBuyPrice());
+        String sellValue = shop.getSellPrice() == null ? "-" : CurrencyFormatter.formatCompact(this.plugin, shop.getSellPrice());
         sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacyAmpersand().deserialize(color + label));
-        sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getItemName()));
+        sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize(
+                "&f" + abbreviateForSign(shop.getItemName())));
         sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacyAmpersand().deserialize(
-                buyColor + "B " + buyValue + " &8| " + sellColor + "S " + sellValue));
+                buyColor + "B:" + buyValue + " &8/ " + sellColor + "S:" + sellValue));
         sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getNote()));
         sign.setWaxed(true);
         sign.update(true, false);
@@ -1624,11 +1626,20 @@ public final class SignShopManager {
         }
     }
 
-    private String trimPrice(double price) {
-        if (price == Math.rint(price)) {
-            return Long.toString((long) price);
+    private String abbreviateForSign(String value) {
+        int maxLength = this.plugin.getConfigManager().getInt(
+                "tnexus.shop.sign-display.item-name-max-length",
+                DEFAULT_SIGN_ITEM_NAME_MAX_LENGTH);
+        if (maxLength <= 0) {
+            return "";
         }
-        return Double.toString(price);
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        if (maxLength <= 3) {
+            return ".".repeat(maxLength);
+        }
+        return value.substring(0, maxLength - 3) + "...";
     }
 
     private void runSync(Runnable runnable) {

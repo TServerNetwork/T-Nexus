@@ -7,6 +7,7 @@ import java.util.function.BooleanSupplier;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.util.BlockPosition;
+import network.tserver.tnexus.util.CurrencyFormatter;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -444,7 +445,7 @@ class SignShopManagerTest {
 
         Sign sign = (Sign) signBlock.getState();
         assertEquals("§c[ServerShop]", LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(0)));
-        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(2)).startsWith("§cB -"));
+        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(2)).startsWith("§cB:-"));
     }
 
     @Test
@@ -472,8 +473,8 @@ class SignShopManagerTest {
         manager.refreshShopDisplay(liveShop);
 
         waitUntil(() -> signLineContains(signBlock, 0, ChatColor.COLOR_CHAR + "a[Shop]")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cB 10")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aS 5"));
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cB:" + CurrencyFormatter.formatCompact(plugin, 10.0D))
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aS:" + CurrencyFormatter.formatCompact(plugin, 5.0D)));
     }
 
     @Test
@@ -501,8 +502,8 @@ class SignShopManagerTest {
         manager.refreshShopDisplay(liveShop);
 
         waitUntil(() -> signLineContains(signBlock, 0, ChatColor.COLOR_CHAR + "a[Shop]")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB 10")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB:" + CurrencyFormatter.formatCompact(plugin, 10.0D))
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS:" + CurrencyFormatter.formatCompact(plugin, 5.0D)));
     }
 
     @Test
@@ -529,8 +530,8 @@ class SignShopManagerTest {
         manager.refreshShopDisplay(liveShop);
 
         waitUntil(() -> signLineContains(signBlock, 0, ChatColor.COLOR_CHAR + "c[Shop]")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B -")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B:-")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS:" + CurrencyFormatter.formatCompact(plugin, 5.0D)));
     }
 
 
@@ -558,8 +559,8 @@ class SignShopManagerTest {
         liveShop.setSellPrice(null);
         manager.refreshShopDisplay(liveShop);
 
-        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB 10")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7S -"));
+        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB:" + CurrencyFormatter.formatCompact(plugin, 10.0D))
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7S:-"));
     }
 
     @Test
@@ -586,9 +587,67 @@ class SignShopManagerTest {
         liveShop.setSellPrice(5.0D);
         manager.refreshShopDisplay(liveShop);
 
-        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B -")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aS 5"));
+        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B:-")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aS:" + CurrencyFormatter.formatCompact(plugin, 5.0D)));
     }
+
+    @Test
+    void shouldCompactLargePricesOnSigns() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        plugin.getEconomyManager().deposit(owner.getUniqueId(), 5_000_000_000.0D).get(5, TimeUnit.SECONDS);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(101, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 16));
+        Block signBlock = world.getBlockAt(102, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(2_500_000.0D);
+        liveShop.setSellPrice(1_000_000_000.0D);
+        manager.refreshShopDisplay(liveShop);
+
+        waitUntil(() -> signLineContains(signBlock, 2, "B:" + CurrencyFormatter.formatCompact(plugin, 2_500_000.0D))
+                && signLineContains(signBlock, 2, "S:" + CurrencyFormatter.formatCompact(plugin, 1_000_000_000.0D)));
+    }
+
+    @Test
+    void shouldTruncateLongItemNameOnSignsUsingConfiguredLimit() throws Exception {
+        TNexus plugin = loadPlugin();
+        plugin.getConfig().set("tnexus.shop.sign-display.item-name-max-length", 10);
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(103, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ItemStack namedItem = new ItemStack(Material.DIAMOND);
+        var meta = namedItem.getItemMeta();
+        assertNotNull(meta);
+        meta.setDisplayName("Legendary Diamond");
+        namedItem.setItemMeta(meta);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(namedItem.clone());
+        Block signBlock = world.getBlockAt(104, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, namedItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        Sign sign = (Sign) signBlock.getState();
+        assertEquals("§fLegenda...", LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(1)));
+    }
+
     @Test
     void shouldReleaseSignProtectionAfterDeletingShop() throws Exception {
         TNexus plugin = loadPlugin();

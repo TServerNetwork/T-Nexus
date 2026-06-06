@@ -34,6 +34,8 @@ tnexus:
   shop:
     player-shop:
       default-limit: 5
+    sign-display:
+      item-name-max-length: 13
     link-tool:
       material: "STICK"
     server-shop:
