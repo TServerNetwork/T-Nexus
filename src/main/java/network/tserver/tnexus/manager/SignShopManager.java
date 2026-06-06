@@ -418,7 +418,7 @@ public final class SignShopManager {
      * @return {@code true} when the shop is currently rendered as unavailable
      */
     public boolean isBrowseUnavailable(SignShop shop) {
-        return resolveRenderedAvailabilityNow(shop).status() == ShopStatus.UNAVAILABLE;
+        return resolveRenderedAvailabilityNow(shop).status() != ShopStatus.AVAILABLE;
     }
 
     /**
@@ -431,6 +431,24 @@ public final class SignShopManager {
         for (String messageKey : resolveBrowseUnavailableMessageKeys(shop)) {
             this.plugin.getMessageConfig().sendMessage(player, messageKey);
         }
+    }
+
+    /**
+     * Returns whether the shop currently exposes the requested trade direction.
+     *
+     * @param shop target shop
+     * @param action trade direction
+     * @return {@code true} when the shop-side trade path is available
+     */
+    public boolean isTradeAvailable(SignShop shop, TradeAction action) {
+        Objects.requireNonNull(shop, "shop");
+        Objects.requireNonNull(action, "action");
+
+        RenderedAvailability availability = resolveRenderedAvailabilityNow(shop);
+        return switch (action) {
+            case BUY -> availability.buyAvailable();
+            case SELL -> availability.sellAvailable();
+        };
     }
 
     /**

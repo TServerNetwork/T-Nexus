@@ -9,6 +9,7 @@ import network.tserver.tnexus.manager.ShopType;
 import network.tserver.tnexus.manager.SignShop;
 import network.tserver.tnexus.manager.SignShopManager;
 import network.tserver.tnexus.util.BlockPosition;
+import network.tserver.tnexus.util.CurrencyFormatter;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -272,6 +273,40 @@ class SignShopBrowseGuiTest {
         String message = seller.nextMessage();
         assertNotNull(message);
         assertTrue(message.contains(plugin.getMessageConfig().getMessage("shop.trade.owner-funds")));
+    }
+
+    @Test
+    void shouldGrayOutUnavailableServerShopSellLore() throws Exception {
+        TNexus plugin = loadPlugin();
+        plugin.getConfig().set("tnexus.shop.server-shop.sell-to-void", false);
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(admin.getWorld(), 40, templateItem, 1);
+        Block signBlock = createSign(admin.getWorld(), 41);
+
+        SignShop shop = manager.createShop(admin, signBlock, ShopType.SERVER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setSellPrice(5.0D);
+
+        manager.openBrowseGui(viewer, liveShop);
+
+        assertTrue(hasLoreLine(
+                viewer,
+                19,
+                plugin.getMessageConfig().getMessage("shop.gui.amount.buy", 1, CurrencyFormatter.format(plugin, 10.0D))));
+        assertTrue(hasLoreLine(
+                viewer,
+                19,
+                plugin.getMessageConfig().getMessage("shop.gui.amount.sell-disabled", 1, CurrencyFormatter.format(plugin, 5.0D))));
     }
 
     private TNexus loadPlugin() {

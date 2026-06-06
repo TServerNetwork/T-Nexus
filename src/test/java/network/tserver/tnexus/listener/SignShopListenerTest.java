@@ -213,6 +213,44 @@ class SignShopListenerTest {
         assertTrue(plugin.getGuiManager().hasOpenGui(owner));
     }
 
+    @Test
+    void shouldSkipBrowseGuiAndShowMessageWhenDisabledServerShopIsClicked() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+        viewer.addAttachment(plugin, "tnexus.shop.use", true);
+
+        World world = admin.getWorld();
+        Block chestBlock = createChestWithItem(world, 40, Material.DIAMOND, 1);
+        Block signBlock = createSign(world, 41);
+
+        SignShop shop = manager.createShop(admin, signBlock, ShopType.SERVER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setEnabled(false);
+        manager.refreshShopDisplay(liveShop);
+
+        PlayerInteractEvent event = new PlayerInteractEvent(
+                viewer,
+                Action.RIGHT_CLICK_BLOCK,
+                null,
+                signBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+        assertFalse(plugin.getGuiManager().hasOpenGui(viewer));
+        assertTrue(waitForNextMessage(viewer).contains("利用できません"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
