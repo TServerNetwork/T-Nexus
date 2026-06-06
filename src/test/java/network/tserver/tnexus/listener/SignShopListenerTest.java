@@ -91,6 +91,56 @@ class SignShopListenerTest {
     }
 
     @Test
+    void shouldAllowOpeningChestAfterEmptyLinkAttemptFails() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = createChestWithItem(world, 15, Material.DIAMOND, 0);
+        Block signBlock = createSign(world, 16);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", null, null);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        ItemStack linkTool = manager.createLinkTool();
+
+        PlayerInteractEvent selectSignEvent = new PlayerInteractEvent(
+                owner,
+                Action.RIGHT_CLICK_BLOCK,
+                linkTool,
+                signBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+        this.server.getPluginManager().callEvent(selectSignEvent);
+        assertTrue(selectSignEvent.isCancelled());
+
+        PlayerInteractEvent linkChestEvent = new PlayerInteractEvent(
+                owner,
+                Action.RIGHT_CLICK_BLOCK,
+                linkTool,
+                chestBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+        this.server.getPluginManager().callEvent(linkChestEvent);
+        assertTrue(linkChestEvent.isCancelled());
+        assertTrue(waitForNextMessage(owner).contains("最低 1 個"));
+
+        PlayerInteractEvent reopenChestEvent = new PlayerInteractEvent(
+                owner,
+                Action.RIGHT_CLICK_BLOCK,
+                linkTool,
+                chestBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+        this.server.getPluginManager().callEvent(reopenChestEvent);
+
+        assertFalse(reopenChestEvent.isCancelled());
+    }
+
+    @Test
     void shouldSkipBrowseGuiAndShowMessageWhenUnavailableShopIsClicked() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
