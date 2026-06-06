@@ -20,6 +20,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.Inventory;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -168,6 +169,10 @@ public final class SignShopListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onInventoryMoveItem(InventoryMoveItemEvent event) {
+        if (containsLinkedChest(event.getSource()) || containsLinkedChest(event.getDestination())) {
+            event.setCancelled(true);
+            return;
+        }
         for (var inventory : List.of(event.getSource(), event.getDestination())) {
             for (BlockPosition blockPosition : this.shopManager.getChestPositions(inventory)) {
                 this.shopManager.refreshByChest(blockPosition);
@@ -177,6 +182,16 @@ public final class SignShopListener implements Listener {
 
     private boolean isChest(Block block) {
         return block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST;
+    }
+
+    private boolean containsLinkedChest(Inventory inventory) {
+        for (BlockPosition blockPosition : this.shopManager.getChestPositions(inventory)) {
+            Block block = blockPosition.resolveBlock(this.plugin.getServer());
+            if (block != null && this.shopManager.isLinkedChest(block)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String sanitizeLine(@Nullable String line) {
