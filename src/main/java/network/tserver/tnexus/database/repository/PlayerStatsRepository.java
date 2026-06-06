@@ -18,6 +18,7 @@ public final class PlayerStatsRepository {
     private final String deathStatsTableName;
     private final String distanceStatsTableName;
     private final String blockStatsTableName;
+    private final String entityDamageStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -30,6 +31,7 @@ public final class PlayerStatsRepository {
         this.deathStatsTableName = this.databaseManager.getTablePrefix() + "death_stats";
         this.distanceStatsTableName = this.databaseManager.getTablePrefix() + "distance_stats";
         this.blockStatsTableName = this.databaseManager.getTablePrefix() + "block_stats";
+        this.entityDamageStatsTableName = this.databaseManager.getTablePrefix() + "entity_damage_stats";
     }
 
     /**
@@ -193,6 +195,37 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Adds aggregate entity damage statistics for one or more players.
+     *
+     * @param damageStats damage deltas by player id and entity identifier
+     * @return completion future
+     */
+    public CompletableFuture<Void> addEntityDamageStats(Map<UUID, Map<String, EntityDamageDelta>> damageStats) {
+        Objects.requireNonNull(damageStats, "damageStats");
+        if (damageStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String sql = """
+                INSERT INTO %s (player_uuid, entity_type, damage_dealt, damage_taken)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    damage_dealt = damage_dealt + VALUES(damage_dealt),
+                    damage_taken = damage_taken + VALUES(damage_taken)
+                """.formatted(this.entityDamageStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                addEntityDamageBatch(statement, damageStats);
+                statement.executeBatch();
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player entity damage stats", exception);
+            }
+        });
+    }
+
+    /**
      * Increments the total death counter for the given player.
      *
      * @param playerId player id
@@ -306,6 +339,20 @@ public final class PlayerStatsRepository {
                 statement.setString(2, materialEntry.getKey());
                 statement.setInt(3, materialEntry.getValue().placedCount());
                 statement.setInt(4, materialEntry.getValue().brokenCount());
+                statement.addBatch();
+            }
+        }
+    }
+
+    private void addEntityDamageBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, EntityDamageDelta>> damageStats) throws Exception {
+        for (Map.Entry<UUID, Map<String, EntityDamageDelta>> playerEntry : damageStats.entrySet()) {
+            for (Map.Entry<String, EntityDamageDelta> entityEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, entityEntry.getKey());
+                statement.setDouble(3, entityEntry.getValue().damageDealt());
+                statement.setDouble(4, entityEntry.getValue().damageTaken());
                 statement.addBatch();
             }
         }

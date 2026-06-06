@@ -46,6 +46,7 @@ class PlayerStatsManagerTest {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
                 new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
@@ -82,6 +83,7 @@ class PlayerStatsManagerTest {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
                 new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
@@ -105,6 +107,7 @@ class PlayerStatsManagerTest {
                 new PlayerStatsRepository(plugin.getDatabaseManager()),
                 new MutableClock(Instant.parse("2026-06-07T02:00:00Z")),
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -134,6 +137,7 @@ class PlayerStatsManagerTest {
                 new PlayerStatsRepository(plugin.getDatabaseManager()),
                 new MutableClock(Instant.parse("2026-06-07T03:00:00Z")),
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -173,6 +177,7 @@ class PlayerStatsManagerTest {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
                 new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
@@ -201,6 +206,7 @@ class PlayerStatsManagerTest {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
                 new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
@@ -219,6 +225,36 @@ class PlayerStatsManagerTest {
         assertEquals(1, readBlockMaterialCount(plugin, player, Material.STONE, "broken_count"));
         assertEquals(1, readBlockMaterialCount(plugin, player, Material.WATER, "placed_count"));
         assertEquals(1, readBlockMaterialCount(plugin, player, Material.DIRT, "broken_count"));
+    }
+
+    @Test
+    void shouldAccumulateEntityDamageStatsByIdentifier() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("Fighter");
+        PlayerStatsManager manager = new PlayerStatsManager(
+                plugin,
+                new PlayerStatsRepository(plugin.getDatabaseManager()),
+                new MutableClock(Instant.parse("2026-06-07T06:00:00Z")),
+                new ConcurrentHashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
+                PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
+                false);
+
+        manager.recordDamageDealt(player, "ZOMBIE", 4.5D);
+        manager.recordDamageDealt(player, "ZOMBIE", 1.5D);
+        manager.recordDamageTaken(player, "CREEPER", 2.25D);
+
+        manager.flushPendingEntityDamageStats().get(5, TimeUnit.SECONDS);
+
+        assertEquals(6.0D, readEntityDamage(plugin, player, "ZOMBIE", "damage_dealt"));
+        assertEquals(0.0D, readEntityDamage(plugin, player, "ZOMBIE", "damage_taken"));
+        assertEquals(2.25D, readEntityDamage(plugin, player, "CREEPER", "damage_taken"));
     }
 
     private TNexus loadPlugin() {
@@ -309,6 +345,19 @@ class PlayerStatsManagerTest {
             statement.setString(2, material.name());
             try (var resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt(columnName) : 0;
+            }
+        }
+    }
+
+    private double readEntityDamage(TNexus plugin, PlayerMock player, String identifier, String columnName)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT " + columnName + " FROM tnexus_entity_damage_stats WHERE player_uuid = ? AND entity_type = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, identifier);
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getDouble(columnName) : 0.0D;
             }
         }
     }
