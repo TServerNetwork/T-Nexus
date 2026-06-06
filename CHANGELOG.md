@@ -1,3 +1,11 @@
+## [0.13.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.13.1...v0.13.2) (2026-06-06)
+
+
+### Bug Fixes
+
+* **shop:** block hopper and dropper access to shop chests ([#59](https://github.com/TServerNetwork/T-Nexus/issues/59)) ([e2e3709](https://github.com/TServerNetwork/T-Nexus/commit/e2e37097202eba54a7fc6279928a475d2cc2c983))
+* **shop:** unify ServerShop unavailable display with PlayerShop ([#59](https://github.com/TServerNetwork/T-Nexus/issues/59)) ([460644e](https://github.com/TServerNetwork/T-Nexus/commit/460644ebcc4f633e059a4f8c07389dec970c0653))
+
 ## [0.13.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.13.0...v0.13.1) (2026-06-06)
 
 
