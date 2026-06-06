@@ -259,7 +259,9 @@ shop:
       disabled-hint: "&8現在この数量では取引できません。"
     max:
       name: "&a最大取引"
-      lore: "&7現在可能な最大数量で取引します。"
+      lore: "&7現在利用可能な最大数量で取引します。"
+      max-buy: "&7最大購入可能数: &e{0}個"
+      max-sell: "&7最大売却可能数: &e{0}個"
       disabled-name: "&8最大取引"
       disabled-lore: "&8現在利用できる取引はありません。"
     custom:

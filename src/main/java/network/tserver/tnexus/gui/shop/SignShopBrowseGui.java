@@ -114,8 +114,6 @@ public final class SignShopBrowseGui extends BaseGui {
                 ? new ItemStack(Material.PAPER)
                 : this.shop.getItemStack().clone();
         icon.setAmount(Math.min(amount, icon.getMaxStackSize()));
-        int maxBuyAmount = this.shopManager.computeMaxTradeAmount(this.player, this.shop, TradeAction.BUY);
-        int maxSellAmount = this.shopManager.computeMaxTradeAmount(this.player, this.shop, TradeAction.SELL);
         boolean buyEnabled = this.shop.getBuyPrice() != null;
         boolean sellEnabled = this.shop.getSellPrice() != null;
         var meta = icon.getItemMeta();
@@ -153,14 +151,18 @@ public final class SignShopBrowseGui extends BaseGui {
         int maxSellAmount = this.shopManager.computeMaxTradeAmount(this.player, this.shop, TradeAction.SELL);
         boolean buyEnabled = maxBuyAmount > 0;
         boolean sellEnabled = maxSellAmount > 0;
+        List<String> lore = new ArrayList<>();
+        lore.add(getPlugin().getMessageConfig().getMessage(
+                buyEnabled || sellEnabled ? "shop.gui.max.lore" : "shop.gui.max.disabled-lore"));
+        lore.add(getPlugin().getMessageConfig().getMessage("shop.gui.max.max-buy", maxBuyAmount));
+        lore.add(getPlugin().getMessageConfig().getMessage("shop.gui.max.max-sell", maxSellAmount));
         setItem(
                 MAX_SLOT,
                 createItem(
                         Material.CHEST,
                         getPlugin().getMessageConfig().getMessage(
                                 buyEnabled || sellEnabled ? "shop.gui.max.name" : "shop.gui.max.disabled-name"),
-                        List.of(getPlugin().getMessageConfig().getMessage(
-                                buyEnabled || sellEnabled ? "shop.gui.max.lore" : "shop.gui.max.disabled-lore"))),
+                        lore),
                 buyEnabled || sellEnabled ? event -> {
                     if (buyEnabled && this.shopManager.isBuyClick(event.getClick())) {
                         this.shopManager.executeTrade(

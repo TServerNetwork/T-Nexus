@@ -343,6 +343,62 @@ class SignShopManagerTest {
                 && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
     }
 
+
+    @Test
+    void shouldGrayOutUnsupportedSellSideOnSign() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(94, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 8));
+        Block signBlock = world.getBlockAt(95, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setSellPrice(null);
+        manager.refreshShopDisplay(liveShop);
+
+        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB 10")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7S -"));
+    }
+
+    @Test
+    void shouldGrayOutUnsupportedBuySideOnSign() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        plugin.getEconomyManager().deposit(owner.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(96, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        Block signBlock = world.getBlockAt(97, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(null);
+        liveShop.setSellPrice(5.0D);
+        manager.refreshShopDisplay(liveShop);
+
+        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B -")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aS 5"));
+    }
     @Test
     void shouldReleaseSignProtectionAfterDeletingShop() throws Exception {
         TNexus plugin = loadPlugin();
@@ -553,7 +609,9 @@ class SignShopManagerTest {
 
         waitUntil(() -> "New Note".equals(liveShop.getNote()));
         Sign sign = (Sign) signBlock.getState();
-        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(3)).contains("New Note"));
+        String noteLine = LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(3));
+        assertTrue(noteLine.startsWith("ﾂｧf"));
+        assertTrue(noteLine.contains("New Note"));
     }
 
     private TNexus loadPlugin() {

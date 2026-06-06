@@ -1124,8 +1124,8 @@ public final class SignShopManager {
             case UNAVAILABLE -> "&c";
             case DISABLED -> "&8";
         };
-        String buyColor = availability.buyAvailable() ? "&a" : "&c";
-        String sellColor = availability.sellAvailable() ? "&a" : "&c";
+        String buyColor = resolveTradeDisplayColor(shop.getBuyPrice(), availability.buyAvailable());
+        String sellColor = resolveTradeDisplayColor(shop.getSellPrice(), availability.sellAvailable());
         String label = shop.getType() == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
         String buyValue = shop.getBuyPrice() == null ? "-" : trimPrice(shop.getBuyPrice());
         String sellValue = shop.getSellPrice() == null ? "-" : trimPrice(shop.getSellPrice());
@@ -1133,7 +1133,7 @@ public final class SignShopManager {
         sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getItemName()));
         sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacyAmpersand().deserialize(
                 buyColor + "B " + buyValue + " &8| " + sellColor + "S " + sellValue));
-        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&7" + shop.getNote()));
+        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getNote()));
         sign.setWaxed(true);
         sign.update(true, false);
     }
@@ -1143,6 +1143,13 @@ public final class SignShopManager {
             sign.setWaxed(waxed);
             sign.update(true, false);
         }
+    }
+
+    private String resolveTradeDisplayColor(@Nullable Double price, boolean available) {
+        if (price == null) {
+            return "&7";
+        }
+        return available ? "&a" : "&c";
     }
 
     private void cacheShop(SignShop shop) {

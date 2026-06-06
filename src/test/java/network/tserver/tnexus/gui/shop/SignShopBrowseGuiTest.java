@@ -81,6 +81,37 @@ class SignShopBrowseGuiTest {
     }
 
     @Test
+    void shouldShowMaxTradeQuantitiesInInvMaxLore() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        viewer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(owner.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+        plugin.getEconomyManager().deposit(viewer.getUniqueId(), 60.0D).get(5, TimeUnit.SECONDS);
+        viewer.getInventory().addItem(new ItemStack(Material.DIAMOND, 4));
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(owner.getWorld(), 2, templateItem, 12);
+        Block signBlock = createSign(owner.getWorld(), 3);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setSellPrice(5.0D);
+
+        manager.openBrowseGui(viewer, liveShop);
+
+        assertTrue(hasLoreLine(viewer, 24, plugin.getMessageConfig().getMessage("shop.gui.max.max-buy", 6)));
+        assertTrue(hasLoreLine(viewer, 24, plugin.getMessageConfig().getMessage("shop.gui.max.max-sell", 4)));
+    }
+
+    @Test
     void shouldRefreshHeaderAndButtonsAfterPlayerShopTrade() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
