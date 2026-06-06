@@ -26,6 +26,7 @@ import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
+import network.tserver.tnexus.listener.PlayerBlockStatsListener;
 import network.tserver.tnexus.listener.PlayerDeathStatsListener;
 import network.tserver.tnexus.listener.PlayerMovementStatsListener;
 import network.tserver.tnexus.listener.PlayerSessionListener;
@@ -53,6 +54,8 @@ public class TNexus extends JavaPlugin {
     private PlayerSessionListener playerSessionListener;
     private PlayerDeathStatsListener playerDeathStatsListener;
     private PlayerMovementStatsListener playerMovementStatsListener;
+    private PlayerBlockStatsListener playerBlockStatsListener;
+    private AutoCloseable worldEditStatsListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
 
@@ -93,6 +96,8 @@ public class TNexus extends JavaPlugin {
         this.playerSessionListener = new PlayerSessionListener(this);
         this.playerDeathStatsListener = new PlayerDeathStatsListener(this);
         this.playerMovementStatsListener = new PlayerMovementStatsListener(this);
+        this.playerBlockStatsListener = new PlayerBlockStatsListener(this);
+        this.worldEditStatsListener = createWorldEditStatsListener();
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
         this.signShopManager.initialize();
@@ -105,6 +110,13 @@ public class TNexus extends JavaPlugin {
         flushPlayerSessions();
         if (this.databaseManager != null) {
             this.databaseManager.shutdown();
+        }
+        if (this.worldEditStatsListener != null) {
+            try {
+                this.worldEditStatsListener.close();
+            } catch (Exception exception) {
+                getLogger().log(Level.WARNING, "Failed to close WorldEdit stats listener cleanly.", exception);
+            }
         }
         if (this.messageConfig != null) {
             logMessage(this.messageConfig.getMessage("general.plugin-disabled"));
@@ -124,6 +136,8 @@ public class TNexus extends JavaPlugin {
         this.playerSessionListener = null;
         this.playerDeathStatsListener = null;
         this.playerMovementStatsListener = null;
+        this.playerBlockStatsListener = null;
+        this.worldEditStatsListener = null;
         this.signShopManager = null;
         this.signShopListener = null;
     }
@@ -298,6 +312,25 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Creates the optional WorldEdit stats suppression listener when the API is available.
+     *
+     * @return closeable listener handle or {@code null} when unavailable
+     */
+    protected AutoCloseable createWorldEditStatsListener() {
+        if (!isWorldEditApiAvailable()) {
+            return null;
+        }
+
+        try {
+            Class<?> listenerClass = Class.forName("network.tserver.tnexus.listener.WorldEditStatsListener");
+            return (AutoCloseable) listenerClass.getConstructor(TNexus.class).newInstance(this);
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            getLogger().log(Level.WARNING, "Failed to initialize WorldEdit stats listener.", exception);
+            return null;
+        }
+    }
+
+    /**
      * Registers the plugin command handlers.
      */
     protected void registerCommands() {
@@ -305,6 +338,15 @@ public class TNexus extends JavaPlugin {
         this.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             this.commandManager.registerCommands(event.registrar());
         });
+    }
+
+    private boolean isWorldEditApiAvailable() {
+        try {
+            Class.forName("com.sk89q.worldedit.WorldEdit", false, TNexus.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError | RuntimeException exception) {
+            return false;
+        }
     }
 
     private void logMessage(String message) {

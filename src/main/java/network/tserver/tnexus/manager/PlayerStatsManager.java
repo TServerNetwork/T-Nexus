@@ -13,8 +13,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.database.repository.BlockStatsDelta;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.entity.AbstractHorse;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
@@ -29,6 +31,7 @@ public class PlayerStatsManager {
 
     static final long DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS = 100L;
     static final double MAX_TRACKED_DISTANCE_PER_EVENT = 32.0D;
+    static final Duration WORLD_EDIT_SUPPRESSION_WINDOW = Duration.ofSeconds(1L);
 
     private final TNexus plugin;
     private final PlayerStatsRepository playerStatsRepository;
@@ -37,7 +40,12 @@ public class PlayerStatsManager {
     private final Object distanceLock;
     private final Map<UUID, Double> pendingTotalDistances;
     private final Map<UUID, EnumMap<TravelType, Double>> pendingTravelDistances;
-    private final BukkitTask distanceFlushTask;
+    private final Object blockLock;
+    private final Map<UUID, Integer> pendingBlocksPlaced;
+    private final Map<UUID, Integer> pendingBlocksBroken;
+    private final Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats;
+    private final Map<UUID, Instant> worldEditSuppressionWindows;
+    private final BukkitTask statsFlushTask;
 
     /**
      * Creates a new player stats manager.
@@ -53,6 +61,10 @@ public class PlayerStatsManager {
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 true);
     }
@@ -64,6 +76,10 @@ public class PlayerStatsManager {
             Map<UUID, Instant> sessionStartTimes,
             Map<UUID, Double> pendingTotalDistances,
             Map<UUID, EnumMap<TravelType, Double>> pendingTravelDistances,
+            Map<UUID, Integer> pendingBlocksPlaced,
+            Map<UUID, Integer> pendingBlocksBroken,
+            Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats,
+            Map<UUID, Instant> worldEditSuppressionWindows,
             long distanceFlushIntervalTicks,
             boolean scheduleDistanceFlushTask) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -73,10 +89,17 @@ public class PlayerStatsManager {
         this.distanceLock = new Object();
         this.pendingTotalDistances = Objects.requireNonNull(pendingTotalDistances, "pendingTotalDistances");
         this.pendingTravelDistances = Objects.requireNonNull(pendingTravelDistances, "pendingTravelDistances");
-        this.distanceFlushTask = scheduleDistanceFlushTask
+        this.blockLock = new Object();
+        this.pendingBlocksPlaced = Objects.requireNonNull(pendingBlocksPlaced, "pendingBlocksPlaced");
+        this.pendingBlocksBroken = Objects.requireNonNull(pendingBlocksBroken, "pendingBlocksBroken");
+        this.pendingBlockStats = Objects.requireNonNull(pendingBlockStats, "pendingBlockStats");
+        this.worldEditSuppressionWindows = Objects.requireNonNull(
+                worldEditSuppressionWindows,
+                "worldEditSuppressionWindows");
+        this.statsFlushTask = scheduleDistanceFlushTask
                 ? this.plugin.getServer().getScheduler().runTaskTimer(
                         this.plugin,
-                        this::flushPendingDistanceStatsSafely,
+                        this::flushPendingStatsSafely,
                         distanceFlushIntervalTicks,
                         distanceFlushIntervalTicks)
                 : null;
@@ -180,6 +203,59 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records a block placement for the given material.
+     *
+     * @param player placing player
+     * @param material placed material
+     */
+    public void recordBlockPlacement(Player player, Material material) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        recordBlockChange(player.getUniqueId(), material, true);
+    }
+
+    /**
+     * Records a block break for the given material.
+     *
+     * @param player breaking player
+     * @param material broken material
+     */
+    public void recordBlockBreak(Player player, Material material) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        recordBlockChange(player.getUniqueId(), material, false);
+    }
+
+    /**
+     * Marks a player as currently performing a WorldEdit-driven bulk edit.
+     *
+     * @param playerId player id
+     */
+    public void markWorldEditOperation(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        this.worldEditSuppressionWindows.put(playerId, this.clock.instant().plus(WORLD_EDIT_SUPPRESSION_WINDOW));
+    }
+
+    /**
+     * Returns whether stat tracking should currently ignore block events for the player.
+     *
+     * @param playerId player id
+     * @return {@code true} when block events should be ignored
+     */
+    public boolean isWorldEditOperationSuppressed(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        Instant expiresAt = this.worldEditSuppressionWindows.get(playerId);
+        if (expiresAt == null) {
+            return false;
+        }
+        if (expiresAt.isAfter(this.clock.instant())) {
+            return true;
+        }
+        this.worldEditSuppressionWindows.remove(playerId, expiresAt);
+        return false;
+    }
+
+    /**
      * Flushes pending distance statistics to the database asynchronously.
      *
      * @return completion future
@@ -203,6 +279,33 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending block statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingBlockStats() {
+        BlockStatsSnapshot snapshot;
+        synchronized (this.blockLock) {
+            if (this.pendingBlocksPlaced.isEmpty()
+                    && this.pendingBlocksBroken.isEmpty()
+                    && this.pendingBlockStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createBlockStatsSnapshot();
+            this.pendingBlocksPlaced.clear();
+            this.pendingBlocksBroken.clear();
+            this.pendingBlockStats.clear();
+        }
+        return this.playerStatsRepository
+                .addBlockStats(snapshot.totalPlacedCounts(), snapshot.totalBrokenCounts(), snapshot.materialStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreBlockStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -210,12 +313,13 @@ public class PlayerStatsManager {
      */
     public CompletableFuture<Void> shutdown(Collection<? extends Player> onlinePlayers) {
         Objects.requireNonNull(onlinePlayers, "onlinePlayers");
-        if (this.distanceFlushTask != null) {
-            this.distanceFlushTask.cancel();
+        if (this.statsFlushTask != null) {
+            this.statsFlushTask.cancel();
         }
         return CompletableFuture.allOf(
                 flushOnlineSessions(onlinePlayers),
-                flushPendingDistanceStats());
+                flushPendingDistanceStats(),
+                flushPendingBlockStats());
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
@@ -231,11 +335,11 @@ public class PlayerStatsManager {
         return this.playerStatsRepository.addPlayTime(playerId, playTimeSeconds);
     }
 
-    private void flushPendingDistanceStatsSafely() {
-        flushPendingDistanceStats().exceptionally(throwable -> {
+    private void flushPendingStatsSafely() {
+        CompletableFuture.allOf(flushPendingDistanceStats(), flushPendingBlockStats()).exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,
-                    "Failed to flush pending player distance stats.",
+                    "Failed to flush pending player stats.",
                     throwable);
             return null;
         });
@@ -264,6 +368,55 @@ public class PlayerStatsManager {
                         .computeIfAbsent(entry.getKey(), ignored -> new EnumMap<>(TravelType.class));
                 for (Map.Entry<String, Double> typeEntry : entry.getValue().entrySet()) {
                     pendingTypes.merge(TravelType.valueOf(typeEntry.getKey()), typeEntry.getValue(), Double::sum);
+                }
+            }
+        }
+    }
+
+    private void recordBlockChange(UUID playerId, Material material, boolean placed) {
+        String materialName = material.name();
+        synchronized (this.blockLock) {
+            if (placed) {
+                this.pendingBlocksPlaced.merge(playerId, 1, Integer::sum);
+            } else {
+                this.pendingBlocksBroken.merge(playerId, 1, Integer::sum);
+            }
+
+            Map<String, BlockStatsDelta> playerMaterialStats = this.pendingBlockStats
+                    .computeIfAbsent(playerId, ignored -> new HashMap<>());
+            playerMaterialStats.compute(materialName, (ignored, existing) -> {
+                BlockStatsDelta current = existing == null ? new BlockStatsDelta(0, 0) : existing;
+                return placed ? current.addPlaced(1) : current.addBroken(1);
+            });
+        }
+    }
+
+    private BlockStatsSnapshot createBlockStatsSnapshot() {
+        Map<UUID, Integer> totalPlacedSnapshot = new HashMap<>(this.pendingBlocksPlaced);
+        Map<UUID, Integer> totalBrokenSnapshot = new HashMap<>(this.pendingBlocksBroken);
+        Map<UUID, Map<String, BlockStatsDelta>> materialStatsSnapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, BlockStatsDelta>> entry : this.pendingBlockStats.entrySet()) {
+            materialStatsSnapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        return new BlockStatsSnapshot(totalPlacedSnapshot, totalBrokenSnapshot, materialStatsSnapshot);
+    }
+
+    private void restoreBlockStatsSnapshot(BlockStatsSnapshot snapshot) {
+        synchronized (this.blockLock) {
+            for (Map.Entry<UUID, Integer> entry : snapshot.totalPlacedCounts().entrySet()) {
+                this.pendingBlocksPlaced.merge(entry.getKey(), entry.getValue(), Integer::sum);
+            }
+            for (Map.Entry<UUID, Integer> entry : snapshot.totalBrokenCounts().entrySet()) {
+                this.pendingBlocksBroken.merge(entry.getKey(), entry.getValue(), Integer::sum);
+            }
+            for (Map.Entry<UUID, Map<String, BlockStatsDelta>> entry : snapshot.materialStats().entrySet()) {
+                Map<String, BlockStatsDelta> playerMaterialStats = this.pendingBlockStats
+                        .computeIfAbsent(entry.getKey(), ignored -> new HashMap<>());
+                for (Map.Entry<String, BlockStatsDelta> materialEntry : entry.getValue().entrySet()) {
+                    playerMaterialStats.merge(materialEntry.getKey(), materialEntry.getValue(), (left, right) ->
+                            new BlockStatsDelta(
+                                    left.placedCount() + right.placedCount(),
+                                    left.brokenCount() + right.brokenCount()));
                 }
             }
         }
@@ -303,6 +456,12 @@ public class PlayerStatsManager {
     private record DistanceStatsSnapshot(
             Map<UUID, Double> totalDistances,
             Map<UUID, Map<String, Double>> travelDistances) {
+    }
+
+    private record BlockStatsSnapshot(
+            Map<UUID, Integer> totalPlacedCounts,
+            Map<UUID, Integer> totalBrokenCounts,
+            Map<UUID, Map<String, BlockStatsDelta>> materialStats) {
     }
 
     enum TravelType {

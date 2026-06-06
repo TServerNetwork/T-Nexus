@@ -17,6 +17,7 @@ public final class PlayerStatsRepository {
     private final String tableName;
     private final String deathStatsTableName;
     private final String distanceStatsTableName;
+    private final String blockStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -28,6 +29,7 @@ public final class PlayerStatsRepository {
         this.tableName = this.databaseManager.getTablePrefix() + "player_stats";
         this.deathStatsTableName = this.databaseManager.getTablePrefix() + "death_stats";
         this.distanceStatsTableName = this.databaseManager.getTablePrefix() + "distance_stats";
+        this.blockStatsTableName = this.databaseManager.getTablePrefix() + "block_stats";
     }
 
     /**
@@ -135,6 +137,62 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Adds aggregate block placement and break statistics for one or more players.
+     *
+     * @param totalPlacedCounts total placed counts by player id
+     * @param totalBrokenCounts total broken counts by player id
+     * @param materialStats material deltas by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addBlockStats(
+            Map<UUID, Integer> totalPlacedCounts,
+            Map<UUID, Integer> totalBrokenCounts,
+            Map<UUID, Map<String, BlockStatsDelta>> materialStats) {
+        Objects.requireNonNull(totalPlacedCounts, "totalPlacedCounts");
+        Objects.requireNonNull(totalBrokenCounts, "totalBrokenCounts");
+        Objects.requireNonNull(materialStats, "materialStats");
+        if (totalPlacedCounts.isEmpty() && totalBrokenCounts.isEmpty() && materialStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String totalSql = """
+                INSERT INTO %s (player_uuid, blocks_placed, blocks_broken)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    blocks_placed = blocks_placed + VALUES(blocks_placed),
+                    blocks_broken = blocks_broken + VALUES(blocks_broken)
+                """.formatted(this.tableName);
+        String materialSql = """
+                INSERT INTO %s (player_uuid, material, placed_count, broken_count)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    placed_count = placed_count + VALUES(placed_count),
+                    broken_count = broken_count + VALUES(broken_count)
+                """.formatted(this.blockStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try (var totalStatement = connection.prepareStatement(totalSql);
+                     var materialStatement = connection.prepareStatement(materialSql)) {
+                    addBlockTotalBatch(totalStatement, totalPlacedCounts, totalBrokenCounts);
+                    addBlockMaterialBatch(materialStatement, materialStats);
+                    totalStatement.executeBatch();
+                    materialStatement.executeBatch();
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player block stats", exception);
+            }
+        });
+    }
+
+    /**
      * Increments the total death counter for the given player.
      *
      * @param playerId player id
@@ -220,6 +278,34 @@ public final class PlayerStatsRepository {
                 statement.setString(1, playerEntry.getKey().toString());
                 statement.setString(2, travelEntry.getKey());
                 statement.setDouble(3, travelEntry.getValue());
+                statement.addBatch();
+            }
+        }
+    }
+
+    private void addBlockTotalBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Integer> totalPlacedCounts,
+            Map<UUID, Integer> totalBrokenCounts) throws Exception {
+        java.util.HashSet<UUID> playerIds = new java.util.HashSet<>(totalPlacedCounts.keySet());
+        playerIds.addAll(totalBrokenCounts.keySet());
+        for (UUID playerId : playerIds) {
+            statement.setString(1, playerId.toString());
+            statement.setInt(2, totalPlacedCounts.getOrDefault(playerId, 0));
+            statement.setInt(3, totalBrokenCounts.getOrDefault(playerId, 0));
+            statement.addBatch();
+        }
+    }
+
+    private void addBlockMaterialBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, BlockStatsDelta>> materialStats) throws Exception {
+        for (Map.Entry<UUID, Map<String, BlockStatsDelta>> playerEntry : materialStats.entrySet()) {
+            for (Map.Entry<String, BlockStatsDelta> materialEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, materialEntry.getKey());
+                statement.setInt(3, materialEntry.getValue().placedCount());
+                statement.setInt(4, materialEntry.getValue().brokenCount());
                 statement.addBatch();
             }
         }
