@@ -1,4 +1,4 @@
-# T-Nexus Foundation Spec v1.0
+# T-Nexus Foundation Spec v1.6
 
 > **このドキュメントは「前提指示書」です。**
 > LLMとの会話が変わっても、このドキュメントを貼り付ければプロジェクト文脈が完全に復元されます。
@@ -68,10 +68,35 @@ Vault APIをフロントエンドの抽象レイヤーとして使用する。�
 - ワールド情報表示
 - ワープポイント設定
 
+### Phase 2.5: プレイヤー統計システム
+- [S-01] Stats基盤: DB・キャッシュ・StatsManager
+- [S-02] Stats Listener: プレイ時間・ログイン統計
+- [S-03] Stats Listener: ワールド別滞在時間
+- [S-04] Stats Listener: ブロック破壊統計（種別×Total）
+- [S-05] Stats Listener: ブロック設置統計（種別×Total）
+- [S-06] Stats Listener: 経済活動統計（Vault連携）
+- [S-07] Stats Listener: チャット発言数
+- [S-08] Stats Listener: コマンド使用数
+- [S-09] Stats Listener: キル/デス数
+- [S-10] Stats GUI: `/stats`コマンド + トップGUI
+- [S-11] Stats GUI: プレイ時間タブ
+- [S-12] Stats GUI: 経済タブ
+- [S-13] Stats GUI: ブロックタブ（ページネーション）
+- [S-14] Stats GUI: その他タブ（チャット/コマンド/キルデス）
+
+#### Phase 2.5 実装方針
+- 保存戦略: ログイン時DBロード → オンメモリ更新 → ログアウト時 + 5分おき定期flushでDB書き込み
+- 集計粒度: 累計（Total）のみ。日別/週別/月別は集計ビューで対応
+- ブロック統計: 種別×Total（日別集計なし、DB肥大化を抑制）
+- 閲覧権限: `tnexus.stats.self`（デフォルトtrue）/ `tnexus.stats.others`（デフォルトfalse）/ `tnexus.stats.admin`（op）
+- コマンド: `/stats`（自分）、`/stats <player>`（他者、権限要）
+- GUI: チェストGUI、カテゴリタブ式（トップサマリー → 各タブドリルダウン）
+- DBテーブル: `tnexus_player_stats`、`tnexus_player_world_time`、`tnexus_player_block_stats`
+- 開発開始方針: Phase 1 完了後、Phase 2 と並行ブランチで開発開始
+
 ### Phase 3: プレイヤー管理
 - ランク表示・昇格UI
 - 権限管理（LuckPerms連携）
-- プレイヤー統計（プレイ時間、経済活動等）
 - 管理者ダッシュボード
 
 ### Phase 4: カスタムコンテンツ
@@ -402,6 +427,7 @@ permissions:
 
 [Phase 1] 経済系UI
 [Phase 2] ワールド管理UI
+[Phase 2.5] プレイヤー統計システム
 [Phase 3] プレイヤー管理
 [Phase 4] カスタムコンテンツ
 ```
@@ -514,3 +540,4 @@ LLMとの会話が新規になった場合（コンテキストリセット）:
 | v1.3 | 2026-06-02 | MINOR | エージェント設定ファイル（AGENTS.md / .gemini/styleguide.md / .gemini/config.yaml）追加、Spec内にファイル参照を記載 |
 | v1.4 | 2026-06-02 | MINOR | メインIDE: VS Code → Antigravity IDE（VS Codeフォーク、Gemini 3内蔵）に変更。Gemini Code Assist → Antigravity内蔵エージェントに統一 |
 | v1.5 | 2026-06-03 | MINOR | エージェント指示ファイルを排他的に分離。AGENTS.md=Codex専用、GEMINI.md=Gemini専用（新規追加）。パッケージ名を network.tserver.tnexus に統一（ドメイン tserver.network 準拠）。GitHub組織: TServerNetwork |
+| v1.6 | 2026-06-06 | MINOR | Phase 2.5「プレイヤー統計システム」を新設。Phase 3 からプレイヤー統計を分離し、Stats基盤・Listener群・`/stats` GUI群・3種の統計テーブル・保存/権限方針を明記 |
