@@ -1,3 +1,13 @@
+## [0.11.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.11.0...v0.11.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **shop:** add link tool to banned-materials list ([#49](https://github.com/TServerNetwork/T-Nexus/issues/49)) ([e7225d4](https://github.com/TServerNetwork/T-Nexus/commit/e7225d4fb6dec2d9985d35df054cd91f2087aed4))
+* **shop:** apply auto-adjust logic for insufficient funds and stock ([#49](https://github.com/TServerNetwork/T-Nexus/issues/49)) ([c2d3364](https://github.com/TServerNetwork/T-Nexus/commit/c2d33645057a78517fd1efe199bcec8f2b1487b2))
+* **shop:** manage B/S availability independently ([#49](https://github.com/TServerNetwork/T-Nexus/issues/49)) ([44a7a03](https://github.com/TServerNetwork/T-Nexus/commit/44a7a0322ea44d2297b685b30078f80fbd4d30be))
+* **shop:** show detailed unavailable messages by state ([#49](https://github.com/TServerNetwork/T-Nexus/issues/49)) ([07d5fb6](https://github.com/TServerNetwork/T-Nexus/commit/07d5fb691318ff2897b3c0502a84931d388ba950))
+
 # [0.11.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.10.0...v0.11.0) (2026-06-06)
 
 
