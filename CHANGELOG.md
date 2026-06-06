@@ -1,3 +1,10 @@
+# [0.17.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.16.0...v0.17.0) (2026-06-06)
+
+
+### Features
+
+* **player:** track session stats ([#65](https://github.com/TServerNetwork/T-Nexus/issues/65)) ([7717c51](https://github.com/TServerNetwork/T-Nexus/commit/7717c5101dc4535f9b447b17918f39dd56c8702a))
+
 # [0.16.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.15.0...v0.16.0) (2026-06-06)
 
 
