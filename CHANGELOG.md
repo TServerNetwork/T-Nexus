@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.9.0...v0.10.0) (2026-06-06)
+
+
+### Features
+
+* **gui:** improve sign shop interaction flow ([#41](https://github.com/TServerNetwork/T-Nexus/issues/41)) ([cc1289e](https://github.com/TServerNetwork/T-Nexus/commit/cc1289eb4d1c269b5b0a239e58eab18a25e996d8))
+
 # [0.9.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.8.3...v0.9.0) (2026-06-05)
 
 
