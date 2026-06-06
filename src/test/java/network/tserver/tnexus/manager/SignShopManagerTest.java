@@ -400,6 +400,103 @@ class SignShopManagerTest {
         assertFalse(buyer.getInventory().contains(Material.EMERALD));
     }
 
+    @Test
+    void shouldAutoAdjustBuyAmountToPlayerBalance() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 25.0D).get(5, TimeUnit.SECONDS);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(70, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 10));
+        Block signBlock = world.getBlockAt(71, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 8);
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 2));
+
+        assertEquals(5.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
+        String adjustmentMessage = buyer.nextMessage();
+        assertNotNull(adjustmentMessage);
+        assertTrue(adjustmentMessage.contains("2"));
+    }
+
+    @Test
+    void shouldExplainOutOfStockWhenBuyUnavailable() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(72, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(73, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().clear();
+
+        manager.executeTrade(buyer, liveShop, TradeAction.BUY, 1);
+
+        waitUntil(() -> buyer.nextMessage() != null);
+        String unavailableMessage = buyer.nextMessage();
+        assertNotNull(unavailableMessage);
+        assertTrue(unavailableMessage.contains("在庫"));
+    }
+
+    @Test
+    void shouldPersistUpdatedNote() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(74, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().addItem(new ItemStack(Material.DIAMOND, 1));
+        Block signBlock = world.getBlockAt(75, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+
+        manager.updateNote(owner, liveShop, "  New Note  ");
+
+        waitUntil(() -> "New Note".equals(liveShop.getNote()));
+        Sign sign = (Sign) signBlock.getState();
+        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(3)).contains("New Note"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);

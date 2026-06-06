@@ -152,6 +152,10 @@ shop:
     failed: "&cチェストのリンク保存に失敗しました。"
   edit:
     not-owner: "&cこのショップを編集できるのは所有者または tnexus.shop.admin のみです。"
+    note:
+      title: "&6Notes を入力"
+      failed: "&cNotes の更新に失敗しました。"
+      updated: "&aNotes を更新しました。"
     price:
       buy-title: "&6購入価格を入力してください (0 = 無効)"
       sell-title: "&6売却価格を入力してください (0 = 無効)"
@@ -164,8 +168,19 @@ shop:
   delete:
     success: "&aショップを削除しました。"
   trade:
+    adjusted:
+      inv-max: "&e【自動調整】インベントリに入る最大数に合わせて、取引数を {0} 個に調整しました"
+      balance: "&e【自動調整】現在の残高に合わせて、取引数を {0} 個に調整しました"
+      stock: "&e【自動調整】在庫数に合わせて、取引数を {0} 個に調整しました"
+      player-items: "&e【自動調整】所持アイテム数に合わせて、取引数を {0} 個に調整しました"
+      capacity: "&e【自動調整】ショップの受け入れ上限に合わせて、取引数を {0} 個に調整しました"
+      owner-funds: "&e【自動調整】オーナー残高に合わせて、取引数を {0} 個に調整しました"
     invalid-amount: "&c有効な数量を入力してください。"
     unavailable: "&cこのショップは現在利用できません。"
+    unavailable-disabled: "&cこのショップは現在利用できません（一時停止中）。"
+    out-of-stock: "&c現在このショップは在庫切れのため購入できません"
+    chest-full: "&cこのショップの買い取りチェストが満杯のため売却できません"
+    owner-funds: "&cオーナーの残高が不足しているため、現在は買い取れません"
     insufficient-funds: "&c所持金が不足しています。"
     failed: "&c取引に失敗しました。"
     buy-success: "&a{1} を {0} 個購入しました。支払額: {2}"
@@ -192,6 +207,12 @@ shop:
       title: "&6ショップ編集"
       owner: "&7所有者: &f{0}"
       status: "&7状態: &f{0}"
+      note:
+        name: "&eNotes を編集"
+        lore: "&7看板の4行目に表示されるメッセージを変更します。"
+      preview-mode:
+        name: "&eショップをプレビュー"
+        lore: "&7一般プレイヤーと同じ表示で購入・売却メニューを確認します。"
       price:
         name: "&e価格を変更"
         lore: "&7購入価格と売却価格を設定します。"

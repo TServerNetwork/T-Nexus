@@ -121,6 +121,16 @@ public final class EconomyManager {
     }
 
     /**
+     * Returns the current balance immediately on the calling thread.
+     *
+     * @param playerId target player UUID
+     * @return current balance
+     */
+    public double getBalanceNow(UUID playerId) {
+        return this.economy.getBalance(getOfflinePlayer(playerId));
+    }
+
+    /**
      * Returns the configured currency name from the active Vault provider.
      *
      * @return plural currency name when available, otherwise singular

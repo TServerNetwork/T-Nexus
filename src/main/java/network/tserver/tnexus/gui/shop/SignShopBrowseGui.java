@@ -205,9 +205,7 @@ public final class SignShopBrowseGui extends BaseGui {
     }
 
     private void refreshAfterTrade() {
-        if (this.shop.getType() == ShopType.PLAYER) {
-            refresh();
-        }
+        refresh();
     }
 
     private String formatPrice(Double unitPrice) {

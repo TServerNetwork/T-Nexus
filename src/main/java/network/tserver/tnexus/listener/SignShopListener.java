@@ -118,7 +118,7 @@ public final class SignShopListener implements Listener {
             if (this.shopManager.canModify(event.getPlayer(), shop)) {
                 this.shopManager.openEditGui(event.getPlayer(), shop);
             } else {
-                this.plugin.getMessageConfig().sendMessage(event.getPlayer(), "shop.edit.not-owner");
+                this.shopManager.openBrowseGui(event.getPlayer(), shop);
             }
         }
     }
