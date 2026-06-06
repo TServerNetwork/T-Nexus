@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.12.1...v0.13.0) (2026-06-06)
+
+
+### Features
+
+* **economy:** support multiple linked shop chests ([#54](https://github.com/TServerNetwork/T-Nexus/issues/54)) ([5d10742](https://github.com/TServerNetwork/T-Nexus/commit/5d10742163a464bb5465369d2edc43bd127f6b75))
+
 ## [0.12.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.12.0...v0.12.1) (2026-06-06)
 
 
