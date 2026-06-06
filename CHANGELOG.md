@@ -1,3 +1,13 @@
+## [0.12.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.12.0...v0.12.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **shop:** correctly register link tool in banned-materials ([#53](https://github.com/TServerNetwork/T-Nexus/issues/53)) ([c620f49](https://github.com/TServerNetwork/T-Nexus/commit/c620f4934903e287c5ed043c5b1a52039cd6e26b))
+* **shop:** prevent unauthorized players from opening shop chests ([#53](https://github.com/TServerNetwork/T-Nexus/issues/53)) ([5420362](https://github.com/TServerNetwork/T-Nexus/commit/5420362e1eea923ef1a8468c3d1c38f2f385e8dd))
+* **shop:** skip GUI and show message when shop is unavailable ([#53](https://github.com/TServerNetwork/T-Nexus/issues/53)) ([64e9e05](https://github.com/TServerNetwork/T-Nexus/commit/64e9e05bec4dc1046d8edcfb1372d3f6c0f39cca))
+* **shop:** update sign to red when both B and S are unavailable ([#53](https://github.com/TServerNetwork/T-Nexus/issues/53)) ([c797f85](https://github.com/TServerNetwork/T-Nexus/commit/c797f8531bcccda630fa85a45f5b4703b15e06f9))
+
 # [0.12.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.11.1...v0.12.0) (2026-06-06)
 
 
