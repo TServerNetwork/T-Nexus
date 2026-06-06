@@ -435,14 +435,11 @@ public final class CommandManager {
     }
 
     private Collection<String> onBalanceTabComplete(CommandSender sender, String[] args) {
-        if (args.length == 0) {
-            return Collections.emptyList();
-        }
         if (!sender.hasPermission(BALANCE_ADMIN_PERMISSION)) {
             return Collections.emptyList();
         }
-        if (args.length == 1) {
-            return TabCompleterUtil.filter(BALANCE_ACTIONS, args[0]);
+        if (args.length <= 1) {
+            return TabCompleterUtil.filter(BALANCE_ACTIONS, args.length == 0 ? "" : args[0]);
         }
         if (args.length == 2) {
             return TabCompleterUtil.filterPlayers(args[1]);
