@@ -102,6 +102,15 @@ public final class SignShopListener implements Listener {
             return;
         }
 
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && isChest(clickedBlock)
+                && this.shopManager.isLinkedChest(clickedBlock)
+                && !this.shopManager.canAccessLinkedChest(event.getPlayer(), clickedBlock)) {
+            event.setCancelled(true);
+            this.plugin.getMessageConfig().sendMessage(event.getPlayer(), "shop.chest.denied");
+            return;
+        }
+
         SignShop shop = this.shopManager.getShop(clickedBlock);
         if (shop == null) {
             return;
@@ -109,6 +118,10 @@ public final class SignShopListener implements Listener {
 
         if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
             event.setCancelled(true);
+            if (!this.shopManager.canModify(event.getPlayer(), shop) && this.shopManager.isBrowseUnavailable(shop)) {
+                this.shopManager.sendBrowseUnavailableMessage(event.getPlayer(), shop);
+                return;
+            }
             this.shopManager.openBrowseGui(event.getPlayer(), shop);
             return;
         }
@@ -118,6 +131,10 @@ public final class SignShopListener implements Listener {
             if (this.shopManager.canModify(event.getPlayer(), shop)) {
                 this.shopManager.openEditGui(event.getPlayer(), shop);
             } else {
+                if (this.shopManager.isBrowseUnavailable(shop)) {
+                    this.shopManager.sendBrowseUnavailableMessage(event.getPlayer(), shop);
+                    return;
+                }
                 this.shopManager.openBrowseGui(event.getPlayer(), shop);
             }
         }

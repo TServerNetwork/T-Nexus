@@ -405,6 +405,28 @@ public final class SignShopManager {
     }
 
     /**
+     * Returns whether a non-owner viewer should be blocked from opening the browse GUI.
+     *
+     * @param shop target shop
+     * @return {@code true} when the shop is currently rendered as unavailable
+     */
+    public boolean isBrowseUnavailable(SignShop shop) {
+        return resolveRenderedAvailabilityNow(shop).status() == ShopStatus.UNAVAILABLE;
+    }
+
+    /**
+     * Sends the current unavailable reason(s) for a shop without opening the GUI.
+     *
+     * @param player viewer
+     * @param shop target shop
+     */
+    public void sendBrowseUnavailableMessage(Player player, SignShop shop) {
+        for (String messageKey : resolveBrowseUnavailableMessageKeys(shop)) {
+            this.plugin.getMessageConfig().sendMessage(player, messageKey);
+        }
+    }
+
+    /**
      * Opens the edit GUI for a player.
      *
      * @param player target player
@@ -763,12 +785,55 @@ public final class SignShopManager {
     }
 
     /**
+     * Returns whether the block is linked as a PlayerShop chest.
+     *
+     * @param block target block
+     * @return {@code true} when the block is tracked as a linked chest
+     */
+    public boolean isLinkedChest(Block block) {
+        Objects.requireNonNull(block, "block");
+        Set<Long> shopIds = this.chestIndex.get(BlockPosition.from(block));
+        return shopIds != null && !shopIds.isEmpty();
+    }
+
+    /**
+     * Returns whether the player may directly open a linked shop chest.
+     *
+     * @param player player attempting access
+     * @param chestBlock target chest block
+     * @return {@code true} when every linked chest entry is modifiable by the player
+     */
+    public boolean canAccessLinkedChest(Player player, Block chestBlock) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(chestBlock, "chestBlock");
+
+        Set<Long> shopIds = this.chestIndex.get(BlockPosition.from(chestBlock));
+        if (shopIds == null || shopIds.isEmpty()) {
+            return true;
+        }
+
+        for (Long shopId : shopIds) {
+            SignShop shop = this.shopsById.get(shopId);
+            if (shop != null && !canModify(player, shop)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Returns whether a material is banned for shop items.
      *
      * @param material material to check
      * @return {@code true} when banned
      */
     public boolean isBannedMaterial(Material material) {
+        Material linkToolMaterial = Material.matchMaterial(
+                this.plugin.getConfigManager().getString("tnexus.shop.link-tool.material", "STICK"));
+        if (linkToolMaterial != null && material == linkToolMaterial) {
+            return true;
+        }
+
         List<String> bannedMaterials = this.plugin.getConfig().getStringList("tnexus.shop.banned-materials");
         if (bannedMaterials.isEmpty()) {
             return false;
@@ -1095,8 +1160,9 @@ public final class SignShopManager {
             return SyncAvailability.unavailable();
         }
         if (shop.getType() == ShopType.SERVER) {
-            boolean sellSideAvailable = shop.getSellPrice() == null || isServerShopSellToVoidEnabled();
-            return new SyncAvailability(true, sellSideAvailable, false, CompletableFuture.completedFuture(true));
+            boolean buySideAvailable = shop.getBuyPrice() != null;
+            boolean sellSideAvailable = shop.getSellPrice() != null && isServerShopSellToVoidEnabled();
+            return new SyncAvailability(buySideAvailable, sellSideAvailable, false, CompletableFuture.completedFuture(true));
         }
 
         Inventory chestInventory = resolveLinkedChestInventory(shop);
@@ -1105,12 +1171,77 @@ public final class SignShopManager {
         }
 
         ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
-        boolean buySideAvailable = shop.getBuyPrice() == null || countMatchingItems(chestInventory, template) > 0;
-        boolean sellSideCapacity = shop.getSellPrice() == null || calculateInventoryFit(chestInventory, template) > 0;
+        boolean buySideAvailable = shop.getBuyPrice() != null && countMatchingItems(chestInventory, template) > 0;
+        boolean sellSideCapacity = shop.getSellPrice() != null && calculateInventoryFit(chestInventory, template) > 0;
         CompletableFuture<Boolean> ownerHasFunds = shop.getSellPrice() == null
                 ? CompletableFuture.completedFuture(true)
                 : this.economyManager.has(shop.getOwnerUuid(), shop.getSellPrice());
         return new SyncAvailability(buySideAvailable, sellSideCapacity, true, ownerHasFunds);
+    }
+
+    private RenderedAvailability resolveRenderedAvailabilityNow(SignShop shop) {
+        if (!shop.isEnabled()) {
+            return RenderedAvailability.disabled();
+        }
+        if (shop.getItemStack() == null) {
+            return RenderedAvailability.unavailable();
+        }
+        if (shop.getType() == ShopType.SERVER) {
+            boolean buyAvailable = shop.getBuyPrice() != null;
+            boolean sellAvailable = shop.getSellPrice() != null && isServerShopSellToVoidEnabled();
+            ShopStatus status = buyAvailable || sellAvailable ? ShopStatus.AVAILABLE : ShopStatus.UNAVAILABLE;
+            return new RenderedAvailability(status, buyAvailable, sellAvailable);
+        }
+
+        Inventory chestInventory = resolveLinkedChestInventory(shop);
+        if (chestInventory == null) {
+            return RenderedAvailability.unavailable();
+        }
+
+        ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
+        boolean buyAvailable = shop.getBuyPrice() != null && countMatchingItems(chestInventory, template) > 0;
+        boolean sellAvailable = shop.getSellPrice() != null
+                && calculateInventoryFit(chestInventory, template) > 0
+                && this.economyManager.getBalanceNow(shop.getOwnerUuid()) >= shop.getSellPrice();
+        ShopStatus status = buyAvailable || sellAvailable ? ShopStatus.AVAILABLE : ShopStatus.UNAVAILABLE;
+        return new RenderedAvailability(status, buyAvailable, sellAvailable);
+    }
+
+    private List<String> resolveBrowseUnavailableMessageKeys(SignShop shop) {
+        if (!shop.isEnabled()) {
+            return List.of("shop.trade.unavailable-disabled");
+        }
+
+        RenderedAvailability availability = resolveRenderedAvailabilityNow(shop);
+        if (availability.status() != ShopStatus.UNAVAILABLE) {
+            return List.of("shop.trade.unavailable");
+        }
+
+        if (shop.getType() == ShopType.SERVER) {
+            return List.of("shop.trade.unavailable");
+        }
+
+        Inventory chestInventory = resolveLinkedChestInventory(shop);
+        ItemStack template = shop.getItemStack();
+        if (chestInventory == null || template == null) {
+            return List.of("shop.trade.unavailable");
+        }
+
+        List<String> messageKeys = new ArrayList<>();
+        if (shop.getBuyPrice() != null && !availability.buyAvailable()) {
+            messageKeys.add("shop.trade.out-of-stock");
+        }
+        if (shop.getSellPrice() != null && !availability.sellAvailable()) {
+            if (calculateInventoryFit(chestInventory, template) <= 0) {
+                messageKeys.add("shop.trade.chest-full");
+            } else if (this.economyManager.getBalanceNow(shop.getOwnerUuid()) < shop.getSellPrice()) {
+                messageKeys.add("shop.trade.owner-funds");
+            } else {
+                messageKeys.add("shop.trade.unavailable");
+            }
+        }
+
+        return messageKeys.isEmpty() ? List.of("shop.trade.unavailable") : messageKeys.stream().distinct().toList();
     }
 
     private void applySignLines(SignShop shop, RenderedAvailability availability) {

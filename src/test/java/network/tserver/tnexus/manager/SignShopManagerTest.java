@@ -230,6 +230,18 @@ class SignShopManagerTest {
     }
 
     @Test
+    void shouldTreatConfiguredLinkToolMaterialAsBannedEvenWhenConfigListMissesIt() {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+
+        plugin.getConfigManager().getConfiguration().set("tnexus.shop.link-tool.material", "BLAZE_ROD");
+        plugin.getConfigManager().getConfiguration().set("tnexus.shop.banned-materials", java.util.List.of("BARRIER"));
+
+        assertTrue(manager.isBannedMaterial(Material.BLAZE_ROD));
+        assertFalse(manager.isBannedMaterial(Material.DIAMOND));
+    }
+
+    @Test
     void shouldAllowBannedServerShopMaterialWithBypass() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();
@@ -340,6 +352,34 @@ class SignShopManagerTest {
 
         waitUntil(() -> signLineContains(signBlock, 0, ChatColor.COLOR_CHAR + "a[Shop]")
                 && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB 10")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
+    }
+
+    @Test
+    void shouldRenderUnavailableSignInRedWhenBothSidesAreUnavailable() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(98, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        Block signBlock = world.getBlockAt(99, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(null);
+        liveShop.setSellPrice(5.0D);
+        manager.refreshShopDisplay(liveShop);
+
+        waitUntil(() -> signLineContains(signBlock, 0, ChatColor.COLOR_CHAR + "c[Shop]")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B -")
                 && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
     }
 

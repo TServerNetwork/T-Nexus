@@ -147,6 +147,8 @@ shop:
     direct-edit-blocked: "&cSignShop の表示内容は編集画面から変更してください。"
   break:
     denied: "&cこのショップを破壊できるのは所有者または tnexus.shop.admin のみです。"
+  chest:
+    denied: "&cこのショップチェストを開けられるのは所有者または tnexus.shop.admin のみです。"
   link:
     mode-started: "&eリンクモードを開始しました。ショップ看板を右クリックし、その後チェストを右クリックしてください。"
     tool-granted: "&aSignShop リンクツールを付与しました。"
