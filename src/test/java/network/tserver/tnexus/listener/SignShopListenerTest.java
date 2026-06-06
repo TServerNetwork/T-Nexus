@@ -10,8 +10,10 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -213,6 +215,95 @@ class SignShopListenerTest {
         assertTrue(plugin.getGuiManager().hasOpenGui(owner));
     }
 
+    @Test
+    void shouldSkipBrowseGuiAndShowMessageWhenDisabledServerShopIsClicked() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock admin = this.server.addPlayer("Admin");
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        admin.addAttachment(plugin, "tnexus.shop.admin", true);
+        viewer.addAttachment(plugin, "tnexus.shop.use", true);
+
+        World world = admin.getWorld();
+        Block chestBlock = createChestWithItem(world, 40, Material.DIAMOND, 1);
+        Block signBlock = createSign(world, 41);
+
+        SignShop shop = manager.createShop(admin, signBlock, ShopType.SERVER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        liveShop.setEnabled(false);
+        manager.refreshShopDisplay(liveShop);
+
+        PlayerInteractEvent event = new PlayerInteractEvent(
+                viewer,
+                Action.RIGHT_CLICK_BLOCK,
+                null,
+                signBlock,
+                org.bukkit.block.BlockFace.UP,
+                EquipmentSlot.HAND);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+        assertFalse(plugin.getGuiManager().hasOpenGui(viewer));
+        assertTrue(waitForNextMessage(viewer).contains("利用できません"));
+    }
+
+    @Test
+    void shouldBlockHopperExtractionFromLinkedShopChest() throws Exception {
+        TNexus plugin = loadPlugin();
+        Inventory linkedChest = createLinkedChestInventory(plugin, 50);
+        Inventory hopper = createInventoryBlock(51, Material.HOPPER);
+
+        InventoryMoveItemEvent event = new InventoryMoveItemEvent(
+                linkedChest,
+                new ItemStack(Material.DIAMOND, 1),
+                hopper,
+                false);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+    }
+
+    @Test
+    void shouldBlockDropperInsertionIntoLinkedShopChest() throws Exception {
+        TNexus plugin = loadPlugin();
+        Inventory dropper = createInventoryBlock(60, Material.DROPPER);
+        Inventory linkedChest = createLinkedChestInventory(plugin, 61);
+
+        InventoryMoveItemEvent event = new InventoryMoveItemEvent(
+                dropper,
+                new ItemStack(Material.DIAMOND, 1),
+                linkedChest,
+                true);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+    }
+
+    @Test
+    void shouldBlockHopperMinecartTransfersIntoLinkedShopChest() throws Exception {
+        TNexus plugin = loadPlugin();
+        Inventory mobileInventory = this.server.createInventory(null, 9);
+        Inventory linkedChest = createLinkedChestInventory(plugin, 71);
+
+        InventoryMoveItemEvent event = new InventoryMoveItemEvent(
+                mobileInventory,
+                new ItemStack(Material.DIAMOND, 1),
+                linkedChest,
+                true);
+
+        this.server.getPluginManager().callEvent(event);
+
+        assertTrue(event.isCancelled());
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
@@ -231,6 +322,30 @@ class SignShopListenerTest {
         Block signBlock = world.getBlockAt(x, 64, 0);
         signBlock.setType(Material.OAK_SIGN);
         return signBlock;
+    }
+
+    private Inventory createLinkedChestInventory(TNexus plugin, int x) throws Exception {
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner-" + x);
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = createChestWithItem(world, x, Material.DIAMOND, 4);
+        Block signBlock = createSign(world, x + 1);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+        return ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory();
+    }
+
+    private Inventory createInventoryBlock(int x, Material material) {
+        World world = this.server.getWorlds().isEmpty()
+                ? this.server.addSimpleWorld("world")
+                : this.server.getWorlds().get(0);
+        Block block = world.getBlockAt(x, 64, 0);
+        block.setType(material);
+        return ((org.bukkit.block.Container) block.getState()).getInventory();
     }
 
     private void waitUntil(BooleanSupplier condition) throws Exception {

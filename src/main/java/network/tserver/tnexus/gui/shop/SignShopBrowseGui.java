@@ -114,8 +114,8 @@ public final class SignShopBrowseGui extends BaseGui {
                 ? new ItemStack(Material.PAPER)
                 : this.shop.getItemStack().clone();
         icon.setAmount(Math.min(amount, icon.getMaxStackSize()));
-        boolean buyEnabled = this.shop.getBuyPrice() != null;
-        boolean sellEnabled = this.shop.getSellPrice() != null;
+        boolean buyEnabled = this.shopManager.isTradeAvailable(this.shop, TradeAction.BUY);
+        boolean sellEnabled = this.shopManager.isTradeAvailable(this.shop, TradeAction.SELL);
         var meta = icon.getItemMeta();
         if (meta != null) {
             String nameKey = buyEnabled || sellEnabled ? "shop.gui.amount.name" : "shop.gui.amount.disabled-name";
