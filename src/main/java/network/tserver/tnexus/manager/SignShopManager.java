@@ -763,6 +763,43 @@ public final class SignShopManager {
     }
 
     /**
+     * Returns whether the block is linked as a PlayerShop chest.
+     *
+     * @param block target block
+     * @return {@code true} when the block is tracked as a linked chest
+     */
+    public boolean isLinkedChest(Block block) {
+        Objects.requireNonNull(block, "block");
+        Set<Long> shopIds = this.chestIndex.get(BlockPosition.from(block));
+        return shopIds != null && !shopIds.isEmpty();
+    }
+
+    /**
+     * Returns whether the player may directly open a linked shop chest.
+     *
+     * @param player player attempting access
+     * @param chestBlock target chest block
+     * @return {@code true} when every linked chest entry is modifiable by the player
+     */
+    public boolean canAccessLinkedChest(Player player, Block chestBlock) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(chestBlock, "chestBlock");
+
+        Set<Long> shopIds = this.chestIndex.get(BlockPosition.from(chestBlock));
+        if (shopIds == null || shopIds.isEmpty()) {
+            return true;
+        }
+
+        for (Long shopId : shopIds) {
+            SignShop shop = this.shopsById.get(shopId);
+            if (shop != null && !canModify(player, shop)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Returns whether a material is banned for shop items.
      *
      * @param material material to check

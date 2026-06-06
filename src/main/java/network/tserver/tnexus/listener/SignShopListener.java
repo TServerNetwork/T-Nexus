@@ -102,6 +102,15 @@ public final class SignShopListener implements Listener {
             return;
         }
 
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && isChest(clickedBlock)
+                && this.shopManager.isLinkedChest(clickedBlock)
+                && !this.shopManager.canAccessLinkedChest(event.getPlayer(), clickedBlock)) {
+            event.setCancelled(true);
+            this.plugin.getMessageConfig().sendMessage(event.getPlayer(), "shop.chest.denied");
+            return;
+        }
+
         SignShop shop = this.shopManager.getShop(clickedBlock);
         if (shop == null) {
             return;
