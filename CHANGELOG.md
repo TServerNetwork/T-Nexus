@@ -1,3 +1,10 @@
+# [0.20.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.19.0...v0.20.0) (2026-06-06)
+
+
+### Features
+
+* **player:** track block stats ([#68](https://github.com/TServerNetwork/T-Nexus/issues/68)) ([3ace31d](https://github.com/TServerNetwork/T-Nexus/commit/3ace31df44840a90ac17e5c026436adabf9eda11))
+
 # [0.19.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.18.0...v0.19.0) (2026-06-06)
 
 
