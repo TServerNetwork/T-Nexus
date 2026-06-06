@@ -230,6 +230,18 @@ class SignShopManagerTest {
     }
 
     @Test
+    void shouldTreatConfiguredLinkToolMaterialAsBannedEvenWhenConfigListMissesIt() {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+
+        plugin.getConfigManager().getConfiguration().set("tnexus.shop.link-tool.material", "BLAZE_ROD");
+        plugin.getConfigManager().getConfiguration().set("tnexus.shop.banned-materials", java.util.List.of("BARRIER"));
+
+        assertTrue(manager.isBannedMaterial(Material.BLAZE_ROD));
+        assertFalse(manager.isBannedMaterial(Material.DIAMOND));
+    }
+
+    @Test
     void shouldAllowBannedServerShopMaterialWithBypass() throws Exception {
         TNexus plugin = loadPlugin();
         SignShopManager manager = plugin.getSignShopManager();

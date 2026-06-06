@@ -806,6 +806,12 @@ public final class SignShopManager {
      * @return {@code true} when banned
      */
     public boolean isBannedMaterial(Material material) {
+        Material linkToolMaterial = Material.matchMaterial(
+                this.plugin.getConfigManager().getString("tnexus.shop.link-tool.material", "STICK"));
+        if (linkToolMaterial != null && material == linkToolMaterial) {
+            return true;
+        }
+
         List<String> bannedMaterials = this.plugin.getConfig().getStringList("tnexus.shop.banned-materials");
         if (bannedMaterials.isEmpty()) {
             return false;
