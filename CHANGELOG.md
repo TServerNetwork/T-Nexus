@@ -1,3 +1,12 @@
+# [0.12.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.11.1...v0.12.0) (2026-06-06)
+
+
+### Features
+
+* **shop:** add max trade quantities to invMax lore ([#50](https://github.com/TServerNetwork/T-Nexus/issues/50)) ([6394057](https://github.com/TServerNetwork/T-Nexus/commit/63940577e198d94061fb066a4e8aefa8aee12835))
+* **shop:** gray out quantity buttons for unsupported trade type ([#50](https://github.com/TServerNetwork/T-Nexus/issues/50)) ([0a6c306](https://github.com/TServerNetwork/T-Nexus/commit/0a6c30666856a81b3ea9fc9bdbe90cdd1437b8b3))
+* **shop:** improve grayout visibility for disabled buttons ([#50](https://github.com/TServerNetwork/T-Nexus/issues/50)) ([aa68212](https://github.com/TServerNetwork/T-Nexus/commit/aa6821280c4767e3defc9fb0e68648e6bf2efe75))
+
 ## [0.11.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.11.0...v0.11.1) (2026-06-06)
 
 
