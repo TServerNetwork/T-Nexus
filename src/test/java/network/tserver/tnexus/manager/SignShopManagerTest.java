@@ -369,7 +369,7 @@ class SignShopManagerTest {
         manager.refreshShopDisplay(liveShop);
 
         waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aB 10")
-                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "8S -"));
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7S -"));
     }
 
     @Test
@@ -396,7 +396,7 @@ class SignShopManagerTest {
         liveShop.setSellPrice(5.0D);
         manager.refreshShopDisplay(liveShop);
 
-        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "8B -")
+        waitUntil(() -> signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B -")
                 && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "aS 5"));
     }
     @Test
@@ -609,7 +609,9 @@ class SignShopManagerTest {
 
         waitUntil(() -> "New Note".equals(liveShop.getNote()));
         Sign sign = (Sign) signBlock.getState();
-        assertTrue(LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(3)).contains("New Note"));
+        String noteLine = LegacyComponentSerializer.legacySection().serialize(sign.getSide(Side.FRONT).line(3));
+        assertTrue(noteLine.startsWith("ﾂｧf"));
+        assertTrue(noteLine.contains("New Note"));
     }
 
     private TNexus loadPlugin() {

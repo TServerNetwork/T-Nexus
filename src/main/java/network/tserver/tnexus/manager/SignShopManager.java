@@ -1133,7 +1133,7 @@ public final class SignShopManager {
         sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getItemName()));
         sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacyAmpersand().deserialize(
                 buyColor + "B " + buyValue + " &8| " + sellColor + "S " + sellValue));
-        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&7" + shop.getNote()));
+        sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getNote()));
         sign.setWaxed(true);
         sign.update(true, false);
     }
@@ -1147,7 +1147,7 @@ public final class SignShopManager {
 
     private String resolveTradeDisplayColor(@Nullable Double price, boolean available) {
         if (price == null) {
-            return "&8";
+            return "&7";
         }
         return available ? "&a" : "&c";
     }
