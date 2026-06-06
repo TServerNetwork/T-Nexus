@@ -343,6 +343,34 @@ class SignShopManagerTest {
                 && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
     }
 
+    @Test
+    void shouldRenderUnavailableSignInRedWhenBothSidesAreUnavailable() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+
+        World world = owner.getWorld();
+        Block chestBlock = world.getBlockAt(98, 64, 0);
+        chestBlock.setType(Material.CHEST);
+        Block signBlock = world.getBlockAt(99, 64, 0);
+        signBlock.setType(Material.OAK_SIGN);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, new ItemStack(Material.DIAMOND));
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(null);
+        liveShop.setSellPrice(5.0D);
+        manager.refreshShopDisplay(liveShop);
+
+        waitUntil(() -> signLineContains(signBlock, 0, ChatColor.COLOR_CHAR + "c[Shop]")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "7B -")
+                && signLineContains(signBlock, 2, ChatColor.COLOR_CHAR + "cS 5"));
+    }
+
 
     @Test
     void shouldGrayOutUnsupportedSellSideOnSign() throws Exception {

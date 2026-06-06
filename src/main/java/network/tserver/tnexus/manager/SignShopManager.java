@@ -1132,8 +1132,9 @@ public final class SignShopManager {
             return SyncAvailability.unavailable();
         }
         if (shop.getType() == ShopType.SERVER) {
-            boolean sellSideAvailable = shop.getSellPrice() == null || isServerShopSellToVoidEnabled();
-            return new SyncAvailability(true, sellSideAvailable, false, CompletableFuture.completedFuture(true));
+            boolean buySideAvailable = shop.getBuyPrice() != null;
+            boolean sellSideAvailable = shop.getSellPrice() != null && isServerShopSellToVoidEnabled();
+            return new SyncAvailability(buySideAvailable, sellSideAvailable, false, CompletableFuture.completedFuture(true));
         }
 
         Inventory chestInventory = resolveLinkedChestInventory(shop);
@@ -1142,8 +1143,8 @@ public final class SignShopManager {
         }
 
         ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
-        boolean buySideAvailable = shop.getBuyPrice() == null || countMatchingItems(chestInventory, template) > 0;
-        boolean sellSideCapacity = shop.getSellPrice() == null || calculateInventoryFit(chestInventory, template) > 0;
+        boolean buySideAvailable = shop.getBuyPrice() != null && countMatchingItems(chestInventory, template) > 0;
+        boolean sellSideCapacity = shop.getSellPrice() != null && calculateInventoryFit(chestInventory, template) > 0;
         CompletableFuture<Boolean> ownerHasFunds = shop.getSellPrice() == null
                 ? CompletableFuture.completedFuture(true)
                 : this.economyManager.has(shop.getOwnerUuid(), shop.getSellPrice());
