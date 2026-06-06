@@ -11,8 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
-import org.bukkit.Location;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import org.bukkit.Location;
+import org.bukkit.Material;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -42,6 +43,10 @@ class PlayerStatsManagerTest {
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
 
@@ -74,6 +79,10 @@ class PlayerStatsManagerTest {
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
 
@@ -98,6 +107,10 @@ class PlayerStatsManagerTest {
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
 
@@ -123,6 +136,10 @@ class PlayerStatsManagerTest {
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
         Location start = new Location(player.getWorld(), 0.0D, 64.0D, 0.0D);
@@ -153,6 +170,10 @@ class PlayerStatsManagerTest {
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
 
@@ -164,6 +185,40 @@ class PlayerStatsManagerTest {
 
         assertEquals(0.0D, readDoubleStat(plugin, player, "distance"));
         assertEquals(0.0D, readTravelDistance(plugin, player, "WALK"));
+    }
+
+    @Test
+    void shouldAccumulateBlockStatsByMaterial() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("Builder");
+        PlayerStatsManager manager = new PlayerStatsManager(
+                plugin,
+                new PlayerStatsRepository(plugin.getDatabaseManager()),
+                new MutableClock(Instant.parse("2026-06-07T05:00:00Z")),
+                new ConcurrentHashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
+                PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
+                false);
+
+        manager.recordBlockPlacement(player, Material.STONE);
+        manager.recordBlockPlacement(player, Material.STONE);
+        manager.recordBlockPlacement(player, Material.WATER);
+        manager.recordBlockBreak(player, Material.DIRT);
+        manager.recordBlockBreak(player, Material.STONE);
+
+        manager.flushPendingBlockStats().get(5, TimeUnit.SECONDS);
+
+        assertEquals(3, readIntStat(plugin, player, "blocks_placed"));
+        assertEquals(2, readIntStat(plugin, player, "blocks_broken"));
+        assertEquals(2, readBlockMaterialCount(plugin, player, Material.STONE, "placed_count"));
+        assertEquals(1, readBlockMaterialCount(plugin, player, Material.STONE, "broken_count"));
+        assertEquals(1, readBlockMaterialCount(plugin, player, Material.WATER, "placed_count"));
+        assertEquals(1, readBlockMaterialCount(plugin, player, Material.DIRT, "broken_count"));
     }
 
     private TNexus loadPlugin() {
@@ -241,6 +296,19 @@ class PlayerStatsManagerTest {
             statement.setString(2, travelType);
             try (var resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getDouble("distance") : 0.0D;
+            }
+        }
+    }
+
+    private int readBlockMaterialCount(TNexus plugin, PlayerMock player, Material material, String columnName)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT " + columnName + " FROM tnexus_block_stats WHERE player_uuid = ? AND material = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt(columnName) : 0;
             }
         }
     }

@@ -8,6 +8,7 @@ version = providers.gradleProperty("version").getOrElse(version.toString())
 
 repositories {
     mavenCentral()
+    maven("https://maven.enginehub.org/repo/")
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
     maven("https://mvn.wesjd.net/")
@@ -20,6 +21,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     compileOnly("net.luckperms:api:5.5")
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.12.0")
     testImplementation("io.papermc.paper:paper-api:26.1.2.build.+")
     testImplementation("com.github.MilkBowl:VaultAPI:1.7.1")
     testImplementation("net.luckperms:api:5.5")
