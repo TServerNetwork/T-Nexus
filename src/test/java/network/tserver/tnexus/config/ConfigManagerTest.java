@@ -38,6 +38,8 @@ class ConfigManagerTest {
         assertEquals("REPLACE_PREVIOUS_ENABLED_TEXTURE",
                 configManager.getGuiSettings().pagerSettings().previous().enabledTexture());
         assertEquals(50, configManager.getGuiSettings().currentLocationSlot());
+        assertTrue(plugin.getConfig().getStringList("tnexus.shop.banned-materials")
+                .contains(configManager.getString("tnexus.shop.link-tool.material")));
 
         ConfigurationSection section = configManager.getSection("tnexus.database");
         assertNotNull(section);

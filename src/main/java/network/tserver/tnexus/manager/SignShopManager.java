@@ -193,7 +193,7 @@ public final class SignShopManager {
                 note == null ? DEFAULT_NOTE : sanitizeNote(note),
                 true);
         applySignWax(signBlock, true);
-        applySignLines(shop, ShopStatus.UNAVAILABLE);
+        applySignLines(shop, RenderedAvailability.unavailable());
         this.signShopRepository.insert(shop)
                 .whenComplete((shopId, throwable) -> runSync(() -> {
                     if (type == ShopType.PLAYER) {
@@ -441,7 +441,7 @@ public final class SignShopManager {
      */
     public void refreshShopDisplay(SignShop shop) {
         if (!shop.isEnabled()) {
-            applySignLines(shop, ShopStatus.DISABLED);
+            applySignLines(shop, RenderedAvailability.disabled());
             return;
         }
 
@@ -449,7 +449,7 @@ public final class SignShopManager {
         syncAvailability.ownerBalanceCheck().whenComplete((ownerHasFunds, throwable) -> runSync(() -> {
             if (throwable != null) {
                 this.plugin.getLogger().log(Level.WARNING, "Failed to resolve SignShop owner balance.", throwable);
-                applySignLines(shop, ShopStatus.UNAVAILABLE);
+                applySignLines(shop, RenderedAvailability.unavailable());
                 return;
             }
             applySignLines(shop, syncAvailability.resolve(ownerHasFunds));
@@ -1089,18 +1089,19 @@ public final class SignShopManager {
 
     private SyncAvailability evaluateSyncAvailability(SignShop shop) {
         if (!shop.isEnabled()) {
-            return new SyncAvailability(true, false, false, CompletableFuture.completedFuture(false));
+            return SyncAvailability.unavailable();
         }
         if (shop.getItemStack() == null) {
-            return new SyncAvailability(false, false, false, CompletableFuture.completedFuture(false));
+            return SyncAvailability.unavailable();
         }
         if (shop.getType() == ShopType.SERVER) {
-            return new SyncAvailability(true, true, false, CompletableFuture.completedFuture(true));
+            boolean sellSideAvailable = shop.getSellPrice() == null || isServerShopSellToVoidEnabled();
+            return new SyncAvailability(true, sellSideAvailable, false, CompletableFuture.completedFuture(true));
         }
 
         Inventory chestInventory = resolveLinkedChestInventory(shop);
         if (chestInventory == null) {
-            return new SyncAvailability(false, false, false, CompletableFuture.completedFuture(false));
+            return SyncAvailability.unavailable();
         }
 
         ItemStack template = Objects.requireNonNull(shop.getItemStack(), "shop item");
@@ -1112,24 +1113,26 @@ public final class SignShopManager {
         return new SyncAvailability(buySideAvailable, sellSideCapacity, true, ownerHasFunds);
     }
 
-    private void applySignLines(SignShop shop, ShopStatus status) {
+    private void applySignLines(SignShop shop, RenderedAvailability availability) {
         Block signBlock = shop.getSignPosition().resolveBlock(this.plugin.getServer());
         if (!(signBlock != null && signBlock.getState() instanceof Sign sign)) {
             return;
         }
 
-        String color = switch (status) {
+        String color = switch (availability.status()) {
             case AVAILABLE -> "&a";
             case UNAVAILABLE -> "&c";
             case DISABLED -> "&8";
         };
+        String buyColor = availability.buyAvailable() ? "&a" : "&c";
+        String sellColor = availability.sellAvailable() ? "&a" : "&c";
         String label = shop.getType() == ShopType.SERVER ? "[ServerShop]" : "[Shop]";
         String buyValue = shop.getBuyPrice() == null ? "-" : trimPrice(shop.getBuyPrice());
         String sellValue = shop.getSellPrice() == null ? "-" : trimPrice(shop.getSellPrice());
         sign.getSide(Side.FRONT).line(0, LegacyComponentSerializer.legacyAmpersand().deserialize(color + label));
         sign.getSide(Side.FRONT).line(1, LegacyComponentSerializer.legacyAmpersand().deserialize("&f" + shop.getItemName()));
         sign.getSide(Side.FRONT).line(2, LegacyComponentSerializer.legacyAmpersand().deserialize(
-                color + "B " + buyValue + " &8| " + color + "S " + sellValue));
+                buyColor + "B " + buyValue + " &8| " + sellColor + "S " + sellValue));
         sign.getSide(Side.FRONT).line(3, LegacyComponentSerializer.legacyAmpersand().deserialize("&7" + shop.getNote()));
         sign.setWaxed(true);
         sign.update(true, false);
@@ -1445,21 +1448,31 @@ public final class SignShopManager {
 
     private record SyncAvailability(
             boolean buySideAvailable,
-            boolean sellSideCapacity,
+            boolean sellSideAvailable,
             boolean playerShop,
             CompletableFuture<Boolean> ownerBalanceCheck) {
 
-        private ShopStatus resolve(boolean ownerHasFunds) {
-            if (!this.buySideAvailable) {
-                return ShopStatus.UNAVAILABLE;
-            }
-            if (!this.sellSideCapacity) {
-                return ShopStatus.UNAVAILABLE;
-            }
-            if (this.playerShop && !ownerHasFunds) {
-                return ShopStatus.UNAVAILABLE;
-            }
-            return ShopStatus.AVAILABLE;
+        private static SyncAvailability unavailable() {
+            return new SyncAvailability(false, false, false, CompletableFuture.completedFuture(false));
+        }
+
+        private RenderedAvailability resolve(boolean ownerHasFunds) {
+            boolean resolvedSellAvailable = this.sellSideAvailable && (!this.playerShop || ownerHasFunds);
+            ShopStatus overallStatus = this.buySideAvailable || resolvedSellAvailable
+                    ? ShopStatus.AVAILABLE
+                    : ShopStatus.UNAVAILABLE;
+            return new RenderedAvailability(overallStatus, this.buySideAvailable, resolvedSellAvailable);
+        }
+    }
+
+    private record RenderedAvailability(ShopStatus status, boolean buyAvailable, boolean sellAvailable) {
+
+        private static RenderedAvailability disabled() {
+            return new RenderedAvailability(ShopStatus.DISABLED, false, false);
+        }
+
+        private static RenderedAvailability unavailable() {
+            return new RenderedAvailability(ShopStatus.UNAVAILABLE, false, false);
         }
     }
 

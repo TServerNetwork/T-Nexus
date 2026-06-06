@@ -115,6 +115,134 @@ class SignShopBrowseGuiTest {
         assertFalse(hasLoreLine(buyer, 3, "買取空き容量:"));
     }
 
+    @Test
+    void shouldAutoAdjustFixedAmountButtonToAffordableBuyAmount() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 25.0D).get(5, TimeUnit.SECONDS);
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(owner.getWorld(), 20, templateItem, 10);
+        Block signBlock = createSign(owner.getWorld(), 21);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+
+        manager.openBrowseGui(buyer, liveShop);
+
+        this.server.getPluginManager().callEvent(createClickEvent(buyer, 20, ClickType.LEFT));
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 2));
+
+        assertEquals(5.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
+        String adjustmentMessage = buyer.nextMessage();
+        assertNotNull(adjustmentMessage);
+        assertTrue(adjustmentMessage.contains("2"));
+    }
+
+    @Test
+    void shouldShowOutOfStockMessageFromFixedAmountButton() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 100.0D).get(5, TimeUnit.SECONDS);
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(owner.getWorld(), 30, templateItem, 1);
+        Block signBlock = createSign(owner.getWorld(), 31);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+        ((org.bukkit.block.Chest) chestBlock.getState()).getBlockInventory().clear();
+
+        manager.openBrowseGui(buyer, liveShop);
+
+        this.server.getPluginManager().callEvent(createClickEvent(buyer, 19, ClickType.LEFT));
+
+        String message = buyer.nextMessage();
+        assertNotNull(message);
+        assertTrue(message.contains(plugin.getMessageConfig().getMessage("shop.trade.out-of-stock")));
+    }
+
+    @Test
+    void shouldShowChestFullMessageFromFixedAmountButton() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock seller = this.server.addPlayer("Seller");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        seller.addAttachment(plugin, "tnexus.shop.use", true);
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(owner.getWorld(), 32, templateItem, 64 * 27);
+        Block signBlock = createSign(owner.getWorld(), 33);
+        seller.getInventory().addItem(new ItemStack(Material.DIAMOND, 8));
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setSellPrice(5.0D);
+
+        manager.openBrowseGui(seller, liveShop);
+
+        this.server.getPluginManager().callEvent(createClickEvent(seller, 19, ClickType.RIGHT));
+
+        String message = seller.nextMessage();
+        assertNotNull(message);
+        assertTrue(message.contains(plugin.getMessageConfig().getMessage("shop.trade.chest-full")));
+    }
+
+    @Test
+    void shouldShowOwnerFundsMessageFromFixedAmountButton() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock seller = this.server.addPlayer("Seller");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        seller.addAttachment(plugin, "tnexus.shop.use", true);
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(owner.getWorld(), 34, templateItem, 0);
+        Block signBlock = createSign(owner.getWorld(), 35);
+        seller.getInventory().addItem(new ItemStack(Material.DIAMOND, 8));
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setSellPrice(5.0D);
+
+        manager.openBrowseGui(seller, liveShop);
+
+        this.server.getPluginManager().callEvent(createClickEvent(seller, 19, ClickType.RIGHT));
+
+        String message = seller.nextMessage();
+        assertNotNull(message);
+        assertTrue(message.contains(plugin.getMessageConfig().getMessage("shop.trade.owner-funds")));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
