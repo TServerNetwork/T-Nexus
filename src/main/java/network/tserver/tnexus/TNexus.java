@@ -1,18 +1,24 @@
 package network.tserver.tnexus;
 
 import java.util.logging.Logger;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import network.tserver.tnexus.command.CommandManager;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
 import network.tserver.tnexus.database.repository.PayQueueRepository;
+import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.gui.AnvilGuiManager;
 import network.tserver.tnexus.gui.GuiManager;
 import network.tserver.tnexus.manager.AuditLogManager;
 import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PaymentManager;
+import network.tserver.tnexus.manager.PlayerStatsManager;
 import network.tserver.tnexus.manager.PluginHookManager;
 import network.tserver.tnexus.manager.SignShopManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
@@ -20,6 +26,7 @@ import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
+import network.tserver.tnexus.listener.PlayerSessionListener;
 import network.tserver.tnexus.listener.SignShopListener;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -39,7 +46,9 @@ public class TNexus extends JavaPlugin {
     private AuditLogManager auditLogManager;
     private EconomyManager economyManager;
     private PaymentManager paymentManager;
+    private PlayerStatsManager playerStatsManager;
     private PaymentNotificationListener paymentNotificationListener;
+    private PlayerSessionListener playerSessionListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
 
@@ -75,7 +84,9 @@ public class TNexus extends JavaPlugin {
         this.anvilGuiManager = new AnvilGuiManager(this);
         this.auditLogManager = new AuditLogManager(this);
         this.paymentManager = createPaymentManager();
+        this.playerStatsManager = createPlayerStatsManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
+        this.playerSessionListener = new PlayerSessionListener(this);
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
         this.signShopManager.initialize();
@@ -85,6 +96,7 @@ public class TNexus extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        flushPlayerSessions();
         if (this.databaseManager != null) {
             this.databaseManager.shutdown();
         }
@@ -101,7 +113,9 @@ public class TNexus extends JavaPlugin {
         this.auditLogManager = null;
         this.economyManager = null;
         this.paymentManager = null;
+        this.playerStatsManager = null;
         this.paymentNotificationListener = null;
+        this.playerSessionListener = null;
         this.signShopManager = null;
         this.signShopListener = null;
     }
@@ -197,6 +211,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the player stats manager instance.
+     *
+     * @return player stats manager
+     */
+    public PlayerStatsManager getPlayerStatsManager() {
+        return this.playerStatsManager;
+    }
+
+    /**
      * Returns the SignShop manager instance.
      *
      * @return SignShop manager
@@ -258,6 +281,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Creates the player stats manager used during startup.
+     *
+     * @return player stats manager
+     */
+    protected PlayerStatsManager createPlayerStatsManager() {
+        return new PlayerStatsManager(this, new PlayerStatsRepository(this.databaseManager));
+    }
+
+    /**
      * Registers the plugin command handlers.
      */
     protected void registerCommands() {
@@ -275,5 +307,20 @@ public class TNexus extends JavaPlugin {
     private void logSevere(String message) {
         Logger logger = getLogger();
         logger.severe(ChatColor.stripColor(message));
+    }
+
+    private void flushPlayerSessions() {
+        if (this.playerStatsManager == null) {
+            return;
+        }
+
+        try {
+            this.playerStatsManager.flushOnlineSessions(getServer().getOnlinePlayers()).get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            getLogger().log(Level.SEVERE, "Interrupted while flushing player sessions during shutdown.", exception);
+        } catch (ExecutionException | TimeoutException exception) {
+            getLogger().log(Level.SEVERE, "Failed to flush player sessions during shutdown.", exception);
+        }
     }
 }
