@@ -1,3 +1,10 @@
+# [0.18.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.17.0...v0.18.0) (2026-06-06)
+
+
+### Features
+
+* **player:** record death and respawn stats ([#66](https://github.com/TServerNetwork/T-Nexus/issues/66)) ([2012f7a](https://github.com/TServerNetwork/T-Nexus/commit/2012f7a37ed9c76d153393ad2c9d1c0cdb93cb83))
+
 # [0.17.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.16.0...v0.17.0) (2026-06-06)
 
 
