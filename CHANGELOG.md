@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.10.0...v0.11.0) (2026-06-06)
+
+
+### Features
+
+* **command:** add shop linkitem and admin balance tools ([#42](https://github.com/TServerNetwork/T-Nexus/issues/42)) ([048ceec](https://github.com/TServerNetwork/T-Nexus/commit/048ceeccdfbb882b82d1b91d2f75e10b6ff7389a))
+
 # [0.10.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.9.0...v0.10.0) (2026-06-06)
 
 
