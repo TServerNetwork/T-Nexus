@@ -39,6 +39,7 @@ tnexus:
     server-shop:
       sell-to-void: true
     banned-materials:
+      - "STICK"
       - "COMMAND_BLOCK"
       - "BARRIER"
       - "DEBUG_STICK"
