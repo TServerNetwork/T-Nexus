@@ -115,6 +115,40 @@ class SignShopBrowseGuiTest {
         assertFalse(hasLoreLine(buyer, 3, "買取空き容量:"));
     }
 
+    @Test
+    void shouldAutoAdjustFixedAmountButtonToAffordableBuyAmount() throws Exception {
+        TNexus plugin = loadPlugin();
+        SignShopManager manager = plugin.getSignShopManager();
+        PlayerMock owner = this.server.addPlayer("Owner");
+        PlayerMock buyer = this.server.addPlayer("Buyer");
+        owner.addAttachment(plugin, "tnexus.shop.player", true);
+        buyer.addAttachment(plugin, "tnexus.shop.use", true);
+        plugin.getEconomyManager().deposit(buyer.getUniqueId(), 25.0D).get(5, TimeUnit.SECONDS);
+
+        ItemStack templateItem = new ItemStack(Material.DIAMOND);
+        Block chestBlock = createChestWithItem(owner.getWorld(), 20, templateItem, 10);
+        Block signBlock = createSign(owner.getWorld(), 21);
+
+        SignShop shop = manager.createShop(owner, signBlock, ShopType.PLAYER, "", chestBlock, templateItem);
+        assertNotNull(shop);
+        waitUntil(() -> manager.getShop(signBlock) != null);
+
+        SignShop liveShop = manager.getShop(signBlock);
+        assertNotNull(liveShop);
+        liveShop.setBuyPrice(10.0D);
+
+        manager.openBrowseGui(buyer, liveShop);
+
+        this.server.getPluginManager().callEvent(createClickEvent(buyer, 20, ClickType.LEFT));
+
+        waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 2));
+
+        assertEquals(5.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
+        String adjustmentMessage = buyer.nextMessage();
+        assertNotNull(adjustmentMessage);
+        assertTrue(adjustmentMessage.contains("2"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);

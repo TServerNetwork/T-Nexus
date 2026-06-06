@@ -116,8 +116,8 @@ public final class SignShopBrowseGui extends BaseGui {
         icon.setAmount(Math.min(amount, icon.getMaxStackSize()));
         int maxBuyAmount = this.shopManager.computeMaxTradeAmount(this.player, this.shop, TradeAction.BUY);
         int maxSellAmount = this.shopManager.computeMaxTradeAmount(this.player, this.shop, TradeAction.SELL);
-        boolean buyEnabled = this.shop.getBuyPrice() != null && maxBuyAmount >= amount;
-        boolean sellEnabled = this.shop.getSellPrice() != null && maxSellAmount >= amount;
+        boolean buyEnabled = this.shop.getBuyPrice() != null && maxBuyAmount > 0;
+        boolean sellEnabled = this.shop.getSellPrice() != null && maxSellAmount > 0;
         var meta = icon.getItemMeta();
         if (meta != null) {
             String nameKey = buyEnabled || sellEnabled ? "shop.gui.amount.name" : "shop.gui.amount.disabled-name";
