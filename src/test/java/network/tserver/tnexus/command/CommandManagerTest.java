@@ -202,6 +202,9 @@ class CommandManagerTest {
         admin.addAttachment(plugin, "tnexus.admin.balance", true);
 
         assertIterableEquals(
+                List.of("add", "set", "take"),
+                invokeTabCompletion(plugin, "onBalanceTabComplete", admin, new String[0]));
+        assertIterableEquals(
                 List.of("add"),
                 invokeTabCompletion(plugin, "onBalanceTabComplete", admin, new String[]{"a"}));
         assertIterableEquals(
