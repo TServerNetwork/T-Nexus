@@ -52,6 +52,8 @@ public class PlayerStatsManager {
     private final Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats;
     private final Object entityDamageLock;
     private final Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats;
+    private final Object killLock;
+    private final Map<UUID, Map<String, Integer>> pendingKillStats;
     private final Object craftLock;
     private final Map<UUID, Map<String, Integer>> pendingCraftStats;
     private final Object processingLock;
@@ -96,6 +98,7 @@ public class PlayerStatsManager {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
                 new ConcurrentHashMap<>(),
                 new ConcurrentHashMap<>(),
                 DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
@@ -113,6 +116,7 @@ public class PlayerStatsManager {
             Map<UUID, Integer> pendingBlocksBroken,
             Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats,
             Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats,
+            Map<UUID, Map<String, Integer>> pendingKillStats,
             Map<UUID, Map<String, Integer>> pendingCraftStats,
             Map<UUID, Integer> pendingBrewCounts,
             Map<UUID, Map<String, Integer>> pendingSmeltStats,
@@ -139,6 +143,8 @@ public class PlayerStatsManager {
         this.pendingBlockStats = Objects.requireNonNull(pendingBlockStats, "pendingBlockStats");
         this.entityDamageLock = new Object();
         this.pendingEntityDamageStats = Objects.requireNonNull(pendingEntityDamageStats, "pendingEntityDamageStats");
+        this.killLock = new Object();
+        this.pendingKillStats = Objects.requireNonNull(pendingKillStats, "pendingKillStats");
         this.craftLock = new Object();
         this.pendingCraftStats = Objects.requireNonNull(pendingCraftStats, "pendingCraftStats");
         this.processingLock = new Object();
@@ -312,6 +318,22 @@ public class PlayerStatsManager {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(entityIdentifier, "entityIdentifier");
         recordEntityDamage(player.getUniqueId(), entityIdentifier, damage, false);
+    }
+
+    /**
+     * Records a kill by the given player against the target identifier.
+     *
+     * @param player killing player
+     * @param targetIdentifier entity type name or player UUID
+     */
+    public void recordKill(Player player, String targetIdentifier) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(targetIdentifier, "targetIdentifier");
+        synchronized (this.killLock) {
+            this.pendingKillStats
+                    .computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>())
+                    .merge(targetIdentifier, 1, Integer::sum);
+        }
     }
 
     /**
@@ -642,6 +664,28 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending kill statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingKillStats() {
+        KillStatsSnapshot snapshot;
+        synchronized (this.killLock) {
+            if (this.pendingKillStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createKillStatsSnapshot();
+            this.pendingKillStats.clear();
+        }
+        return this.playerStatsRepository.addKillStats(snapshot.killStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreKillStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes pending craft statistics to the database asynchronously.
      *
      * @return completion future
@@ -761,6 +805,7 @@ public class PlayerStatsManager {
                 flushPendingDistanceStats(),
                 flushPendingBlockStats(),
                 flushPendingEntityDamageStats(),
+                flushPendingKillStats(),
                 flushPendingCraftStats(),
                 flushPendingProcessingStats(),
                 flushPendingFarmingStats(),
@@ -785,6 +830,7 @@ public class PlayerStatsManager {
                         flushPendingDistanceStats(),
                         flushPendingBlockStats(),
                         flushPendingEntityDamageStats(),
+                        flushPendingKillStats(),
                         flushPendingCraftStats(),
                         flushPendingProcessingStats(),
                         flushPendingFarmingStats(),
@@ -909,6 +955,16 @@ public class PlayerStatsManager {
                 EntityDamageDelta current = existing == null ? new EntityDamageDelta(0.0D, 0.0D) : existing;
                 return dealt ? current.addDealt(damage) : current.addTaken(damage);
             });
+        }
+    }
+
+    private KillStatsSnapshot createKillStatsSnapshot() {
+        return new KillStatsSnapshot(copyPendingIntegerStats(this.pendingKillStats));
+    }
+
+    private void restoreKillStatsSnapshot(KillStatsSnapshot snapshot) {
+        synchronized (this.killLock) {
+            restoreProcessingStatMap(this.pendingKillStats, snapshot.killStats());
         }
     }
 
@@ -1091,6 +1147,9 @@ public class PlayerStatsManager {
     }
 
     private record EntityDamageStatsSnapshot(Map<UUID, Map<String, EntityDamageDelta>> damageStats) {
+    }
+
+    private record KillStatsSnapshot(Map<UUID, Map<String, Integer>> killStats) {
     }
 
     private record CraftStatsSnapshot(Map<UUID, Map<String, Integer>> craftStats) {

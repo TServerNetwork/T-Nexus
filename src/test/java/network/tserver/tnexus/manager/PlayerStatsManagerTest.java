@@ -168,6 +168,23 @@ class PlayerStatsManagerTest {
     }
 
     @Test
+    void shouldAccumulateKillStatsByTarget() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock killer = this.server.addPlayer("Slayer");
+        PlayerMock target = this.server.addPlayer("Target");
+        PlayerStatsManager manager = createManager(plugin, new MutableClock(Instant.parse("2026-06-07T06:30:00Z")));
+
+        manager.recordKill(killer, EntityType.ZOMBIE.name());
+        manager.recordKill(killer, EntityType.ZOMBIE.name());
+        manager.recordKill(killer, target.getUniqueId().toString());
+
+        manager.flushPendingKillStats().get(5, TimeUnit.SECONDS);
+
+        assertEquals(2, readKillCount(plugin, killer, EntityType.ZOMBIE.name()));
+        assertEquals(1, readKillCount(plugin, killer, target.getUniqueId().toString()));
+    }
+
+    @Test
     void shouldAccumulateCraftStatsByMaterial() throws Exception {
         TNexus plugin = loadPlugin();
         PlayerMock player = this.server.addPlayer("Crafter");
@@ -277,6 +294,7 @@ class PlayerStatsManagerTest {
                 new PlayerStatsRepository(plugin.getDatabaseManager()),
                 clock,
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -405,6 +423,18 @@ class PlayerStatsManagerTest {
                      "SELECT count FROM tnexus_craft_stats WHERE player_uuid = ? AND material = ?")) {
             statement.setString(1, player.getUniqueId().toString());
             statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readKillCount(TNexus plugin, PlayerMock player, String target) throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_kill_stats WHERE player_uuid = ? AND target = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, target);
             try (var resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt("count") : 0;
             }

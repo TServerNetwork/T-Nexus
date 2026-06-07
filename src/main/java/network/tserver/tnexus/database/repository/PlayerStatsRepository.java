@@ -19,6 +19,7 @@ public final class PlayerStatsRepository {
     private final String distanceStatsTableName;
     private final String blockStatsTableName;
     private final String entityDamageStatsTableName;
+    private final String killStatsTableName;
     private final String craftStatsTableName;
     private final String smeltStatsTableName;
     private final String enchantStatsTableName;
@@ -41,6 +42,7 @@ public final class PlayerStatsRepository {
         this.distanceStatsTableName = this.databaseManager.getTablePrefix() + "distance_stats";
         this.blockStatsTableName = this.databaseManager.getTablePrefix() + "block_stats";
         this.entityDamageStatsTableName = this.databaseManager.getTablePrefix() + "entity_damage_stats";
+        this.killStatsTableName = this.databaseManager.getTablePrefix() + "kill_stats";
         this.craftStatsTableName = this.databaseManager.getTablePrefix() + "craft_stats";
         this.smeltStatsTableName = this.databaseManager.getTablePrefix() + "smelt_stats";
         this.enchantStatsTableName = this.databaseManager.getTablePrefix() + "enchant_stats";
@@ -239,6 +241,35 @@ public final class PlayerStatsRepository {
                 return null;
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to update player entity damage stats", exception);
+            }
+        });
+    }
+
+    /**
+     * Adds aggregate kill statistics for one or more players.
+     *
+     * @param killStats kill counts by player id and target identifier
+     * @return completion future
+     */
+    public CompletableFuture<Void> addKillStats(Map<UUID, Map<String, Integer>> killStats) {
+        Objects.requireNonNull(killStats, "killStats");
+        if (killStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String sql = """
+                INSERT INTO %s (player_uuid, target, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.killStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                addNamedStatsBatch(statement, killStats);
+                statement.executeBatch();
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player kill stats", exception);
             }
         });
     }

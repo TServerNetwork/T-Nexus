@@ -32,6 +32,7 @@ import network.tserver.tnexus.listener.PlayerDeathStatsListener;
 import network.tserver.tnexus.listener.PlayerEntityDamageStatsListener;
 import network.tserver.tnexus.listener.PlayerFarmingStatsListener;
 import network.tserver.tnexus.listener.PlayerItemStatsListener;
+import network.tserver.tnexus.listener.PlayerKillStatsListener;
 import network.tserver.tnexus.listener.PlayerMiscStatsListener;
 import network.tserver.tnexus.listener.PlayerMovementStatsListener;
 import network.tserver.tnexus.listener.PlayerProcessingStatsListener;
@@ -66,6 +67,7 @@ public class TNexus extends JavaPlugin {
     private PlayerProcessingStatsListener playerProcessingStatsListener;
     private PlayerFarmingStatsListener playerFarmingStatsListener;
     private PlayerItemStatsListener playerItemStatsListener;
+    private PlayerKillStatsListener playerKillStatsListener;
     private PlayerMiscStatsListener playerMiscStatsListener;
     private AutoCloseable worldEditStatsListener;
     private SignShopManager signShopManager;
@@ -114,6 +116,7 @@ public class TNexus extends JavaPlugin {
         this.playerProcessingStatsListener = new PlayerProcessingStatsListener(this);
         this.playerFarmingStatsListener = new PlayerFarmingStatsListener(this);
         this.playerItemStatsListener = new PlayerItemStatsListener(this);
+        this.playerKillStatsListener = new PlayerKillStatsListener(this);
         this.playerMiscStatsListener = new PlayerMiscStatsListener(this);
         this.worldEditStatsListener = createWorldEditStatsListener();
         this.signShopManager = new SignShopManager(this);
@@ -160,6 +163,7 @@ public class TNexus extends JavaPlugin {
         this.playerProcessingStatsListener = null;
         this.playerFarmingStatsListener = null;
         this.playerItemStatsListener = null;
+        this.playerKillStatsListener = null;
         this.playerMiscStatsListener = null;
         this.worldEditStatsListener = null;
         this.signShopManager = null;
