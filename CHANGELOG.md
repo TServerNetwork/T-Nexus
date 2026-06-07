@@ -1,3 +1,10 @@
+# [0.21.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.20.0...v0.21.0) (2026-06-07)
+
+
+### Features
+
+* **player:** track entity damage stats ([#69](https://github.com/TServerNetwork/T-Nexus/issues/69)) ([8aca5ac](https://github.com/TServerNetwork/T-Nexus/commit/8aca5ac45bac2c73eb5c71ecd83c553e754f3420))
+
 # [0.20.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.19.0...v0.20.0) (2026-06-06)
 
 
