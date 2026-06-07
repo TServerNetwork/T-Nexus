@@ -244,6 +244,28 @@ class PlayerStatsManagerTest {
         assertEquals(2, readItemStatCount(plugin, player, Material.DIRT, "drop_count"));
     }
 
+    @Test
+    void shouldRecordMiscStats() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("Sleeper");
+        PlayerStatsManager manager = createManager(plugin, new MutableClock(Instant.parse("2026-06-07T11:00:00Z")));
+
+        manager.recordSleep(player).get(5, TimeUnit.SECONDS);
+        manager.recordSleep(player).get(5, TimeUnit.SECONDS);
+        manager.recordPortal(player).get(5, TimeUnit.SECONDS);
+        manager.recordChat(player).get(5, TimeUnit.SECONDS);
+        manager.recordChat(player).get(5, TimeUnit.SECONDS);
+        manager.recordProjectileLaunch(player, EntityType.ARROW.name()).get(5, TimeUnit.SECONDS);
+        manager.recordProjectileLaunch(player, EntityType.ARROW.name()).get(5, TimeUnit.SECONDS);
+        manager.recordProjectileLaunch(player, EntityType.SNOWBALL.name()).get(5, TimeUnit.SECONDS);
+
+        assertEquals(2, readIntStat(plugin, player, "sleep_count"));
+        assertEquals(1, readIntStat(plugin, player, "portal_count"));
+        assertEquals(2, readIntStat(plugin, player, "chat_count"));
+        assertEquals(2, readProjectileCount(plugin, player, EntityType.ARROW.name()));
+        assertEquals(1, readProjectileCount(plugin, player, EntityType.SNOWBALL.name()));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -476,6 +498,19 @@ class PlayerStatsManagerTest {
             statement.setString(2, material.name());
             try (var resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt(columnName) : 0;
+            }
+        }
+    }
+
+    private int readProjectileCount(TNexus plugin, PlayerMock player, String entityType)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_projectile_stats WHERE player_uuid = ? AND entity_type = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, entityType);
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
             }
         }
     }
