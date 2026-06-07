@@ -302,3 +302,107 @@ server-stats:
     active-shops:
       name: "&6アクティブショップ数"
       lore: "&7現在値: &f{0}件"
+stats:
+  command:
+    usage: "&c使い方: /stats [player]"
+    player-not-found: "&cプレイヤー {0} は見つかりませんでした。"
+    load-failed: "&c統計情報の読み込みに失敗しました。"
+    favorites-full: "&cピン留め枠がいっぱいです。先に他のピン留めを解除してください。"
+  categories:
+    general: "&a全般統計"
+    economy: "&a経済統計"
+    blocks: "&aブロック統計"
+    combat: "&a戦闘統計"
+    activity: "&a活動統計"
+  filters:
+    today: "今日"
+    this-week: "今週"
+    this-month: "今月"
+    all-time: "全期間"
+  sorts:
+    value-desc: "数値降順"
+    value-asc: "数値昇順"
+    name-asc: "名前順"
+  values:
+    unavailable: "不明"
+  labels:
+    general:
+      play-time: "&eプレイ時間"
+      distance: "&e移動距離"
+      deaths: "&e死亡回数"
+      respawns: "&eリスポーン回数"
+      chat-count: "&eチャット発言数"
+      sleep-count: "&e就寝回数"
+      portal-count: "&eポータル使用回数"
+      first-login: "&e初ログイン"
+    economy:
+      balance: "&e現在の残高"
+      deposit-amount: "&e累計入金額"
+      withdraw-amount: "&e累計出金額"
+      payment-received-count: "&e送金受取回数"
+      payment-sent-count: "&e送金支払回数"
+      shop-buy-count: "&eショップ購入回数"
+      shop-sell-count: "&eショップ売却回数"
+      total-volume: "&e累計取引量"
+    activity:
+      craft-total: "&eクラフト回数"
+      smelt-total: "&e精錬回数"
+      brew-total: "&e醸造回数"
+      enchant-total: "&eエンチャント回数"
+      harvest-total: "&e収穫数"
+      breed-total: "&e繁殖数"
+      fish-total: "&e釣果数"
+      pickup-total: "&eアイテム拾得数"
+      drop-total: "&eアイテム投棄数"
+      projectile-total: "&e射出物使用数"
+  dynamic:
+    block:
+      name: "&e{0}"
+      placed: "&7設置数: &f{0}"
+      broken: "&7破壊数: &f{0}"
+    combat:
+      name: "&e{0}"
+      kills: "&7討伐数: &f{0}"
+      damage-dealt: "&7与ダメージ量: &f{0}"
+      damage-taken: "&7被ダメージ量: &f{0}"
+  gui:
+    main:
+      title: "&6&l{0} の統計情報"
+      player:
+        name: "&6&l{0} の統計情報"
+        uuid: "&7UUID: &f{0}"
+        first-login: "&7初ログイン: &f{0}"
+      filter:
+        name: "&e期間フィルター"
+        current: "&7現在の設定: &a{0}"
+        options: "&7(今日/今週/今月/全期間)"
+        hint: "&7クリックで切り替え"
+      sort:
+        name: "&eソート順"
+        current: "&7現在の設定: &a{0}"
+        options: "&7(数値降順/数値昇順/名前順)"
+        hint: "&7クリックで切り替え"
+      category:
+        general: "&7プレイ時間、死亡数、移動距離などの基本情報"
+        economy: "&7残高、取引量、ショップ利用回数など"
+        blocks: "&7設置・破壊したブロックの種類別ランキング"
+        combat: "&7与/被ダメージ、討伐数などの戦闘記録"
+        activity: "&7クラフト、釣り、農業、醸造などの活動記録"
+      favorite:
+        empty:
+          name: "&8未設定"
+          lore: "&7カテゴリ画面で右クリックするとここに表示されます。"
+        category: "&7カテゴリ: &f{0}"
+    category:
+      title: "&6{0} - {1}"
+      icon:
+        lore: "&7カテゴリの詳細統計です。"
+      empty:
+        name: "&c表示できる統計がありません"
+        lore: "&7このカテゴリには表示可能な記録がありません。"
+    entry:
+      pinned: "&a★ ピン留め済み"
+      separator: "&8───────────────"
+      value: "&7記録値: &a{0}"
+      period: "&7期間: &f{0}"
+      favorite-hint: "&e▶ 右クリックでお気に入りにピン留め / 解除"

@@ -47,6 +47,9 @@ commands:
   history:
     description: Open audit history
     usage: "/<command> [player]"
+  stats:
+    description: Open player stats
+    usage: "/<command> [player]"
   server-stats:
     description: Open server stats
     usage: "/<command>"
@@ -69,6 +72,15 @@ permissions:
     default: op
   tnexus.audit.admin:
     description: Allows viewing other players audit history
+    default: op
+  tnexus.stats.self:
+    description: Allows opening your own stats viewer
+    default: true
+  tnexus.stats.others:
+    description: Allows opening other players stats viewers
+    default: false
+  tnexus.stats.admin:
+    description: Allows administering stats viewer access
     default: op
   tnexus.admin.balance:
     description: Allows administrating player balances

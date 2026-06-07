@@ -464,6 +464,42 @@ class CommandManagerTest {
     }
 
     @Test
+    void shouldOpenOwnStatsGui() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("StatsUser");
+        player.addAttachment(plugin, "tnexus.stats.self", true);
+
+        assertTrue(this.server.dispatchCommand(player, "stats"));
+        waitUntil(() -> plugin.getGuiManager().hasOpenGui(player));
+        waitUntil(() -> player.getOpenInventory().getTopInventory().getItem(20) != null);
+
+        assertEquals(plugin.getMessageConfig().getMessage("stats.gui.main.title", "StatsUser"), player.getOpenInventory().getTitle());
+        assertEquals(Material.PLAYER_HEAD, player.getOpenInventory().getTopInventory().getItem(4).getType());
+        assertEquals(Material.BOOK, player.getOpenInventory().getTopInventory().getItem(20).getType());
+        assertEquals(Material.GOLD_INGOT, player.getOpenInventory().getTopInventory().getItem(21).getType());
+        assertEquals(Material.GRASS_BLOCK, player.getOpenInventory().getTopInventory().getItem(22).getType());
+        assertEquals(Material.DIAMOND_SWORD, player.getOpenInventory().getTopInventory().getItem(23).getType());
+        assertEquals(Material.CRAFTING_TABLE, player.getOpenInventory().getTopInventory().getItem(24).getType());
+    }
+
+    @Test
+    void shouldOpenOtherPlayersStatsGuiWithPermission() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+        viewer.addAttachment(plugin, "tnexus.stats.others", true);
+
+        assertTrue(this.server.dispatchCommand(viewer, "stats Target"));
+        waitUntil(() -> plugin.getGuiManager().hasOpenGui(viewer));
+        waitUntil(() -> viewer.getOpenInventory().getTopInventory().getItem(20) != null);
+
+        assertEquals(plugin.getMessageConfig().getMessage("stats.gui.main.title", "Target"), viewer.getOpenInventory().getTitle());
+        assertEquals(Material.PLAYER_HEAD, viewer.getOpenInventory().getTopInventory().getItem(4).getType());
+    }
+
+    @Test
     void shouldOpenOwnHistoryGui() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);

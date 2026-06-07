@@ -52,6 +52,7 @@ public final class CommandManager {
     private static final String SHOP_COMMAND_NAME = "shop";
     private static final String SHOPS_COMMAND_NAME = "shops";
     private static final String HISTORY_COMMAND_NAME = "history";
+    private static final String STATS_COMMAND_NAME = "stats";
     private static final String SERVER_STATS_COMMAND_NAME = "server-stats";
     private static final List<String> BALANCE_ACTIONS = List.of("add", "set", "take");
     private static final List<String> PAY_ACTIONS = List.of("confirm", "cancel");
@@ -61,6 +62,9 @@ public final class CommandManager {
     private static final String SHOP_ADMIN_PERMISSION = "tnexus.shop.admin";
     private static final String SHOP_PLAYER_PERMISSION = "tnexus.shop.player";
     private static final String AUDIT_ADMIN_PERMISSION = "tnexus.audit.admin";
+    private static final String STATS_SELF_PERMISSION = "tnexus.stats.self";
+    private static final String STATS_OTHERS_PERMISSION = "tnexus.stats.others";
+    private static final String STATS_ADMIN_PERMISSION = "tnexus.stats.admin";
 
     private final TNexus plugin;
     private final BaseCommand rootCommand;
@@ -165,6 +169,18 @@ public final class CommandManager {
             @Override
             public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
                 return CommandManager.this.onHistoryTabComplete(commandSourceStack.getSender(), args);
+            }
+        });
+
+        commands.register(STATS_COMMAND_NAME, "Open player stats", List.of(), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onStatsCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return CommandManager.this.onStatsTabComplete(commandSourceStack.getSender(), args);
             }
         });
 
@@ -443,6 +459,58 @@ public final class CommandManager {
                 return Collections.emptyList();
             }
             return TabCompleterUtil.filterPlayers(args[0]);
+        }
+        return Collections.emptyList();
+    }
+
+    private void onStatsCommand(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
+            return;
+        }
+        if (args.length > 1) {
+            this.plugin.getMessageConfig().sendMessage(sender, "stats.command.usage");
+            return;
+        }
+        if (args.length == 0) {
+            if (!sender.hasPermission(STATS_SELF_PERMISSION) && !sender.hasPermission(STATS_ADMIN_PERMISSION)) {
+                this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+                return;
+            }
+            this.plugin.getPlayerStatsViewerManager().openMainGui(
+                    player,
+                    player,
+                    network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME,
+                    network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+            return;
+        }
+
+        if (!sender.hasPermission(STATS_OTHERS_PERMISSION) && !sender.hasPermission(STATS_ADMIN_PERMISSION)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+            return;
+        }
+
+        OfflinePlayer target = resolveTarget(args[0]);
+        if (target == null) {
+            this.plugin.getMessageConfig().sendMessage(sender, "stats.command.player-not-found", args[0]);
+            return;
+        }
+        this.plugin.getPlayerStatsViewerManager().openMainGui(
+                player,
+                target,
+                network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME,
+                network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+    }
+
+    private Collection<String> onStatsTabComplete(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player)) {
+            return Collections.emptyList();
+        }
+        if (args.length <= 1) {
+            if (!sender.hasPermission(STATS_OTHERS_PERMISSION) && !sender.hasPermission(STATS_ADMIN_PERMISSION)) {
+                return Collections.emptyList();
+            }
+            return args.length == 0 ? Collections.emptyList() : TabCompleterUtil.filterPlayers(args[0]);
         }
         return Collections.emptyList();
     }
