@@ -52,6 +52,7 @@ public final class CommandManager {
     private static final String SHOP_COMMAND_NAME = "shop";
     private static final String SHOPS_COMMAND_NAME = "shops";
     private static final String HISTORY_COMMAND_NAME = "history";
+    private static final String SERVER_STATS_COMMAND_NAME = "server-stats";
     private static final List<String> BALANCE_ACTIONS = List.of("add", "set", "take");
     private static final List<String> PAY_ACTIONS = List.of("confirm", "cancel");
     private static final List<String> SHOP_ACTIONS = List.of("linkitem");
@@ -164,6 +165,18 @@ public final class CommandManager {
             @Override
             public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
                 return CommandManager.this.onHistoryTabComplete(commandSourceStack.getSender(), args);
+            }
+        });
+
+        commands.register(SERVER_STATS_COMMAND_NAME, "Open server stats", List.of(), new BasicCommand() {
+            @Override
+            public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                CommandManager.this.onServerStatsCommand(commandSourceStack.getSender(), args);
+            }
+
+            @Override
+            public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                return Collections.emptyList();
             }
         });
     }
@@ -432,6 +445,18 @@ public final class CommandManager {
             return TabCompleterUtil.filterPlayers(args[0]);
         }
         return Collections.emptyList();
+    }
+
+    private void onServerStatsCommand(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.player-only");
+            return;
+        }
+        if (args.length != 0) {
+            this.plugin.getMessageConfig().sendMessage(sender, "server-stats.command.usage");
+            return;
+        }
+        this.plugin.getServerStatsManager().openServerStats(player);
     }
 
     private Collection<String> onBalanceTabComplete(CommandSender sender, String[] args) {

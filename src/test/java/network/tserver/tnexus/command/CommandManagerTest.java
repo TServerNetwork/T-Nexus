@@ -435,6 +435,35 @@ class CommandManagerTest {
     }
 
     @Test
+    void shouldOpenServerStatsGuiAndRenderLoadedValues() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("StatsUser");
+
+        insertAudit(plugin, player, TransactionType.DEPOSIT, 100.0D, 100.0D, "Deposit");
+        insertAudit(plugin, player, TransactionType.WITHDRAW, 40.0D, 60.0D, "Withdraw");
+        insertServerStatsFixtures(plugin, player);
+
+        assertTrue(this.server.dispatchCommand(player, "server-stats"));
+        waitUntil(() -> plugin.getGuiManager().hasOpenGui(player));
+        waitUntil(() -> {
+            org.bukkit.inventory.ItemStack item = player.getOpenInventory().getTopInventory().getItem(12);
+            return item != null
+                    && item.getItemMeta() != null
+                    && plugin.getMessageConfig().getMessage("server-stats.gui.total-transactions.name")
+                    .equals(item.getItemMeta().getDisplayName());
+        });
+
+        assertEquals(plugin.getMessageConfig().getMessage("server-stats.gui.title"), player.getOpenInventory().getTitle());
+        assertEquals(Material.PLAYER_HEAD, player.getOpenInventory().getTopInventory().getItem(10).getType());
+        assertEquals(Material.GOLD_INGOT, player.getOpenInventory().getTopInventory().getItem(12).getType());
+        assertEquals(Material.GOLD_BLOCK, player.getOpenInventory().getTopInventory().getItem(14).getType());
+        assertEquals(Material.CLOCK, player.getOpenInventory().getTopInventory().getItem(19).getType());
+        assertEquals(Material.EMERALD, player.getOpenInventory().getTopInventory().getItem(21).getType());
+        assertEquals(Material.CHEST, player.getOpenInventory().getTopInventory().getItem(23).getType());
+    }
+
+    @Test
     void shouldOpenOwnHistoryGui() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -507,6 +536,36 @@ class CommandManagerTest {
                 balanceAfter,
                 description,
                 null)).get();
+    }
+
+    private void insertServerStatsFixtures(TNexus plugin, PlayerMock player) throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection()) {
+            try (var statement = connection.prepareStatement(
+                    "INSERT INTO tnexus_server_shops (name, material, amount, buy_price, sell_price, category, enabled, created_by) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+                statement.setString(1, "Server Shop");
+                statement.setString(2, "DIAMOND");
+                statement.setInt(3, 1);
+                statement.setDouble(4, 100.0D);
+                statement.setDouble(5, 90.0D);
+                statement.setString(6, "test");
+                statement.setBoolean(7, true);
+                statement.setString(8, player.getUniqueId().toString());
+                statement.executeUpdate();
+            }
+            try (var statement = connection.prepareStatement(
+                    "INSERT INTO tnexus_player_shops (owner_uuid, material, amount, price, type, stock, enabled) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+                statement.setString(1, player.getUniqueId().toString());
+                statement.setString(2, "EMERALD");
+                statement.setInt(3, 1);
+                statement.setDouble(4, 50.0D);
+                statement.setString(5, "SELL");
+                statement.setInt(6, 8);
+                statement.setBoolean(7, true);
+                statement.executeUpdate();
+            }
+        }
     }
 
     private static final class TestCommand extends Command {
