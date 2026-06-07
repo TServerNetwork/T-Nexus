@@ -31,6 +31,7 @@ import network.tserver.tnexus.listener.PlayerCraftStatsListener;
 import network.tserver.tnexus.listener.PlayerDeathStatsListener;
 import network.tserver.tnexus.listener.PlayerEntityDamageStatsListener;
 import network.tserver.tnexus.listener.PlayerMovementStatsListener;
+import network.tserver.tnexus.listener.PlayerProcessingStatsListener;
 import network.tserver.tnexus.listener.PlayerSessionListener;
 import network.tserver.tnexus.listener.SignShopListener;
 import org.bukkit.ChatColor;
@@ -59,6 +60,7 @@ public class TNexus extends JavaPlugin {
     private PlayerMovementStatsListener playerMovementStatsListener;
     private PlayerBlockStatsListener playerBlockStatsListener;
     private PlayerCraftStatsListener playerCraftStatsListener;
+    private PlayerProcessingStatsListener playerProcessingStatsListener;
     private AutoCloseable worldEditStatsListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
@@ -103,6 +105,7 @@ public class TNexus extends JavaPlugin {
         this.playerMovementStatsListener = new PlayerMovementStatsListener(this);
         this.playerBlockStatsListener = new PlayerBlockStatsListener(this);
         this.playerCraftStatsListener = new PlayerCraftStatsListener(this);
+        this.playerProcessingStatsListener = new PlayerProcessingStatsListener(this);
         this.worldEditStatsListener = createWorldEditStatsListener();
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
@@ -145,6 +148,7 @@ public class TNexus extends JavaPlugin {
         this.playerMovementStatsListener = null;
         this.playerBlockStatsListener = null;
         this.playerCraftStatsListener = null;
+        this.playerProcessingStatsListener = null;
         this.worldEditStatsListener = null;
         this.signShopManager = null;
         this.signShopListener = null;

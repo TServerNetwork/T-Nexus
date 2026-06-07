@@ -16,8 +16,11 @@ import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.database.repository.BlockStatsDelta;
 import network.tserver.tnexus.database.repository.EntityDamageDelta;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import network.tserver.tnexus.util.BlockPosition;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.AbstractHorse;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
@@ -33,6 +36,7 @@ public class PlayerStatsManager {
     static final long DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS = 100L;
     static final double MAX_TRACKED_DISTANCE_PER_EVENT = 32.0D;
     static final Duration WORLD_EDIT_SUPPRESSION_WINDOW = Duration.ofSeconds(1L);
+    static final Duration PROCESSING_ATTRIBUTION_WINDOW = Duration.ofMinutes(10L);
 
     private final TNexus plugin;
     private final PlayerStatsRepository playerStatsRepository;
@@ -49,6 +53,12 @@ public class PlayerStatsManager {
     private final Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats;
     private final Object craftLock;
     private final Map<UUID, Map<String, Integer>> pendingCraftStats;
+    private final Object processingLock;
+    private final Map<UUID, Integer> pendingBrewCounts;
+    private final Map<UUID, Map<String, Integer>> pendingSmeltStats;
+    private final Map<UUID, Map<String, Integer>> pendingEnchantStats;
+    private final Map<UUID, Map<String, Integer>> pendingEnchantItemStats;
+    private final Map<BlockPosition, ProcessingAttribution> processingStationAttributions;
     private final Map<UUID, Instant> worldEditSuppressionWindows;
     private final BukkitTask statsFlushTask;
 
@@ -71,6 +81,11 @@ public class PlayerStatsManager {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 new ConcurrentHashMap<>(),
                 DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 true);
@@ -88,6 +103,11 @@ public class PlayerStatsManager {
             Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats,
             Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats,
             Map<UUID, Map<String, Integer>> pendingCraftStats,
+            Map<UUID, Integer> pendingBrewCounts,
+            Map<UUID, Map<String, Integer>> pendingSmeltStats,
+            Map<UUID, Map<String, Integer>> pendingEnchantStats,
+            Map<UUID, Map<String, Integer>> pendingEnchantItemStats,
+            Map<BlockPosition, ProcessingAttribution> processingStationAttributions,
             Map<UUID, Instant> worldEditSuppressionWindows,
             long distanceFlushIntervalTicks,
             boolean scheduleDistanceFlushTask) {
@@ -106,6 +126,14 @@ public class PlayerStatsManager {
         this.pendingEntityDamageStats = Objects.requireNonNull(pendingEntityDamageStats, "pendingEntityDamageStats");
         this.craftLock = new Object();
         this.pendingCraftStats = Objects.requireNonNull(pendingCraftStats, "pendingCraftStats");
+        this.processingLock = new Object();
+        this.pendingBrewCounts = Objects.requireNonNull(pendingBrewCounts, "pendingBrewCounts");
+        this.pendingSmeltStats = Objects.requireNonNull(pendingSmeltStats, "pendingSmeltStats");
+        this.pendingEnchantStats = Objects.requireNonNull(pendingEnchantStats, "pendingEnchantStats");
+        this.pendingEnchantItemStats = Objects.requireNonNull(pendingEnchantItemStats, "pendingEnchantItemStats");
+        this.processingStationAttributions = Objects.requireNonNull(
+                processingStationAttributions,
+                "processingStationAttributions");
         this.worldEditSuppressionWindows = Objects.requireNonNull(
                 worldEditSuppressionWindows,
                 "worldEditSuppressionWindows");
@@ -287,6 +315,102 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records the most recent player interaction with a smelting or brewing block.
+     *
+     * @param player interacting player
+     * @param block interacted processing block
+     */
+    public void markProcessingStationInteraction(Player player, Block block) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(block, "block");
+        this.processingStationAttributions.put(
+                BlockPosition.from(block),
+                new ProcessingAttribution(
+                        player.getUniqueId(),
+                        this.clock.instant().plus(PROCESSING_ATTRIBUTION_WINDOW)));
+    }
+
+    /**
+     * Resolves the last known player attributed to the given processing block.
+     *
+     * @param block processing block
+     * @return attributed player id or {@code null} when none is available
+     */
+    public UUID resolveProcessingStationPlayer(Block block) {
+        Objects.requireNonNull(block, "block");
+        BlockPosition position = BlockPosition.from(block);
+        ProcessingAttribution attribution = this.processingStationAttributions.get(position);
+        if (attribution == null) {
+            return null;
+        }
+        if (attribution.expiresAt().isAfter(this.clock.instant())) {
+            return attribution.playerId();
+        }
+        this.processingStationAttributions.remove(position, attribution);
+        return null;
+    }
+
+    /**
+     * Records a smelted result material for the given player.
+     *
+     * @param playerId player id
+     * @param material smelted result material
+     */
+    public void recordSmelt(UUID playerId, Material material) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(material, "material");
+        synchronized (this.processingLock) {
+            this.pendingSmeltStats
+                    .computeIfAbsent(playerId, ignored -> new HashMap<>())
+                    .merge(material.name(), 1, Integer::sum);
+        }
+    }
+
+    /**
+     * Records a completed brew operation for the given player.
+     *
+     * @param playerId player id
+     */
+    public void recordBrew(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        synchronized (this.processingLock) {
+            this.pendingBrewCounts.merge(playerId, 1, Integer::sum);
+        }
+    }
+
+    /**
+     * Records an applied enchantment for the given player.
+     *
+     * @param player player who enchanted an item
+     * @param enchantment applied enchantment type
+     */
+    public void recordEnchantment(Player player, Enchantment enchantment) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(enchantment, "enchantment");
+        synchronized (this.processingLock) {
+            this.pendingEnchantStats
+                    .computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>())
+                    .merge(enchantment.getKey().getKey(), 1, Integer::sum);
+        }
+    }
+
+    /**
+     * Records the enchanted item material for the given player.
+     *
+     * @param player player who enchanted an item
+     * @param material enchanted item material
+     */
+    public void recordEnchantedItem(Player player, Material material) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        synchronized (this.processingLock) {
+            this.pendingEnchantItemStats
+                    .computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>())
+                    .merge(material.name(), 1, Integer::sum);
+        }
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
@@ -410,6 +534,39 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending smelt, brew, and enchant statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingProcessingStats() {
+        ProcessingStatsSnapshot snapshot;
+        synchronized (this.processingLock) {
+            if (this.pendingBrewCounts.isEmpty()
+                    && this.pendingSmeltStats.isEmpty()
+                    && this.pendingEnchantStats.isEmpty()
+                    && this.pendingEnchantItemStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createProcessingStatsSnapshot();
+            this.pendingBrewCounts.clear();
+            this.pendingSmeltStats.clear();
+            this.pendingEnchantStats.clear();
+            this.pendingEnchantItemStats.clear();
+        }
+        return this.playerStatsRepository
+                .addProcessingStats(
+                        snapshot.brewCounts(),
+                        snapshot.smeltStats(),
+                        snapshot.enchantStats(),
+                        snapshot.enchantItemStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreProcessingStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -425,7 +582,8 @@ public class PlayerStatsManager {
                 flushPendingDistanceStats(),
                 flushPendingBlockStats(),
                 flushPendingEntityDamageStats(),
-                flushPendingCraftStats());
+                flushPendingCraftStats(),
+                flushPendingProcessingStats());
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
@@ -446,7 +604,8 @@ public class PlayerStatsManager {
                         flushPendingDistanceStats(),
                         flushPendingBlockStats(),
                         flushPendingEntityDamageStats(),
-                        flushPendingCraftStats())
+                        flushPendingCraftStats(),
+                        flushPendingProcessingStats())
                 .exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,
@@ -590,6 +749,49 @@ public class PlayerStatsManager {
         }
     }
 
+    private ProcessingStatsSnapshot createProcessingStatsSnapshot() {
+        Map<UUID, Integer> brewCountsSnapshot = new HashMap<>(this.pendingBrewCounts);
+        Map<UUID, Map<String, Integer>> smeltStatsSnapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, Integer>> entry : this.pendingSmeltStats.entrySet()) {
+            smeltStatsSnapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        Map<UUID, Map<String, Integer>> enchantStatsSnapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, Integer>> entry : this.pendingEnchantStats.entrySet()) {
+            enchantStatsSnapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        Map<UUID, Map<String, Integer>> enchantItemStatsSnapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, Integer>> entry : this.pendingEnchantItemStats.entrySet()) {
+            enchantItemStatsSnapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        return new ProcessingStatsSnapshot(
+                brewCountsSnapshot,
+                smeltStatsSnapshot,
+                enchantStatsSnapshot,
+                enchantItemStatsSnapshot);
+    }
+
+    private void restoreProcessingStatsSnapshot(ProcessingStatsSnapshot snapshot) {
+        synchronized (this.processingLock) {
+            for (Map.Entry<UUID, Integer> entry : snapshot.brewCounts().entrySet()) {
+                this.pendingBrewCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
+            }
+            restoreProcessingStatMap(this.pendingSmeltStats, snapshot.smeltStats());
+            restoreProcessingStatMap(this.pendingEnchantStats, snapshot.enchantStats());
+            restoreProcessingStatMap(this.pendingEnchantItemStats, snapshot.enchantItemStats());
+        }
+    }
+
+    private void restoreProcessingStatMap(
+            Map<UUID, Map<String, Integer>> pendingStats,
+            Map<UUID, Map<String, Integer>> snapshotStats) {
+        for (Map.Entry<UUID, Map<String, Integer>> playerEntry : snapshotStats.entrySet()) {
+            Map<String, Integer> playerStats = pendingStats.computeIfAbsent(playerEntry.getKey(), ignored -> new HashMap<>());
+            for (Map.Entry<String, Integer> statEntry : playerEntry.getValue().entrySet()) {
+                playerStats.merge(statEntry.getKey(), statEntry.getValue(), Integer::sum);
+            }
+        }
+    }
+
     private TravelType resolveTravelType(Player player) {
         if (player.isGliding()) {
             return TravelType.ELYTRA;
@@ -636,6 +838,16 @@ public class PlayerStatsManager {
     }
 
     private record CraftStatsSnapshot(Map<UUID, Map<String, Integer>> craftStats) {
+    }
+
+    private record ProcessingStatsSnapshot(
+            Map<UUID, Integer> brewCounts,
+            Map<UUID, Map<String, Integer>> smeltStats,
+            Map<UUID, Map<String, Integer>> enchantStats,
+            Map<UUID, Map<String, Integer>> enchantItemStats) {
+    }
+
+    private record ProcessingAttribution(UUID playerId, Instant expiresAt) {
     }
 
     enum TravelType {
