@@ -12,6 +12,7 @@ import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
 import network.tserver.tnexus.database.repository.PayQueueRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import network.tserver.tnexus.database.repository.PlayerStatsViewRepository;
 import network.tserver.tnexus.database.repository.ServerStatsRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.gui.AnvilGuiManager;
@@ -20,6 +21,7 @@ import network.tserver.tnexus.manager.AuditLogManager;
 import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PlayerStatsManager;
+import network.tserver.tnexus.manager.PlayerStatsViewerManager;
 import network.tserver.tnexus.manager.PluginHookManager;
 import network.tserver.tnexus.manager.ServerStatsManager;
 import network.tserver.tnexus.manager.SignShopManager;
@@ -59,6 +61,7 @@ public class TNexus extends JavaPlugin {
     private EconomyManager economyManager;
     private PaymentManager paymentManager;
     private PlayerStatsManager playerStatsManager;
+    private PlayerStatsViewerManager playerStatsViewerManager;
     private ServerStatsManager serverStatsManager;
     private PaymentNotificationListener paymentNotificationListener;
     private PlayerSessionListener playerSessionListener;
@@ -109,6 +112,7 @@ public class TNexus extends JavaPlugin {
         this.auditLogManager = new AuditLogManager(this);
         this.paymentManager = createPaymentManager();
         this.playerStatsManager = createPlayerStatsManager();
+        this.playerStatsViewerManager = createPlayerStatsViewerManager();
         this.serverStatsManager = createServerStatsManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.playerSessionListener = new PlayerSessionListener(this);
@@ -157,6 +161,7 @@ public class TNexus extends JavaPlugin {
         this.economyManager = null;
         this.paymentManager = null;
         this.playerStatsManager = null;
+        this.playerStatsViewerManager = null;
         this.serverStatsManager = null;
         this.paymentNotificationListener = null;
         this.playerSessionListener = null;
@@ -275,6 +280,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the player stats viewer manager instance.
+     *
+     * @return player stats viewer manager
+     */
+    public PlayerStatsViewerManager getPlayerStatsViewerManager() {
+        return this.playerStatsViewerManager;
+    }
+
+    /**
      * Returns the server stats manager instance.
      *
      * @return server stats manager
@@ -351,6 +365,15 @@ public class TNexus extends JavaPlugin {
      */
     protected PlayerStatsManager createPlayerStatsManager() {
         return new PlayerStatsManager(this, new PlayerStatsRepository(this.databaseManager));
+    }
+
+    /**
+     * Creates the player stats viewer manager used during startup.
+     *
+     * @return player stats viewer manager
+     */
+    protected PlayerStatsViewerManager createPlayerStatsViewerManager() {
+        return new PlayerStatsViewerManager(this, new PlayerStatsViewRepository(this.databaseManager));
     }
 
     /**
