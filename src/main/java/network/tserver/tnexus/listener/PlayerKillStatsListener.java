@@ -9,16 +9,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 
 /**
- * Tracks player-caused kill statistics.
+ * プレイヤーによるキル統計を追跡するリスナー。
  */
 public final class PlayerKillStatsListener implements Listener {
 
     private final PlayerStatsManager playerStatsManager;
 
     /**
-     * Creates a new player kill stats listener.
+     * 新しいプレイヤーキル統計リスナーを作成します。
      *
-     * @param plugin plugin instance
+     * @param plugin プラグインのインスタンス
      */
     public PlayerKillStatsListener(TNexus plugin) {
         this.playerStatsManager = plugin.getPlayerStatsManager();
@@ -32,6 +32,7 @@ public final class PlayerKillStatsListener implements Listener {
             return;
         }
 
+        // 対象がプレイヤーの場合はUUID文字列、それ以外（Mob）の場合はエンティティタイプ名をターゲット識別子とする
         String targetIdentifier = event.getEntity() instanceof Player targetPlayer
                 ? targetPlayer.getUniqueId().toString()
                 : event.getEntity().getType().name();

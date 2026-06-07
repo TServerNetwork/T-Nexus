@@ -20,15 +20,24 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * {@link PlayerKillStatsListener} の動作を検証するテストクラス。
+ */
 class PlayerKillStatsListenerTest {
 
     private ServerMock server;
 
+    /**
+     * テスト実行後の後処理を行い、MockBukkit をアンモックします。
+     */
     @AfterEach
     void tearDown() {
         MockBukkit.unmock();
     }
 
+    /**
+     * プレイヤーがキラー（攻撃者）である場合、Mob とプレイヤーのキルが正しく記録されることを検証します。
+     */
     @Test
     void shouldRecordMobAndPlayerKillsForPlayerKillers() {
         TNexus plugin = loadPlugin();
@@ -45,6 +54,9 @@ class PlayerKillStatsListenerTest {
         assertEquals(1, readKillCount(plugin, killer, victim.getUniqueId().toString()));
     }
 
+    /**
+     * プレイヤーがキラーでない場合、キル統計が記録されないことを検証します。
+     */
     @Test
     void shouldIgnoreDeathsWithoutPlayerKillers() {
         TNexus plugin = loadPlugin();
@@ -57,11 +69,23 @@ class PlayerKillStatsListenerTest {
         assertEquals(0, readKillCount(plugin, killer, "ZOMBIE"));
     }
 
+    /**
+     * 必要な依存プラグインと共にテスト用のプラグインをロードします。
+     *
+     * @return ロードされたプラグインインスタンス
+     */
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
     }
 
+    /**
+     * テスト用の Mob 死亡イベントを作成します。
+     *
+     * @param killer キラー（プレイヤー）
+     * @param entityType 対象のエンティティタイプ
+     * @return 作成された EntityDeathEvent
+     */
     private EntityDeathEvent createMobDeathEvent(Player killer, EntityType entityType) {
         LivingEntity entity = (LivingEntity) createLivingEntityProxy(killer, entityType, null);
         return new EntityDeathEvent(
@@ -71,6 +95,13 @@ class PlayerKillStatsListenerTest {
                 0);
     }
 
+    /**
+     * テスト用のプレイヤー死亡イベントを作成します。
+     *
+     * @param killer キラー（プレイヤー）
+     * @param playerId 被害者プレイヤーの UUID
+     * @return 作成された EntityDeathEvent
+     */
     private EntityDeathEvent createPlayerDeathEvent(Player killer, UUID playerId) {
         Player entity = (Player) createLivingEntityProxy(killer, EntityType.PLAYER, playerId);
         return new EntityDeathEvent(
@@ -80,11 +111,19 @@ class PlayerKillStatsListenerTest {
                 0);
     }
 
+    /**
+     * LivingEntity または Player のプロキシオブジェクトを作成します。
+     *
+     * @param killer キラー（プレイヤー）
+     * @param entityType 対象のエンティティタイプ
+     * @param playerId プレイヤーID（対象がプレイヤーの場合）
+     * @return プロキシオブジェクト
+     */
     private Object createLivingEntityProxy(Player killer, EntityType entityType, UUID playerId) {
         Class<?>[] interfaces = playerId == null
                 ? new Class<?>[]{LivingEntity.class}
                 : new Class<?>[]{Player.class};
-        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+        java.lang.reflect.InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
             case "getKiller" -> killer;
             case "getType" -> entityType;
             case "getUniqueId" -> playerId;
@@ -99,6 +138,14 @@ class PlayerKillStatsListenerTest {
                 handler);
     }
 
+    /**
+     * データベースから指定されたターゲットのキル数を取得します。
+     *
+     * @param plugin プラグインインスタンス
+     * @param player プレイヤー
+     * @param target ターゲットの識別子（エンティティタイプ名またはプレイヤーUUID）
+     * @return キル数
+     */
     private int readKillCount(TNexus plugin, Player player, String target) {
         return plugin.getDatabaseManager().queryAsync(() -> {
             try (var connection = plugin.getDatabaseManager().getConnection();
@@ -115,6 +162,12 @@ class PlayerKillStatsListenerTest {
         }).join();
     }
 
+    /**
+     * プロキシメソッドのデフォルト戻り値を返します。
+     *
+     * @param returnType 戻り値のクラスタイプ
+     * @return デフォルト値
+     */
     private Object defaultValue(Class<?> returnType) {
         if (returnType == boolean.class) {
             return false;
