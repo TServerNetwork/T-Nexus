@@ -1,3 +1,10 @@
+# [0.22.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.21.0...v0.22.0) (2026-06-07)
+
+
+### Features
+
+* **player:** track crafted item stats ([#70](https://github.com/TServerNetwork/T-Nexus/issues/70)) ([b505880](https://github.com/TServerNetwork/T-Nexus/commit/b50588067c9143f5e3d55bae1d01b0e09e0db3ad))
+
 # [0.21.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.20.0...v0.21.0) (2026-06-07)
 
 
