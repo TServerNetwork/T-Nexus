@@ -26,6 +26,7 @@ public final class PlayerStatsRepository {
     private final String harvestStatsTableName;
     private final String breedStatsTableName;
     private final String fishStatsTableName;
+    private final String itemStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -46,6 +47,7 @@ public final class PlayerStatsRepository {
         this.harvestStatsTableName = this.databaseManager.getTablePrefix() + "harvest_stats";
         this.breedStatsTableName = this.databaseManager.getTablePrefix() + "breed_stats";
         this.fishStatsTableName = this.databaseManager.getTablePrefix() + "fish_stats";
+        this.itemStatsTableName = this.databaseManager.getTablePrefix() + "item_stats";
     }
 
     /**
@@ -400,6 +402,37 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Adds aggregate pickup and drop statistics for one or more players.
+     *
+     * @param itemStats item deltas by player id and material
+     * @return completion future
+     */
+    public CompletableFuture<Void> addItemStats(Map<UUID, Map<String, ItemStatsDelta>> itemStats) {
+        Objects.requireNonNull(itemStats, "itemStats");
+        if (itemStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String sql = """
+                INSERT INTO %s (player_uuid, material, pickup_count, drop_count)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    pickup_count = pickup_count + VALUES(pickup_count),
+                    drop_count = drop_count + VALUES(drop_count)
+                """.formatted(this.itemStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                addItemStatsBatch(statement, itemStats);
+                statement.executeBatch();
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player item stats", exception);
+            }
+        });
+    }
+
+    /**
      * Increments the total death counter for the given player.
      *
      * @param playerId player id
@@ -576,6 +609,20 @@ public final class PlayerStatsRepository {
                 statement.setString(1, playerEntry.getKey().toString());
                 statement.setString(2, statEntry.getKey());
                 statement.setInt(3, statEntry.getValue());
+                statement.addBatch();
+            }
+        }
+    }
+
+    private void addItemStatsBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, ItemStatsDelta>> itemStats) throws Exception {
+        for (Map.Entry<UUID, Map<String, ItemStatsDelta>> playerEntry : itemStats.entrySet()) {
+            for (Map.Entry<String, ItemStatsDelta> materialEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, materialEntry.getKey());
+                statement.setInt(3, materialEntry.getValue().pickupCount());
+                statement.setInt(4, materialEntry.getValue().dropCount());
                 statement.addBatch();
             }
         }
