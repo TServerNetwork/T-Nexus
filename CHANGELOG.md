@@ -1,3 +1,10 @@
+# [0.28.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.27.0...v0.28.0) (2026-06-07)
+
+
+### Features
+
+* **gui:** add server stats viewer ([#77](https://github.com/TServerNetwork/T-Nexus/issues/77)) ([69ef616](https://github.com/TServerNetwork/T-Nexus/commit/69ef616b57e4d2a8f4b2bf7f8a2a932f0cf971ff))
+
 # [0.27.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.26.0...v0.27.0) (2026-06-07)
 
 
