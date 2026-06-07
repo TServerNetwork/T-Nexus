@@ -1,3 +1,10 @@
+# [0.23.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.22.0...v0.23.0) (2026-06-07)
+
+
+### Features
+
+* **player:** add processing stats tracking ([#71](https://github.com/TServerNetwork/T-Nexus/issues/71)) ([ee40f86](https://github.com/TServerNetwork/T-Nexus/commit/ee40f8627ea83df9984a6b73c2d034a69ca92ce8))
+
 # [0.22.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.21.0...v0.22.0) (2026-06-07)
 
 
