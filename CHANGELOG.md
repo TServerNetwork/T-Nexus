@@ -1,3 +1,11 @@
+# [0.27.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.26.0...v0.27.0) (2026-06-07)
+
+
+### Features
+
+* **stats:** add kill_stats table migration ([#89](https://github.com/TServerNetwork/T-Nexus/issues/89)) ([cb38367](https://github.com/TServerNetwork/T-Nexus/commit/cb3836725e0abfb5b865a795a52a855e69e754f4))
+* **stats:** implement kill tracking via EntityDeathEvent ([#89](https://github.com/TServerNetwork/T-Nexus/issues/89)) ([7c40544](https://github.com/TServerNetwork/T-Nexus/commit/7c40544f7c49f3fcbcc0d0a9bc2c4205430a13ad))
+
 # [0.26.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.25.0...v0.26.0) (2026-06-07)
 
 
