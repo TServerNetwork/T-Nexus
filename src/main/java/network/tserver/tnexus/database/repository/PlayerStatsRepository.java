@@ -27,6 +27,7 @@ public final class PlayerStatsRepository {
     private final String breedStatsTableName;
     private final String fishStatsTableName;
     private final String itemStatsTableName;
+    private final String projectileStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -48,6 +49,7 @@ public final class PlayerStatsRepository {
         this.breedStatsTableName = this.databaseManager.getTablePrefix() + "breed_stats";
         this.fishStatsTableName = this.databaseManager.getTablePrefix() + "fish_stats";
         this.itemStatsTableName = this.databaseManager.getTablePrefix() + "item_stats";
+        this.projectileStatsTableName = this.databaseManager.getTablePrefix() + "projectile_stats";
     }
 
     /**
@@ -452,6 +454,67 @@ public final class PlayerStatsRepository {
     public CompletableFuture<Void> incrementRespawns(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
         return incrementPlayerStat(playerId, "respawns");
+    }
+
+    /**
+     * Increments the total sleep counter for the given player.
+     *
+     * @param playerId player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> incrementSleepCount(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return incrementPlayerStat(playerId, "sleep_count");
+    }
+
+    /**
+     * Increments the total portal usage counter for the given player.
+     *
+     * @param playerId player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> incrementPortalCount(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return incrementPlayerStat(playerId, "portal_count");
+    }
+
+    /**
+     * Increments the total chat message counter for the given player.
+     *
+     * @param playerId player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> incrementChatCount(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return incrementPlayerStat(playerId, "chat_count");
+    }
+
+    /**
+     * Increments the projectile launch counter for the given player and entity type.
+     *
+     * @param playerId player id
+     * @param entityType projectile entity type
+     * @return completion future
+     */
+    public CompletableFuture<Void> incrementProjectileCount(UUID playerId, String entityType) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(entityType, "entityType");
+        String sql = """
+                INSERT INTO %s (player_uuid, entity_type, count)
+                VALUES (?, ?, 1)
+                ON DUPLICATE KEY UPDATE count = count + 1
+                """.formatted(this.projectileStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                statement.setString(1, playerId.toString());
+                statement.setString(2, entityType);
+                statement.executeUpdate();
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player projectile stats", exception);
+            }
+        });
     }
 
     /**

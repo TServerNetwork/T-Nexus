@@ -495,6 +495,52 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records a successful sleep event for the given player.
+     *
+     * @param player sleeping player
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordSleep(Player player) {
+        Objects.requireNonNull(player, "player");
+        return this.playerStatsRepository.incrementSleepCount(player.getUniqueId());
+    }
+
+    /**
+     * Records a portal usage event for the given player.
+     *
+     * @param player portal-travelling player
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordPortal(Player player) {
+        Objects.requireNonNull(player, "player");
+        return this.playerStatsRepository.incrementPortalCount(player.getUniqueId());
+    }
+
+    /**
+     * Records a chat message event for the given player.
+     *
+     * @param player chatting player
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordChat(Player player) {
+        Objects.requireNonNull(player, "player");
+        return this.playerStatsRepository.incrementChatCount(player.getUniqueId());
+    }
+
+    /**
+     * Records a projectile launch event for the given player and projectile entity type.
+     *
+     * @param player launching player
+     * @param entityType projectile entity type name
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordProjectileLaunch(Player player, String entityType) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(entityType, "entityType");
+        return this.playerStatsRepository.incrementProjectileCount(player.getUniqueId(), entityType);
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
