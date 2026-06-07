@@ -1,3 +1,10 @@
+# [0.26.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.25.0...v0.26.0) (2026-06-07)
+
+
+### Features
+
+* **player:** add misc stats tracking ([#74](https://github.com/TServerNetwork/T-Nexus/issues/74)) ([461abe0](https://github.com/TServerNetwork/T-Nexus/commit/461abe02d1abee3b9c4776eb8899c5bd0196ad91))
+
 # [0.25.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.24.0...v0.25.0) (2026-06-07)
 
 
