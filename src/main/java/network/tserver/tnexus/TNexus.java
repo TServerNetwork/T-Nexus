@@ -28,6 +28,7 @@ import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
 import network.tserver.tnexus.listener.PlayerBlockStatsListener;
 import network.tserver.tnexus.listener.PlayerDeathStatsListener;
+import network.tserver.tnexus.listener.PlayerEntityDamageStatsListener;
 import network.tserver.tnexus.listener.PlayerMovementStatsListener;
 import network.tserver.tnexus.listener.PlayerSessionListener;
 import network.tserver.tnexus.listener.SignShopListener;
@@ -53,6 +54,7 @@ public class TNexus extends JavaPlugin {
     private PaymentNotificationListener paymentNotificationListener;
     private PlayerSessionListener playerSessionListener;
     private PlayerDeathStatsListener playerDeathStatsListener;
+    private PlayerEntityDamageStatsListener playerEntityDamageStatsListener;
     private PlayerMovementStatsListener playerMovementStatsListener;
     private PlayerBlockStatsListener playerBlockStatsListener;
     private AutoCloseable worldEditStatsListener;
@@ -95,6 +97,7 @@ public class TNexus extends JavaPlugin {
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.playerSessionListener = new PlayerSessionListener(this);
         this.playerDeathStatsListener = new PlayerDeathStatsListener(this);
+        this.playerEntityDamageStatsListener = new PlayerEntityDamageStatsListener(this);
         this.playerMovementStatsListener = new PlayerMovementStatsListener(this);
         this.playerBlockStatsListener = new PlayerBlockStatsListener(this);
         this.worldEditStatsListener = createWorldEditStatsListener();
@@ -135,6 +138,7 @@ public class TNexus extends JavaPlugin {
         this.paymentNotificationListener = null;
         this.playerSessionListener = null;
         this.playerDeathStatsListener = null;
+        this.playerEntityDamageStatsListener = null;
         this.playerMovementStatsListener = null;
         this.playerBlockStatsListener = null;
         this.worldEditStatsListener = null;

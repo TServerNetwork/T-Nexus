@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.database.repository.BlockStatsDelta;
+import network.tserver.tnexus.database.repository.EntityDamageDelta;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -44,6 +45,8 @@ public class PlayerStatsManager {
     private final Map<UUID, Integer> pendingBlocksPlaced;
     private final Map<UUID, Integer> pendingBlocksBroken;
     private final Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats;
+    private final Object entityDamageLock;
+    private final Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats;
     private final Map<UUID, Instant> worldEditSuppressionWindows;
     private final BukkitTask statsFlushTask;
 
@@ -64,6 +67,7 @@ public class PlayerStatsManager {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
                 new ConcurrentHashMap<>(),
                 DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 true);
@@ -79,6 +83,7 @@ public class PlayerStatsManager {
             Map<UUID, Integer> pendingBlocksPlaced,
             Map<UUID, Integer> pendingBlocksBroken,
             Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats,
+            Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats,
             Map<UUID, Instant> worldEditSuppressionWindows,
             long distanceFlushIntervalTicks,
             boolean scheduleDistanceFlushTask) {
@@ -93,6 +98,8 @@ public class PlayerStatsManager {
         this.pendingBlocksPlaced = Objects.requireNonNull(pendingBlocksPlaced, "pendingBlocksPlaced");
         this.pendingBlocksBroken = Objects.requireNonNull(pendingBlocksBroken, "pendingBlocksBroken");
         this.pendingBlockStats = Objects.requireNonNull(pendingBlockStats, "pendingBlockStats");
+        this.entityDamageLock = new Object();
+        this.pendingEntityDamageStats = Objects.requireNonNull(pendingEntityDamageStats, "pendingEntityDamageStats");
         this.worldEditSuppressionWindows = Objects.requireNonNull(
                 worldEditSuppressionWindows,
                 "worldEditSuppressionWindows");
@@ -227,6 +234,32 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records damage dealt by the player to an entity identifier.
+     *
+     * @param player dealing player
+     * @param entityIdentifier entity identifier
+     * @param damage final damage amount
+     */
+    public void recordDamageDealt(Player player, String entityIdentifier, double damage) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(entityIdentifier, "entityIdentifier");
+        recordEntityDamage(player.getUniqueId(), entityIdentifier, damage, true);
+    }
+
+    /**
+     * Records damage taken by the player from an entity identifier.
+     *
+     * @param player damaged player
+     * @param entityIdentifier entity identifier
+     * @param damage final damage amount
+     */
+    public void recordDamageTaken(Player player, String entityIdentifier, double damage) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(entityIdentifier, "entityIdentifier");
+        recordEntityDamage(player.getUniqueId(), entityIdentifier, damage, false);
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
@@ -306,6 +339,28 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending entity damage statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingEntityDamageStats() {
+        EntityDamageStatsSnapshot snapshot;
+        synchronized (this.entityDamageLock) {
+            if (this.pendingEntityDamageStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createEntityDamageStatsSnapshot();
+            this.pendingEntityDamageStats.clear();
+        }
+        return this.playerStatsRepository.addEntityDamageStats(snapshot.damageStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreEntityDamageStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -319,7 +374,8 @@ public class PlayerStatsManager {
         return CompletableFuture.allOf(
                 flushOnlineSessions(onlinePlayers),
                 flushPendingDistanceStats(),
-                flushPendingBlockStats());
+                flushPendingBlockStats(),
+                flushPendingEntityDamageStats());
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
@@ -336,7 +392,11 @@ public class PlayerStatsManager {
     }
 
     private void flushPendingStatsSafely() {
-        CompletableFuture.allOf(flushPendingDistanceStats(), flushPendingBlockStats()).exceptionally(throwable -> {
+        CompletableFuture.allOf(
+                        flushPendingDistanceStats(),
+                        flushPendingBlockStats(),
+                        flushPendingEntityDamageStats())
+                .exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,
                     "Failed to flush pending player stats.",
@@ -422,6 +482,43 @@ public class PlayerStatsManager {
         }
     }
 
+    private EntityDamageStatsSnapshot createEntityDamageStatsSnapshot() {
+        Map<UUID, Map<String, EntityDamageDelta>> damageStatsSnapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, EntityDamageDelta>> entry : this.pendingEntityDamageStats.entrySet()) {
+            damageStatsSnapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        return new EntityDamageStatsSnapshot(damageStatsSnapshot);
+    }
+
+    private void restoreEntityDamageStatsSnapshot(EntityDamageStatsSnapshot snapshot) {
+        synchronized (this.entityDamageLock) {
+            for (Map.Entry<UUID, Map<String, EntityDamageDelta>> playerEntry : snapshot.damageStats().entrySet()) {
+                Map<String, EntityDamageDelta> playerStats = this.pendingEntityDamageStats
+                        .computeIfAbsent(playerEntry.getKey(), ignored -> new HashMap<>());
+                for (Map.Entry<String, EntityDamageDelta> entityEntry : playerEntry.getValue().entrySet()) {
+                    playerStats.merge(entityEntry.getKey(), entityEntry.getValue(), (left, right) ->
+                            new EntityDamageDelta(
+                                    left.damageDealt() + right.damageDealt(),
+                                    left.damageTaken() + right.damageTaken()));
+                }
+            }
+        }
+    }
+
+    private void recordEntityDamage(UUID playerId, String entityIdentifier, double damage, boolean dealt) {
+        if (damage <= 0.0D) {
+            return;
+        }
+        synchronized (this.entityDamageLock) {
+            Map<String, EntityDamageDelta> playerDamageStats = this.pendingEntityDamageStats
+                    .computeIfAbsent(playerId, ignored -> new HashMap<>());
+            playerDamageStats.compute(entityIdentifier, (ignored, existing) -> {
+                EntityDamageDelta current = existing == null ? new EntityDamageDelta(0.0D, 0.0D) : existing;
+                return dealt ? current.addDealt(damage) : current.addTaken(damage);
+            });
+        }
+    }
+
     private TravelType resolveTravelType(Player player) {
         if (player.isGliding()) {
             return TravelType.ELYTRA;
@@ -462,6 +559,9 @@ public class PlayerStatsManager {
             Map<UUID, Integer> totalPlacedCounts,
             Map<UUID, Integer> totalBrokenCounts,
             Map<UUID, Map<String, BlockStatsDelta>> materialStats) {
+    }
+
+    private record EntityDamageStatsSnapshot(Map<UUID, Map<String, EntityDamageDelta>> damageStats) {
     }
 
     enum TravelType {
