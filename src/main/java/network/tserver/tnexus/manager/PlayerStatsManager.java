@@ -58,6 +58,10 @@ public class PlayerStatsManager {
     private final Map<UUID, Map<String, Integer>> pendingSmeltStats;
     private final Map<UUID, Map<String, Integer>> pendingEnchantStats;
     private final Map<UUID, Map<String, Integer>> pendingEnchantItemStats;
+    private final Object farmingLock;
+    private final Map<UUID, Map<String, Integer>> pendingHarvestStats;
+    private final Map<UUID, Map<String, Integer>> pendingBreedStats;
+    private final Map<UUID, Map<String, Integer>> pendingFishStats;
     private final Map<BlockPosition, ProcessingAttribution> processingStationAttributions;
     private final Map<UUID, Instant> worldEditSuppressionWindows;
     private final BukkitTask statsFlushTask;
@@ -74,6 +78,9 @@ public class PlayerStatsManager {
                 playerStatsRepository,
                 Clock.systemUTC(),
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -107,6 +114,9 @@ public class PlayerStatsManager {
             Map<UUID, Map<String, Integer>> pendingSmeltStats,
             Map<UUID, Map<String, Integer>> pendingEnchantStats,
             Map<UUID, Map<String, Integer>> pendingEnchantItemStats,
+            Map<UUID, Map<String, Integer>> pendingHarvestStats,
+            Map<UUID, Map<String, Integer>> pendingBreedStats,
+            Map<UUID, Map<String, Integer>> pendingFishStats,
             Map<BlockPosition, ProcessingAttribution> processingStationAttributions,
             Map<UUID, Instant> worldEditSuppressionWindows,
             long distanceFlushIntervalTicks,
@@ -131,6 +141,10 @@ public class PlayerStatsManager {
         this.pendingSmeltStats = Objects.requireNonNull(pendingSmeltStats, "pendingSmeltStats");
         this.pendingEnchantStats = Objects.requireNonNull(pendingEnchantStats, "pendingEnchantStats");
         this.pendingEnchantItemStats = Objects.requireNonNull(pendingEnchantItemStats, "pendingEnchantItemStats");
+        this.farmingLock = new Object();
+        this.pendingHarvestStats = Objects.requireNonNull(pendingHarvestStats, "pendingHarvestStats");
+        this.pendingBreedStats = Objects.requireNonNull(pendingBreedStats, "pendingBreedStats");
+        this.pendingFishStats = Objects.requireNonNull(pendingFishStats, "pendingFishStats");
         this.processingStationAttributions = Objects.requireNonNull(
                 processingStationAttributions,
                 "processingStationAttributions");
@@ -411,6 +425,43 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records harvested item counts for the given player.
+     *
+     * @param player harvesting player
+     * @param material harvested material
+     * @param amount harvested item amount
+     */
+    public void recordHarvest(Player player, Material material, int amount) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        recordFarmingStat(this.pendingHarvestStats, player.getUniqueId(), material.name(), amount);
+    }
+
+    /**
+     * Records a breeding event for the given player.
+     *
+     * @param player breeding player
+     * @param entityType entity type name
+     */
+    public void recordBreed(Player player, String entityType) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(entityType, "entityType");
+        recordFarmingStat(this.pendingBreedStats, player.getUniqueId(), entityType, 1);
+    }
+
+    /**
+     * Records a caught fish item for the given player.
+     *
+     * @param player fishing player
+     * @param material caught material
+     */
+    public void recordFish(Player player, Material material) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        recordFarmingStat(this.pendingFishStats, player.getUniqueId(), material.name(), 1);
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
@@ -567,6 +618,33 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending harvest, breed, and fish statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingFarmingStats() {
+        FarmingStatsSnapshot snapshot;
+        synchronized (this.farmingLock) {
+            if (this.pendingHarvestStats.isEmpty()
+                    && this.pendingBreedStats.isEmpty()
+                    && this.pendingFishStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createFarmingStatsSnapshot();
+            this.pendingHarvestStats.clear();
+            this.pendingBreedStats.clear();
+            this.pendingFishStats.clear();
+        }
+        return this.playerStatsRepository
+                .addFarmingStats(snapshot.harvestStats(), snapshot.breedStats(), snapshot.fishStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreFarmingStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -583,7 +661,8 @@ public class PlayerStatsManager {
                 flushPendingBlockStats(),
                 flushPendingEntityDamageStats(),
                 flushPendingCraftStats(),
-                flushPendingProcessingStats());
+                flushPendingProcessingStats(),
+                flushPendingFarmingStats());
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
@@ -605,7 +684,8 @@ public class PlayerStatsManager {
                         flushPendingBlockStats(),
                         flushPendingEntityDamageStats(),
                         flushPendingCraftStats(),
-                        flushPendingProcessingStats())
+                        flushPendingProcessingStats(),
+                        flushPendingFarmingStats())
                 .exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,
@@ -792,6 +872,42 @@ public class PlayerStatsManager {
         }
     }
 
+    private void recordFarmingStat(
+            Map<UUID, Map<String, Integer>> pendingStats,
+            UUID playerId,
+            String key,
+            int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        synchronized (this.farmingLock) {
+            pendingStats.computeIfAbsent(playerId, ignored -> new HashMap<>()).merge(key, amount, Integer::sum);
+        }
+    }
+
+    private FarmingStatsSnapshot createFarmingStatsSnapshot() {
+        return new FarmingStatsSnapshot(
+                copyPendingIntegerStats(this.pendingHarvestStats),
+                copyPendingIntegerStats(this.pendingBreedStats),
+                copyPendingIntegerStats(this.pendingFishStats));
+    }
+
+    private void restoreFarmingStatsSnapshot(FarmingStatsSnapshot snapshot) {
+        synchronized (this.farmingLock) {
+            restoreProcessingStatMap(this.pendingHarvestStats, snapshot.harvestStats());
+            restoreProcessingStatMap(this.pendingBreedStats, snapshot.breedStats());
+            restoreProcessingStatMap(this.pendingFishStats, snapshot.fishStats());
+        }
+    }
+
+    private Map<UUID, Map<String, Integer>> copyPendingIntegerStats(Map<UUID, Map<String, Integer>> pendingStats) {
+        Map<UUID, Map<String, Integer>> snapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, Integer>> entry : pendingStats.entrySet()) {
+            snapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        return snapshot;
+    }
+
     private TravelType resolveTravelType(Player player) {
         if (player.isGliding()) {
             return TravelType.ELYTRA;
@@ -845,6 +961,12 @@ public class PlayerStatsManager {
             Map<UUID, Map<String, Integer>> smeltStats,
             Map<UUID, Map<String, Integer>> enchantStats,
             Map<UUID, Map<String, Integer>> enchantItemStats) {
+    }
+
+    private record FarmingStatsSnapshot(
+            Map<UUID, Map<String, Integer>> harvestStats,
+            Map<UUID, Map<String, Integer>> breedStats,
+            Map<UUID, Map<String, Integer>> fishStats) {
     }
 
     private record ProcessingAttribution(UUID playerId, Instant expiresAt) {
