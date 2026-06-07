@@ -1,3 +1,10 @@
+# [0.24.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.23.0...v0.24.0) (2026-06-07)
+
+
+### Features
+
+* **player:** add farming stats tracking ([#72](https://github.com/TServerNetwork/T-Nexus/issues/72)) ([dce5351](https://github.com/TServerNetwork/T-Nexus/commit/dce5351555d126204599b994768485a7572cd3ea))
+
 # [0.23.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.22.0...v0.23.0) (2026-06-07)
 
 
