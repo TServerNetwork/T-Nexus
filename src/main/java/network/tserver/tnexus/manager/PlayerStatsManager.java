@@ -47,6 +47,8 @@ public class PlayerStatsManager {
     private final Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats;
     private final Object entityDamageLock;
     private final Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats;
+    private final Object craftLock;
+    private final Map<UUID, Map<String, Integer>> pendingCraftStats;
     private final Map<UUID, Instant> worldEditSuppressionWindows;
     private final BukkitTask statsFlushTask;
 
@@ -62,6 +64,7 @@ public class PlayerStatsManager {
                 playerStatsRepository,
                 Clock.systemUTC(),
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -84,6 +87,7 @@ public class PlayerStatsManager {
             Map<UUID, Integer> pendingBlocksBroken,
             Map<UUID, Map<String, BlockStatsDelta>> pendingBlockStats,
             Map<UUID, Map<String, EntityDamageDelta>> pendingEntityDamageStats,
+            Map<UUID, Map<String, Integer>> pendingCraftStats,
             Map<UUID, Instant> worldEditSuppressionWindows,
             long distanceFlushIntervalTicks,
             boolean scheduleDistanceFlushTask) {
@@ -100,6 +104,8 @@ public class PlayerStatsManager {
         this.pendingBlockStats = Objects.requireNonNull(pendingBlockStats, "pendingBlockStats");
         this.entityDamageLock = new Object();
         this.pendingEntityDamageStats = Objects.requireNonNull(pendingEntityDamageStats, "pendingEntityDamageStats");
+        this.craftLock = new Object();
+        this.pendingCraftStats = Objects.requireNonNull(pendingCraftStats, "pendingCraftStats");
         this.worldEditSuppressionWindows = Objects.requireNonNull(
                 worldEditSuppressionWindows,
                 "worldEditSuppressionWindows");
@@ -260,6 +266,27 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records crafted item counts for the given material.
+     *
+     * @param player crafting player
+     * @param material crafted material
+     * @param amount crafted item amount
+     */
+    public void recordCraft(Player player, Material material, int amount) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        if (amount <= 0) {
+            return;
+        }
+
+        synchronized (this.craftLock) {
+            this.pendingCraftStats
+                    .computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>())
+                    .merge(material.name(), amount, Integer::sum);
+        }
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
@@ -361,6 +388,28 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending craft statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingCraftStats() {
+        CraftStatsSnapshot snapshot;
+        synchronized (this.craftLock) {
+            if (this.pendingCraftStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createCraftStatsSnapshot();
+            this.pendingCraftStats.clear();
+        }
+        return this.playerStatsRepository.addCraftStats(snapshot.craftStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreCraftStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -375,7 +424,8 @@ public class PlayerStatsManager {
                 flushOnlineSessions(onlinePlayers),
                 flushPendingDistanceStats(),
                 flushPendingBlockStats(),
-                flushPendingEntityDamageStats());
+                flushPendingEntityDamageStats(),
+                flushPendingCraftStats());
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
@@ -395,7 +445,8 @@ public class PlayerStatsManager {
         CompletableFuture.allOf(
                         flushPendingDistanceStats(),
                         flushPendingBlockStats(),
-                        flushPendingEntityDamageStats())
+                        flushPendingEntityDamageStats(),
+                        flushPendingCraftStats())
                 .exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,
@@ -519,6 +570,26 @@ public class PlayerStatsManager {
         }
     }
 
+    private CraftStatsSnapshot createCraftStatsSnapshot() {
+        Map<UUID, Map<String, Integer>> craftStatsSnapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, Integer>> entry : this.pendingCraftStats.entrySet()) {
+            craftStatsSnapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        return new CraftStatsSnapshot(craftStatsSnapshot);
+    }
+
+    private void restoreCraftStatsSnapshot(CraftStatsSnapshot snapshot) {
+        synchronized (this.craftLock) {
+            for (Map.Entry<UUID, Map<String, Integer>> playerEntry : snapshot.craftStats().entrySet()) {
+                Map<String, Integer> playerCraftStats = this.pendingCraftStats
+                        .computeIfAbsent(playerEntry.getKey(), ignored -> new HashMap<>());
+                for (Map.Entry<String, Integer> materialEntry : playerEntry.getValue().entrySet()) {
+                    playerCraftStats.merge(materialEntry.getKey(), materialEntry.getValue(), Integer::sum);
+                }
+            }
+        }
+    }
+
     private TravelType resolveTravelType(Player player) {
         if (player.isGliding()) {
             return TravelType.ELYTRA;
@@ -562,6 +633,9 @@ public class PlayerStatsManager {
     }
 
     private record EntityDamageStatsSnapshot(Map<UUID, Map<String, EntityDamageDelta>> damageStats) {
+    }
+
+    private record CraftStatsSnapshot(Map<UUID, Map<String, Integer>> craftStats) {
     }
 
     enum TravelType {

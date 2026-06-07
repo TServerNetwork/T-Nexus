@@ -19,6 +19,7 @@ public final class PlayerStatsRepository {
     private final String distanceStatsTableName;
     private final String blockStatsTableName;
     private final String entityDamageStatsTableName;
+    private final String craftStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -32,6 +33,7 @@ public final class PlayerStatsRepository {
         this.distanceStatsTableName = this.databaseManager.getTablePrefix() + "distance_stats";
         this.blockStatsTableName = this.databaseManager.getTablePrefix() + "block_stats";
         this.entityDamageStatsTableName = this.databaseManager.getTablePrefix() + "entity_damage_stats";
+        this.craftStatsTableName = this.databaseManager.getTablePrefix() + "craft_stats";
     }
 
     /**
@@ -226,6 +228,35 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Adds aggregate craft statistics for one or more players.
+     *
+     * @param craftStats crafted item counts by player id and material
+     * @return completion future
+     */
+    public CompletableFuture<Void> addCraftStats(Map<UUID, Map<String, Integer>> craftStats) {
+        Objects.requireNonNull(craftStats, "craftStats");
+        if (craftStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String sql = """
+                INSERT INTO %s (player_uuid, material, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.craftStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                addCraftStatsBatch(statement, craftStats);
+                statement.executeBatch();
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player craft stats", exception);
+            }
+        });
+    }
+
+    /**
      * Increments the total death counter for the given player.
      *
      * @param playerId player id
@@ -353,6 +384,19 @@ public final class PlayerStatsRepository {
                 statement.setString(2, entityEntry.getKey());
                 statement.setDouble(3, entityEntry.getValue().damageDealt());
                 statement.setDouble(4, entityEntry.getValue().damageTaken());
+                statement.addBatch();
+            }
+        }
+    }
+
+    private void addCraftStatsBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, Integer>> craftStats) throws Exception {
+        for (Map.Entry<UUID, Map<String, Integer>> playerEntry : craftStats.entrySet()) {
+            for (Map.Entry<String, Integer> materialEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, materialEntry.getKey());
+                statement.setInt(3, materialEntry.getValue());
                 statement.addBatch();
             }
         }
