@@ -1,3 +1,10 @@
+# [0.30.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.29.0...v0.30.0) (2026-06-07)
+
+
+### Features
+
+* **stats:** implement kill tracking via EntityDeathEvent ([#89](https://github.com/TServerNetwork/T-Nexus/issues/89)) ([315d428](https://github.com/TServerNetwork/T-Nexus/commit/315d42818d2888b6ec90d98e2186c7ce20f32dde))
+
 # [0.29.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.28.0...v0.29.0) (2026-06-07)
 
 
