@@ -226,6 +226,24 @@ class PlayerStatsManagerTest {
         assertEquals(1, readFishMaterialCount(plugin, player, Material.COD));
     }
 
+    @Test
+    void shouldAccumulateItemPickupAndDropStats() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("Collector");
+        PlayerStatsManager manager = createManager(plugin, new MutableClock(Instant.parse("2026-06-07T10:00:00Z")));
+
+        manager.recordItemPickup(player, Material.STONE, 16);
+        manager.recordItemPickup(player, Material.STONE, 8);
+        manager.recordItemDrop(player, Material.STONE, 4);
+        manager.recordItemDrop(player, Material.DIRT, 2);
+
+        manager.flushPendingItemStats().get(5, TimeUnit.SECONDS);
+
+        assertEquals(24, readItemStatCount(plugin, player, Material.STONE, "pickup_count"));
+        assertEquals(4, readItemStatCount(plugin, player, Material.STONE, "drop_count"));
+        assertEquals(2, readItemStatCount(plugin, player, Material.DIRT, "drop_count"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -237,6 +255,7 @@ class PlayerStatsManagerTest {
                 new PlayerStatsRepository(plugin.getDatabaseManager()),
                 clock,
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -444,6 +463,19 @@ class PlayerStatsManagerTest {
             statement.setString(2, material.name());
             try (var resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readItemStatCount(TNexus plugin, PlayerMock player, Material material, String columnName)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT " + columnName + " FROM tnexus_item_stats WHERE player_uuid = ? AND material = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt(columnName) : 0;
             }
         }
     }

@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.database.repository.BlockStatsDelta;
 import network.tserver.tnexus.database.repository.EntityDamageDelta;
+import network.tserver.tnexus.database.repository.ItemStatsDelta;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import network.tserver.tnexus.util.BlockPosition;
 import org.bukkit.Location;
@@ -62,6 +63,8 @@ public class PlayerStatsManager {
     private final Map<UUID, Map<String, Integer>> pendingHarvestStats;
     private final Map<UUID, Map<String, Integer>> pendingBreedStats;
     private final Map<UUID, Map<String, Integer>> pendingFishStats;
+    private final Object itemLock;
+    private final Map<UUID, Map<String, ItemStatsDelta>> pendingItemStats;
     private final Map<BlockPosition, ProcessingAttribution> processingStationAttributions;
     private final Map<UUID, Instant> worldEditSuppressionWindows;
     private final BukkitTask statsFlushTask;
@@ -78,6 +81,7 @@ public class PlayerStatsManager {
                 playerStatsRepository,
                 Clock.systemUTC(),
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -117,6 +121,7 @@ public class PlayerStatsManager {
             Map<UUID, Map<String, Integer>> pendingHarvestStats,
             Map<UUID, Map<String, Integer>> pendingBreedStats,
             Map<UUID, Map<String, Integer>> pendingFishStats,
+            Map<UUID, Map<String, ItemStatsDelta>> pendingItemStats,
             Map<BlockPosition, ProcessingAttribution> processingStationAttributions,
             Map<UUID, Instant> worldEditSuppressionWindows,
             long distanceFlushIntervalTicks,
@@ -145,6 +150,8 @@ public class PlayerStatsManager {
         this.pendingHarvestStats = Objects.requireNonNull(pendingHarvestStats, "pendingHarvestStats");
         this.pendingBreedStats = Objects.requireNonNull(pendingBreedStats, "pendingBreedStats");
         this.pendingFishStats = Objects.requireNonNull(pendingFishStats, "pendingFishStats");
+        this.itemLock = new Object();
+        this.pendingItemStats = Objects.requireNonNull(pendingItemStats, "pendingItemStats");
         this.processingStationAttributions = Objects.requireNonNull(
                 processingStationAttributions,
                 "processingStationAttributions");
@@ -462,6 +469,32 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Records picked up item counts for the given player and material.
+     *
+     * @param player picking up player
+     * @param material picked up material
+     * @param amount picked up item amount
+     */
+    public void recordItemPickup(Player player, Material material, int amount) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        recordItemStat(player.getUniqueId(), material, amount, true);
+    }
+
+    /**
+     * Records dropped item counts for the given player and material.
+     *
+     * @param player dropping player
+     * @param material dropped material
+     * @param amount dropped item amount
+     */
+    public void recordItemDrop(Player player, Material material, int amount) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(material, "material");
+        recordItemStat(player.getUniqueId(), material, amount, false);
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
@@ -645,6 +678,28 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes pending pickup and drop statistics to the database asynchronously.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingItemStats() {
+        ItemStatsSnapshot snapshot;
+        synchronized (this.itemLock) {
+            if (this.pendingItemStats.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            snapshot = createItemStatsSnapshot();
+            this.pendingItemStats.clear();
+        }
+        return this.playerStatsRepository.addItemStats(snapshot.itemStats())
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        restoreItemStatsSnapshot(snapshot);
+                    }
+                });
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -662,7 +717,8 @@ public class PlayerStatsManager {
                 flushPendingEntityDamageStats(),
                 flushPendingCraftStats(),
                 flushPendingProcessingStats(),
-                flushPendingFarmingStats());
+                flushPendingFarmingStats(),
+                flushPendingItemStats());
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
@@ -685,7 +741,8 @@ public class PlayerStatsManager {
                         flushPendingEntityDamageStats(),
                         flushPendingCraftStats(),
                         flushPendingProcessingStats(),
-                        flushPendingFarmingStats())
+                        flushPendingFarmingStats(),
+                        flushPendingItemStats())
                 .exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,
@@ -900,6 +957,43 @@ public class PlayerStatsManager {
         }
     }
 
+    private void recordItemStat(UUID playerId, Material material, int amount, boolean pickedUp) {
+        if (amount <= 0) {
+            return;
+        }
+        synchronized (this.itemLock) {
+            Map<String, ItemStatsDelta> playerItemStats = this.pendingItemStats
+                    .computeIfAbsent(playerId, ignored -> new HashMap<>());
+            playerItemStats.compute(material.name(), (ignored, existing) -> {
+                ItemStatsDelta current = existing == null ? new ItemStatsDelta(0, 0) : existing;
+                return pickedUp ? current.addPickup(amount) : current.addDrop(amount);
+            });
+        }
+    }
+
+    private ItemStatsSnapshot createItemStatsSnapshot() {
+        Map<UUID, Map<String, ItemStatsDelta>> snapshot = new HashMap<>();
+        for (Map.Entry<UUID, Map<String, ItemStatsDelta>> entry : this.pendingItemStats.entrySet()) {
+            snapshot.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
+        return new ItemStatsSnapshot(snapshot);
+    }
+
+    private void restoreItemStatsSnapshot(ItemStatsSnapshot snapshot) {
+        synchronized (this.itemLock) {
+            for (Map.Entry<UUID, Map<String, ItemStatsDelta>> playerEntry : snapshot.itemStats().entrySet()) {
+                Map<String, ItemStatsDelta> playerStats = this.pendingItemStats
+                        .computeIfAbsent(playerEntry.getKey(), ignored -> new HashMap<>());
+                for (Map.Entry<String, ItemStatsDelta> materialEntry : playerEntry.getValue().entrySet()) {
+                    playerStats.merge(materialEntry.getKey(), materialEntry.getValue(), (left, right) ->
+                            new ItemStatsDelta(
+                                    left.pickupCount() + right.pickupCount(),
+                                    left.dropCount() + right.dropCount()));
+                }
+            }
+        }
+    }
+
     private Map<UUID, Map<String, Integer>> copyPendingIntegerStats(Map<UUID, Map<String, Integer>> pendingStats) {
         Map<UUID, Map<String, Integer>> snapshot = new HashMap<>();
         for (Map.Entry<UUID, Map<String, Integer>> entry : pendingStats.entrySet()) {
@@ -967,6 +1061,9 @@ public class PlayerStatsManager {
             Map<UUID, Map<String, Integer>> harvestStats,
             Map<UUID, Map<String, Integer>> breedStats,
             Map<UUID, Map<String, Integer>> fishStats) {
+    }
+
+    private record ItemStatsSnapshot(Map<UUID, Map<String, ItemStatsDelta>> itemStats) {
     }
 
     private record ProcessingAttribution(UUID playerId, Instant expiresAt) {
