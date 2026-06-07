@@ -23,6 +23,9 @@ public final class PlayerStatsRepository {
     private final String smeltStatsTableName;
     private final String enchantStatsTableName;
     private final String enchantItemStatsTableName;
+    private final String harvestStatsTableName;
+    private final String breedStatsTableName;
+    private final String fishStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -40,6 +43,9 @@ public final class PlayerStatsRepository {
         this.smeltStatsTableName = this.databaseManager.getTablePrefix() + "smelt_stats";
         this.enchantStatsTableName = this.databaseManager.getTablePrefix() + "enchant_stats";
         this.enchantItemStatsTableName = this.databaseManager.getTablePrefix() + "enchant_item_stats";
+        this.harvestStatsTableName = this.databaseManager.getTablePrefix() + "harvest_stats";
+        this.breedStatsTableName = this.databaseManager.getTablePrefix() + "breed_stats";
+        this.fishStatsTableName = this.databaseManager.getTablePrefix() + "fish_stats";
     }
 
     /**
@@ -329,6 +335,66 @@ public final class PlayerStatsRepository {
                 }
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to update player processing stats", exception);
+            }
+        });
+    }
+
+    /**
+     * Adds aggregate harvest, breed, and fishing statistics for one or more players.
+     *
+     * @param harvestStats harvested material counts by player id
+     * @param breedStats bred entity counts by player id
+     * @param fishStats caught fish material counts by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addFarmingStats(
+            Map<UUID, Map<String, Integer>> harvestStats,
+            Map<UUID, Map<String, Integer>> breedStats,
+            Map<UUID, Map<String, Integer>> fishStats) {
+        Objects.requireNonNull(harvestStats, "harvestStats");
+        Objects.requireNonNull(breedStats, "breedStats");
+        Objects.requireNonNull(fishStats, "fishStats");
+        if (harvestStats.isEmpty() && breedStats.isEmpty() && fishStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String harvestSql = """
+                INSERT INTO %s (player_uuid, material, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.harvestStatsTableName);
+        String breedSql = """
+                INSERT INTO %s (player_uuid, entity_type, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.breedStatsTableName);
+        String fishSql = """
+                INSERT INTO %s (player_uuid, material, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.fishStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try (var harvestStatement = connection.prepareStatement(harvestSql);
+                     var breedStatement = connection.prepareStatement(breedSql);
+                     var fishStatement = connection.prepareStatement(fishSql)) {
+                    addMaterialStatsBatch(harvestStatement, harvestStats);
+                    addNamedStatsBatch(breedStatement, breedStats);
+                    addMaterialStatsBatch(fishStatement, fishStats);
+                    harvestStatement.executeBatch();
+                    breedStatement.executeBatch();
+                    fishStatement.executeBatch();
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player farming stats", exception);
             }
         });
     }

@@ -14,6 +14,7 @@ import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.EntityType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -204,6 +205,27 @@ class PlayerStatsManagerTest {
         assertEquals(1, readEnchantItemCount(plugin, player, Material.DIAMOND_PICKAXE));
     }
 
+    @Test
+    void shouldAccumulateFarmingStats() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("Farmer");
+        PlayerStatsManager manager = createManager(plugin, new MutableClock(Instant.parse("2026-06-07T09:00:00Z")));
+
+        manager.recordHarvest(player, Material.WHEAT, 3);
+        manager.recordHarvest(player, Material.WHEAT, 2);
+        manager.recordHarvest(player, Material.WHEAT_SEEDS, 1);
+        manager.recordBreed(player, EntityType.COW.name());
+        manager.recordBreed(player, EntityType.COW.name());
+        manager.recordFish(player, Material.COD);
+
+        manager.flushPendingFarmingStats().get(5, TimeUnit.SECONDS);
+
+        assertEquals(5, readHarvestMaterialCount(plugin, player, Material.WHEAT));
+        assertEquals(1, readHarvestMaterialCount(plugin, player, Material.WHEAT_SEEDS));
+        assertEquals(2, readBreedCount(plugin, player, EntityType.COW.name()));
+        assertEquals(1, readFishMaterialCount(plugin, player, Material.COD));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -215,6 +237,9 @@ class PlayerStatsManagerTest {
                 new PlayerStatsRepository(plugin.getDatabaseManager()),
                 clock,
                 new ConcurrentHashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -376,6 +401,45 @@ class PlayerStatsManagerTest {
         try (var connection = plugin.getDatabaseManager().getConnection();
              var statement = connection.prepareStatement(
                      "SELECT count FROM tnexus_enchant_item_stats WHERE player_uuid = ? AND material = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readHarvestMaterialCount(TNexus plugin, PlayerMock player, Material material)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_harvest_stats WHERE player_uuid = ? AND material = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readBreedCount(TNexus plugin, PlayerMock player, String entityType)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_breed_stats WHERE player_uuid = ? AND entity_type = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, entityType);
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readFishMaterialCount(TNexus plugin, PlayerMock player, Material material)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_fish_stats WHERE player_uuid = ? AND material = ?")) {
             statement.setString(1, player.getUniqueId().toString());
             statement.setString(2, material.name());
             try (var resultSet = statement.executeQuery()) {
