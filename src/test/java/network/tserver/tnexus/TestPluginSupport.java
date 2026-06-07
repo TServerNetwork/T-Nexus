@@ -59,6 +59,9 @@ public final class TestPluginSupport {
               history:
                 description: test history command
                 usage: "/history [player]"
+              server-stats:
+                description: test server stats command
+                usage: "/server-stats"
             """;
 
     private TestPluginSupport() {

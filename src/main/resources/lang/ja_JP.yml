@@ -275,3 +275,30 @@ shop:
     unlinked:
       name: "&c未リンクのショップ"
       lore: "&7チェストをリンクしてショップアイテムを定義してください。"
+server-stats:
+  command:
+    usage: "&c使い方: /server-stats"
+    load-failed: "&cサーバー統計の読み込みに失敗しました。"
+  gui:
+    title: "&6サーバー統計"
+    loading:
+      name: "&e読み込み中..."
+      lore: "&7統計情報を取得しています。"
+    online:
+      name: "&a現在のオンライン人数"
+      lore: "&7現在値: &f{0}人"
+    total-transactions:
+      name: "&6総取引回数"
+      lore: "&7現在値: &f{0}回"
+    total-volume:
+      name: "&6総取引量"
+      lore: "&7現在値: &f{0}"
+    uptime:
+      name: "&eサーバー稼働時間"
+      lore: "&7現在値: &f{0}"
+    circulation:
+      name: "&a経済圏内流通総額"
+      lore: "&7現在値: &f{0}"
+    active-shops:
+      name: "&6アクティブショップ数"
+      lore: "&7現在値: &f{0}件"

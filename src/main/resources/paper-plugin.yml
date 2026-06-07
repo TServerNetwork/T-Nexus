@@ -47,6 +47,9 @@ commands:
   history:
     description: Open audit history
     usage: "/<command> [player]"
+  server-stats:
+    description: Open server stats
+    usage: "/<command>"
 
 permissions:
   tnexus.use:

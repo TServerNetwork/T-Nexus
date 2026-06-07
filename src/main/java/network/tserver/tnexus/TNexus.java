@@ -12,6 +12,7 @@ import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
 import network.tserver.tnexus.database.repository.PayQueueRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import network.tserver.tnexus.database.repository.ServerStatsRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.gui.AnvilGuiManager;
 import network.tserver.tnexus.gui.GuiManager;
@@ -20,6 +21,7 @@ import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PlayerStatsManager;
 import network.tserver.tnexus.manager.PluginHookManager;
+import network.tserver.tnexus.manager.ServerStatsManager;
 import network.tserver.tnexus.manager.SignShopManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
 import network.tserver.tnexus.manager.hook.LuckPermsHook;
@@ -57,6 +59,7 @@ public class TNexus extends JavaPlugin {
     private EconomyManager economyManager;
     private PaymentManager paymentManager;
     private PlayerStatsManager playerStatsManager;
+    private ServerStatsManager serverStatsManager;
     private PaymentNotificationListener paymentNotificationListener;
     private PlayerSessionListener playerSessionListener;
     private PlayerDeathStatsListener playerDeathStatsListener;
@@ -106,6 +109,7 @@ public class TNexus extends JavaPlugin {
         this.auditLogManager = new AuditLogManager(this);
         this.paymentManager = createPaymentManager();
         this.playerStatsManager = createPlayerStatsManager();
+        this.serverStatsManager = createServerStatsManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.playerSessionListener = new PlayerSessionListener(this);
         this.playerDeathStatsListener = new PlayerDeathStatsListener(this);
@@ -153,6 +157,7 @@ public class TNexus extends JavaPlugin {
         this.economyManager = null;
         this.paymentManager = null;
         this.playerStatsManager = null;
+        this.serverStatsManager = null;
         this.paymentNotificationListener = null;
         this.playerSessionListener = null;
         this.playerDeathStatsListener = null;
@@ -270,6 +275,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the server stats manager instance.
+     *
+     * @return server stats manager
+     */
+    public ServerStatsManager getServerStatsManager() {
+        return this.serverStatsManager;
+    }
+
+    /**
      * Returns the SignShop manager instance.
      *
      * @return SignShop manager
@@ -337,6 +351,15 @@ public class TNexus extends JavaPlugin {
      */
     protected PlayerStatsManager createPlayerStatsManager() {
         return new PlayerStatsManager(this, new PlayerStatsRepository(this.databaseManager));
+    }
+
+    /**
+     * Creates the server stats manager used during startup.
+     *
+     * @return server stats manager
+     */
+    protected ServerStatsManager createServerStatsManager() {
+        return new ServerStatsManager(this, new ServerStatsRepository(this.databaseManager));
     }
 
     /**
