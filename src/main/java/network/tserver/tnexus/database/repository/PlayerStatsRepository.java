@@ -20,6 +20,9 @@ public final class PlayerStatsRepository {
     private final String blockStatsTableName;
     private final String entityDamageStatsTableName;
     private final String craftStatsTableName;
+    private final String smeltStatsTableName;
+    private final String enchantStatsTableName;
+    private final String enchantItemStatsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -34,6 +37,9 @@ public final class PlayerStatsRepository {
         this.blockStatsTableName = this.databaseManager.getTablePrefix() + "block_stats";
         this.entityDamageStatsTableName = this.databaseManager.getTablePrefix() + "entity_damage_stats";
         this.craftStatsTableName = this.databaseManager.getTablePrefix() + "craft_stats";
+        this.smeltStatsTableName = this.databaseManager.getTablePrefix() + "smelt_stats";
+        this.enchantStatsTableName = this.databaseManager.getTablePrefix() + "enchant_stats";
+        this.enchantItemStatsTableName = this.databaseManager.getTablePrefix() + "enchant_item_stats";
     }
 
     /**
@@ -257,6 +263,77 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Adds aggregate brew, smelt, and enchant statistics for one or more players.
+     *
+     * @param brewCounts brew counts by player id
+     * @param smeltStats smelted material counts by player id
+     * @param enchantStats enchantment counts by player id
+     * @param enchantItemStats enchanted item material counts by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addProcessingStats(
+            Map<UUID, Integer> brewCounts,
+            Map<UUID, Map<String, Integer>> smeltStats,
+            Map<UUID, Map<String, Integer>> enchantStats,
+            Map<UUID, Map<String, Integer>> enchantItemStats) {
+        Objects.requireNonNull(brewCounts, "brewCounts");
+        Objects.requireNonNull(smeltStats, "smeltStats");
+        Objects.requireNonNull(enchantStats, "enchantStats");
+        Objects.requireNonNull(enchantItemStats, "enchantItemStats");
+        if (brewCounts.isEmpty() && smeltStats.isEmpty() && enchantStats.isEmpty() && enchantItemStats.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String brewSql = """
+                INSERT INTO %s (player_uuid, brew_count)
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE brew_count = brew_count + VALUES(brew_count)
+                """.formatted(this.tableName);
+        String smeltSql = """
+                INSERT INTO %s (player_uuid, material, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.smeltStatsTableName);
+        String enchantSql = """
+                INSERT INTO %s (player_uuid, enchantment, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.enchantStatsTableName);
+        String enchantItemSql = """
+                INSERT INTO %s (player_uuid, material, count)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE count = count + VALUES(count)
+                """.formatted(this.enchantItemStatsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try (var brewStatement = connection.prepareStatement(brewSql);
+                     var smeltStatement = connection.prepareStatement(smeltSql);
+                     var enchantStatement = connection.prepareStatement(enchantSql);
+                     var enchantItemStatement = connection.prepareStatement(enchantItemSql)) {
+                    addIntegerStatsBatch(brewStatement, brewCounts);
+                    addMaterialStatsBatch(smeltStatement, smeltStats);
+                    addNamedStatsBatch(enchantStatement, enchantStats);
+                    addMaterialStatsBatch(enchantItemStatement, enchantItemStats);
+                    brewStatement.executeBatch();
+                    smeltStatement.executeBatch();
+                    enchantStatement.executeBatch();
+                    enchantItemStatement.executeBatch();
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player processing stats", exception);
+            }
+        });
+    }
+
+    /**
      * Increments the total death counter for the given player.
      *
      * @param playerId player id
@@ -397,6 +474,42 @@ public final class PlayerStatsRepository {
                 statement.setString(1, playerEntry.getKey().toString());
                 statement.setString(2, materialEntry.getKey());
                 statement.setInt(3, materialEntry.getValue());
+                statement.addBatch();
+            }
+        }
+    }
+
+    private void addIntegerStatsBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Integer> statCounts) throws Exception {
+        for (Map.Entry<UUID, Integer> entry : statCounts.entrySet()) {
+            statement.setString(1, entry.getKey().toString());
+            statement.setInt(2, entry.getValue());
+            statement.addBatch();
+        }
+    }
+
+    private void addMaterialStatsBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, Integer>> materialStats) throws Exception {
+        for (Map.Entry<UUID, Map<String, Integer>> playerEntry : materialStats.entrySet()) {
+            for (Map.Entry<String, Integer> materialEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, materialEntry.getKey());
+                statement.setInt(3, materialEntry.getValue());
+                statement.addBatch();
+            }
+        }
+    }
+
+    private void addNamedStatsBatch(
+            java.sql.PreparedStatement statement,
+            Map<UUID, Map<String, Integer>> namedStats) throws Exception {
+        for (Map.Entry<UUID, Map<String, Integer>> playerEntry : namedStats.entrySet()) {
+            for (Map.Entry<String, Integer> statEntry : playerEntry.getValue().entrySet()) {
+                statement.setString(1, playerEntry.getKey().toString());
+                statement.setString(2, statEntry.getKey());
+                statement.setInt(3, statEntry.getValue());
                 statement.addBatch();
             }
         }

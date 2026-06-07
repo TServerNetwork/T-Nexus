@@ -13,6 +13,7 @@ import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -181,6 +182,28 @@ class PlayerStatsManagerTest {
         assertEquals(1, readCraftMaterialCount(plugin, player, Material.CHEST));
     }
 
+    @Test
+    void shouldAccumulateProcessingStats() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("Processor");
+        PlayerStatsManager manager = createManager(plugin, new MutableClock(Instant.parse("2026-06-07T08:00:00Z")));
+
+        manager.recordSmelt(player.getUniqueId(), Material.GLASS);
+        manager.recordSmelt(player.getUniqueId(), Material.GLASS);
+        manager.recordBrew(player.getUniqueId());
+        manager.recordEnchantment(player, Enchantment.EFFICIENCY);
+        manager.recordEnchantment(player, Enchantment.UNBREAKING);
+        manager.recordEnchantedItem(player, Material.DIAMOND_PICKAXE);
+
+        manager.flushPendingProcessingStats().get(5, TimeUnit.SECONDS);
+
+        assertEquals(1, readIntStat(plugin, player, "brew_count"));
+        assertEquals(2, readSmeltMaterialCount(plugin, player, Material.GLASS));
+        assertEquals(1, readEnchantCount(plugin, player, Enchantment.EFFICIENCY));
+        assertEquals(1, readEnchantCount(plugin, player, Enchantment.UNBREAKING));
+        assertEquals(1, readEnchantItemCount(plugin, player, Material.DIAMOND_PICKAXE));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -199,6 +222,11 @@ class PlayerStatsManagerTest {
                 new HashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
                 new ConcurrentHashMap<>(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
@@ -309,6 +337,45 @@ class PlayerStatsManagerTest {
         try (var connection = plugin.getDatabaseManager().getConnection();
              var statement = connection.prepareStatement(
                      "SELECT count FROM tnexus_craft_stats WHERE player_uuid = ? AND material = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readSmeltMaterialCount(TNexus plugin, PlayerMock player, Material material)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_smelt_stats WHERE player_uuid = ? AND material = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, material.name());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readEnchantCount(TNexus plugin, PlayerMock player, Enchantment enchantment)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_enchant_stats WHERE player_uuid = ? AND enchantment = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            statement.setString(2, enchantment.getKey().getKey());
+            try (var resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt("count") : 0;
+            }
+        }
+    }
+
+    private int readEnchantItemCount(TNexus plugin, PlayerMock player, Material material)
+            throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT count FROM tnexus_enchant_item_stats WHERE player_uuid = ? AND material = ?")) {
             statement.setString(1, player.getUniqueId().toString());
             statement.setString(2, material.name());
             try (var resultSet = statement.executeQuery()) {
