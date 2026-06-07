@@ -1,3 +1,10 @@
+# [0.25.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.24.0...v0.25.0) (2026-06-07)
+
+
+### Features
+
+* **player:** track item pickup and drop stats ([#73](https://github.com/TServerNetwork/T-Nexus/issues/73)) ([9473334](https://github.com/TServerNetwork/T-Nexus/commit/9473334ab841e550d753cc4c4d6a54af3f2da430))
+
 # [0.24.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.23.0...v0.24.0) (2026-06-07)
 
 
