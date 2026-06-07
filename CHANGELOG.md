@@ -1,3 +1,10 @@
+# [0.29.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.28.0...v0.29.0) (2026-06-07)
+
+
+### Features
+
+* **gui:** add player stats viewer ([#75](https://github.com/TServerNetwork/T-Nexus/issues/75)) ([831edec](https://github.com/TServerNetwork/T-Nexus/commit/831edec6e4ca1ef5854cdacf98541771e8d44db5))
+
 # [0.28.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.27.0...v0.28.0) (2026-06-07)
 
 
