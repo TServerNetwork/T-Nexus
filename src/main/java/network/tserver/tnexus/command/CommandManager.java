@@ -54,6 +54,7 @@ public final class CommandManager {
     private static final String HISTORY_COMMAND_NAME = "history";
     private static final String STATS_COMMAND_NAME = "stats";
     private static final String SERVER_STATS_COMMAND_NAME = "server-stats";
+    private static final String STATS_RANKING_ARGUMENT = "ranking";
     private static final List<String> BALANCE_ACTIONS = List.of("add", "set", "take");
     private static final List<String> PAY_ACTIONS = List.of("confirm", "cancel");
     private static final List<String> SHOP_ACTIONS = List.of("linkitem");
@@ -472,6 +473,16 @@ public final class CommandManager {
             this.plugin.getMessageConfig().sendMessage(sender, "stats.command.usage");
             return;
         }
+        if (args.length == 1 && STATS_RANKING_ARGUMENT.equalsIgnoreCase(args[0])) {
+            if (!sender.hasPermission(STATS_SELF_PERMISSION) && !sender.hasPermission(STATS_ADMIN_PERMISSION)) {
+                this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+                return;
+            }
+            this.plugin.getPlayerStatsRankingManager().openRankingGui(
+                    player,
+                    network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME);
+            return;
+        }
         if (args.length == 0) {
             if (!sender.hasPermission(STATS_SELF_PERMISSION) && !sender.hasPermission(STATS_ADMIN_PERMISSION)) {
                 this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
@@ -507,10 +518,15 @@ public final class CommandManager {
             return Collections.emptyList();
         }
         if (args.length <= 1) {
-            if (!sender.hasPermission(STATS_OTHERS_PERMISSION) && !sender.hasPermission(STATS_ADMIN_PERMISSION)) {
-                return Collections.emptyList();
+            List<String> completions = new ArrayList<>();
+            String input = args.length == 0 ? "" : args[0];
+            if (sender.hasPermission(STATS_SELF_PERMISSION) || sender.hasPermission(STATS_ADMIN_PERMISSION)) {
+                completions.addAll(TabCompleterUtil.filter(List.of(STATS_RANKING_ARGUMENT), input));
             }
-            return args.length == 0 ? Collections.emptyList() : TabCompleterUtil.filterPlayers(args[0]);
+            if (sender.hasPermission(STATS_OTHERS_PERMISSION) || sender.hasPermission(STATS_ADMIN_PERMISSION)) {
+                completions.addAll(TabCompleterUtil.filterPlayers(input));
+            }
+            return completions.isEmpty() ? Collections.emptyList() : completions;
         }
         return Collections.emptyList();
     }

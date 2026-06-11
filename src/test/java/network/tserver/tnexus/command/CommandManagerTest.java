@@ -500,6 +500,22 @@ class CommandManagerTest {
     }
 
     @Test
+    void shouldOpenStatsRankingGui() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("StatsUser");
+        player.addAttachment(plugin, "tnexus.stats.self", true);
+
+        assertTrue(this.server.dispatchCommand(player, "stats ranking"));
+        waitUntil(() -> plugin.getGuiManager().hasOpenGui(player));
+        waitUntil(() -> player.getOpenInventory().getTopInventory().getItem(4) != null);
+
+        assertEquals(plugin.getMessageConfig().getMessage("stats.ranking.gui.title"), player.getOpenInventory().getTitle());
+        assertEquals(Material.CLOCK, player.getOpenInventory().getTopInventory().getItem(4).getType());
+        assertEquals(Material.COMPASS, player.getOpenInventory().getTopInventory().getItem(7).getType());
+    }
+
+    @Test
     void shouldOpenOwnHistoryGui() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);

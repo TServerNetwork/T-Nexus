@@ -49,7 +49,7 @@ commands:
     usage: "/<command> [player]"
   stats:
     description: Open player stats
-    usage: "/<command> [player]"
+    usage: "/<command> [player|ranking]"
   server-stats:
     description: Open server stats
     usage: "/<command>"

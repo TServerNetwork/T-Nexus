@@ -812,6 +812,15 @@ public class PlayerStatsManager {
                 flushPendingItemStats());
     }
 
+    /**
+     * Returns a snapshot of currently active sessions keyed by player UUID.
+     *
+     * @return active session start times
+     */
+    public Map<UUID, Instant> getActiveSessionStarts() {
+        return Map.copyOf(this.sessionStartTimes);
+    }
+
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
         Instant sessionStart = this.sessionStartTimes.remove(playerId);
         if (sessionStart == null) {
@@ -822,7 +831,7 @@ public class PlayerStatsManager {
         if (playTimeSeconds <= 0L) {
             return CompletableFuture.completedFuture(null);
         }
-        return this.playerStatsRepository.addPlayTime(playerId, playTimeSeconds);
+        return this.playerStatsRepository.recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds);
     }
 
     private void flushPendingStatsSafely() {
