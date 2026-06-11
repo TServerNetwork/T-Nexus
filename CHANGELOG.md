@@ -1,3 +1,10 @@
+# [0.31.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.30.0...v0.31.0) (2026-06-11)
+
+
+### Features
+
+* **gui:** add stats ranking viewer ([#76](https://github.com/TServerNetwork/T-Nexus/issues/76)) ([ecfd641](https://github.com/TServerNetwork/T-Nexus/commit/ecfd64128d535763a72f1ce45c6bf1d4ec615edc))
+
 # [0.30.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.29.0...v0.30.0) (2026-06-07)
 
 
