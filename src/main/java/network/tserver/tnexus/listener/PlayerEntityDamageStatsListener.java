@@ -11,6 +11,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 
 /**
  * Tracks dealt and taken damage by entity identifier.
@@ -60,6 +61,17 @@ public final class PlayerEntityDamageStatsListener implements Listener {
                     attribution.identifier(),
                     finalDamage);
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player damagedPlayer)) {
+            return;
+        }
+        if (event.getCause() != EntityDamageEvent.DamageCause.FALL || event.getFinalDamage() <= 0.0D) {
+            return;
+        }
+        this.playerStatsManager.recordDamageTaken(damagedPlayer, "FALL", event.getFinalDamage());
     }
 
     private DamageAttribution resolveAttribution(Entity damager) {
