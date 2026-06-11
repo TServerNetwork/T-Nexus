@@ -63,6 +63,7 @@ class PlayerStatsViewerManagerTest {
         assertNotNull(snapshot.getEntry("BLOCK:STONE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("ACTIVITY_CRAFT_TOTAL"));
+        assertNotNull(snapshot.getEntry("ITEM:DIAMOND"));
     }
 
     @Test
@@ -204,6 +205,31 @@ class PlayerStatsViewerManagerTest {
         assertTrue(playerEntries.stream().anyMatch(entry ->
                 entry.key().equals("COMBAT_PLAYER:" + rival.getUniqueId())
                         && rival.getUniqueId().equals(entry.playerHeadId())));
+    }
+
+    @Test
+    void shouldExposePerItemPickupDropBreakdownEntries() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        List<PlayerStatsViewerManager.StatsEntry> itemEntries = snapshot.getSortedItemDetailEntries(
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+
+        assertTrue(itemEntries.stream().anyMatch(entry -> entry.key().equals("ITEM:DIAMOND")));
+        PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("ITEM:DIAMOND");
+        assertNotNull(entry);
+        assertEquals("8", entry.valueText());
     }
 
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {

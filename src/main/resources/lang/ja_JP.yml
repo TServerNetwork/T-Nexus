@@ -355,11 +355,15 @@ stats:
       pickup-total: "&eアイテム拾得数"
       drop-total: "&eアイテム投棄数"
       projectile-total: "&e射出物使用数"
+      item-breakdown: "&eItem Breakdown"
   dynamic:
     block:
       name: "&e{0}"
       placed: "&7設置数: &f{0}"
       broken: "&7破壊数: &f{0}"
+    item:
+      pickup: "&7Picked Up: &f{0}"
+      drop: "&7Dropped: &f{0}"
     combat:
       name: "&e{0}"
       kills: "&7討伐数: &f{0}"
