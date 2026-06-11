@@ -2,14 +2,12 @@ package network.tserver.tnexus.manager;
 
 import java.text.NumberFormat;
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -236,10 +234,8 @@ public final class PlayerStatsRankingManager {
         return switch (filter) {
             case ALL_TIME -> null;
             case TODAY -> LocalDateTime.of(today, LocalTime.MIN).atZone(zoneId).toInstant();
-            case THIS_WEEK -> LocalDateTime.of(
-                    today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)),
-                    LocalTime.MIN).atZone(zoneId).toInstant();
-            case THIS_MONTH -> LocalDateTime.of(today.withDayOfMonth(1), LocalTime.MIN).atZone(zoneId).toInstant();
+            case THIS_WEEK -> LocalDateTime.of(today.minusDays(6L), LocalTime.MIN).atZone(zoneId).toInstant();
+            case THIS_MONTH -> LocalDateTime.of(today.minusDays(29L), LocalTime.MIN).atZone(zoneId).toInstant();
         };
     }
 

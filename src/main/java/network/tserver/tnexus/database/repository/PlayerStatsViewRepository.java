@@ -1,7 +1,9 @@
 package network.tserver.tnexus.database.repository;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +39,9 @@ public final class PlayerStatsViewRepository {
     private final String projectileStatsTableName;
     private final String transactionsTableName;
     private final String favoritesTableName;
+    private final String deathStatsTableName;
+    private final String distanceStatsTableName;
+    private final String playSessionsTableName;
 
     /**
      * Creates a new repository.
@@ -61,6 +66,9 @@ public final class PlayerStatsViewRepository {
         this.projectileStatsTableName = tablePrefix + "projectile_stats";
         this.transactionsTableName = tablePrefix + "transactions";
         this.favoritesTableName = tablePrefix + "stats_favorites";
+        this.deathStatsTableName = tablePrefix + "death_stats";
+        this.distanceStatsTableName = tablePrefix + "distance_stats";
+        this.playSessionsTableName = tablePrefix + "player_play_sessions";
     }
 
     /**
@@ -68,31 +76,43 @@ public final class PlayerStatsViewRepository {
      *
      * @param viewerId viewer UUID used for favorites
      * @param targetId stats target UUID
-     * @param periodStart optional period lower bound
+     * @param periodStartDate optional lower bound for daily aggregate tables
+     * @param periodStart optional lower bound for timestamp-based tables
      * @return completion future
      */
     public CompletableFuture<RawPlayerStatsData> loadSnapshot(
             UUID viewerId,
             UUID targetId,
+            @Nullable LocalDate periodStartDate,
             @Nullable Instant periodStart) {
         Objects.requireNonNull(viewerId, "viewerId");
         Objects.requireNonNull(targetId, "targetId");
         return this.databaseManager.queryAsync(() -> {
             try (var connection = this.databaseManager.getConnection()) {
                 return new RawPlayerStatsData(
-                        queryPlayerSummary(connection, targetId),
-                        queryBlockStats(connection, targetId),
-                        queryEntityDamageStats(connection, targetId),
-                        queryIntegerStats(connection, this.killStatsTableName, "target", targetId),
-                        queryIntegerStats(connection, this.craftStatsTableName, "material", targetId),
-                        queryIntegerStats(connection, this.smeltStatsTableName, "material", targetId),
-                        queryIntegerStats(connection, this.enchantStatsTableName, "enchantment", targetId),
-                        queryIntegerStats(connection, this.enchantItemStatsTableName, "material", targetId),
-                        queryIntegerStats(connection, this.harvestStatsTableName, "material", targetId),
-                        queryIntegerStats(connection, this.breedStatsTableName, "entity_type", targetId),
-                        queryIntegerStats(connection, this.fishStatsTableName, "material", targetId),
-                        queryItemStats(connection, targetId),
-                        queryIntegerStats(connection, this.projectileStatsTableName, "entity_type", targetId),
+                        queryPlayerSummary(connection, targetId, periodStartDate, periodStart),
+                        queryBlockStats(connection, targetId, periodStartDate),
+                        queryEntityDamageStats(connection, targetId, periodStartDate),
+                        queryIntegerStats(connection, this.killStatsTableName, "target", targetId, periodStartDate),
+                        queryIntegerStats(connection, this.craftStatsTableName, "material", targetId, periodStartDate),
+                        queryIntegerStats(connection, this.smeltStatsTableName, "material", targetId, periodStartDate),
+                        queryIntegerStats(connection, this.enchantStatsTableName, "enchantment", targetId, periodStartDate),
+                        queryIntegerStats(
+                                connection,
+                                this.enchantItemStatsTableName,
+                                "material",
+                                targetId,
+                                periodStartDate),
+                        queryIntegerStats(connection, this.harvestStatsTableName, "material", targetId, periodStartDate),
+                        queryIntegerStats(connection, this.breedStatsTableName, "entity_type", targetId, periodStartDate),
+                        queryIntegerStats(connection, this.fishStatsTableName, "material", targetId, periodStartDate),
+                        queryItemStats(connection, targetId, periodStartDate),
+                        queryIntegerStats(
+                                connection,
+                                this.projectileStatsTableName,
+                                "entity_type",
+                                targetId,
+                                periodStartDate),
                         queryTransactionStats(connection, targetId, periodStart),
                         queryFavorites(connection, viewerId));
             } catch (Exception exception) {
@@ -147,7 +167,28 @@ public final class PlayerStatsViewRepository {
         });
     }
 
-    private PlayerSummary queryPlayerSummary(java.sql.Connection connection, UUID playerId) throws Exception {
+    private PlayerSummary queryPlayerSummary(
+            java.sql.Connection connection,
+            UUID playerId,
+            @Nullable LocalDate periodStartDate,
+            @Nullable Instant periodStart) throws Exception {
+        PlayerSummary baseSummary = queryBasePlayerSummary(connection, playerId);
+        if (periodStartDate == null || periodStart == null) {
+            return baseSummary;
+        }
+        return new PlayerSummary(
+                queryPlayTime(connection, playerId, periodStart),
+                querySummedInteger(connection, this.deathStatsTableName, "count", playerId, periodStartDate),
+                baseSummary.respawns(),
+                querySummedDouble(connection, this.distanceStatsTableName, "distance", playerId, periodStartDate),
+                baseSummary.firstLogin(),
+                baseSummary.sleepCount(),
+                baseSummary.portalCount(),
+                baseSummary.chatCount(),
+                baseSummary.brewCount());
+    }
+
+    private PlayerSummary queryBasePlayerSummary(java.sql.Connection connection, UUID playerId) throws Exception {
         String sql = """
                 SELECT play_time, deaths, respawns, distance, first_login, sleep_count, portal_count, chat_count, brew_count
                 FROM %s
@@ -174,15 +215,19 @@ public final class PlayerStatsViewRepository {
         }
     }
 
-    private Map<String, BlockStatsDelta> queryBlockStats(java.sql.Connection connection, UUID playerId) throws Exception {
+    private Map<String, BlockStatsDelta> queryBlockStats(
+            java.sql.Connection connection,
+            UUID playerId,
+            @Nullable LocalDate periodStartDate) throws Exception {
         String sql = """
-                SELECT material, placed_count, broken_count
+                SELECT material, SUM(placed_count) AS placed_count, SUM(broken_count) AS broken_count
                 FROM %s
-                WHERE player_uuid = ?
-                """.formatted(this.blockStatsTableName);
+                WHERE player_uuid = ? %s
+                GROUP BY material
+                """.formatted(this.blockStatsTableName, buildDateFilterClause(periodStartDate));
         Map<String, BlockStatsDelta> stats = new LinkedHashMap<>();
         try (var statement = connection.prepareStatement(sql)) {
-            statement.setString(1, playerId.toString());
+            bindPlayerAndDate(statement, playerId, periodStartDate);
             try (var resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     stats.put(
@@ -198,15 +243,17 @@ public final class PlayerStatsViewRepository {
 
     private Map<String, EntityDamageDelta> queryEntityDamageStats(
             java.sql.Connection connection,
-            UUID playerId) throws Exception {
+            UUID playerId,
+            @Nullable LocalDate periodStartDate) throws Exception {
         String sql = """
-                SELECT entity_type, damage_dealt, damage_taken
+                SELECT entity_type, SUM(damage_dealt) AS damage_dealt, SUM(damage_taken) AS damage_taken
                 FROM %s
-                WHERE player_uuid = ?
-                """.formatted(this.entityDamageStatsTableName);
+                WHERE player_uuid = ? %s
+                GROUP BY entity_type
+                """.formatted(this.entityDamageStatsTableName, buildDateFilterClause(periodStartDate));
         Map<String, EntityDamageDelta> stats = new LinkedHashMap<>();
         try (var statement = connection.prepareStatement(sql)) {
-            statement.setString(1, playerId.toString());
+            bindPlayerAndDate(statement, playerId, periodStartDate);
             try (var resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     stats.put(
@@ -224,15 +271,17 @@ public final class PlayerStatsViewRepository {
             java.sql.Connection connection,
             String tableName,
             String keyColumn,
-            UUID playerId) throws Exception {
+            UUID playerId,
+            @Nullable LocalDate periodStartDate) throws Exception {
         String sql = """
-                SELECT %s, count
+                SELECT %s, SUM(count) AS count
                 FROM %s
-                WHERE player_uuid = ?
-                """.formatted(keyColumn, tableName);
+                WHERE player_uuid = ? %s
+                GROUP BY %s
+                """.formatted(keyColumn, tableName, buildDateFilterClause(periodStartDate), keyColumn);
         Map<String, Integer> stats = new LinkedHashMap<>();
         try (var statement = connection.prepareStatement(sql)) {
-            statement.setString(1, playerId.toString());
+            bindPlayerAndDate(statement, playerId, periodStartDate);
             try (var resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     stats.put(resultSet.getString(1), resultSet.getInt("count"));
@@ -242,15 +291,19 @@ public final class PlayerStatsViewRepository {
         return stats;
     }
 
-    private Map<String, ItemStatsDelta> queryItemStats(java.sql.Connection connection, UUID playerId) throws Exception {
+    private Map<String, ItemStatsDelta> queryItemStats(
+            java.sql.Connection connection,
+            UUID playerId,
+            @Nullable LocalDate periodStartDate) throws Exception {
         String sql = """
-                SELECT material, pickup_count, drop_count
+                SELECT material, SUM(pickup_count) AS pickup_count, SUM(drop_count) AS drop_count
                 FROM %s
-                WHERE player_uuid = ?
-                """.formatted(this.itemStatsTableName);
+                WHERE player_uuid = ? %s
+                GROUP BY material
+                """.formatted(this.itemStatsTableName, buildDateFilterClause(periodStartDate));
         Map<String, ItemStatsDelta> stats = new LinkedHashMap<>();
         try (var statement = connection.prepareStatement(sql)) {
-            statement.setString(1, playerId.toString());
+            bindPlayerAndDate(statement, playerId, periodStartDate);
             try (var resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     stats.put(
@@ -354,6 +407,86 @@ public final class PlayerStatsViewRepository {
             }
         }
         return null;
+    }
+
+    private String buildDateFilterClause(@Nullable LocalDate periodStartDate) {
+        return periodStartDate == null ? "" : "AND stat_date >= ?";
+    }
+
+    private void bindPlayerAndDate(
+            java.sql.PreparedStatement statement,
+            UUID playerId,
+            @Nullable LocalDate periodStartDate) throws Exception {
+        statement.setString(1, playerId.toString());
+        if (periodStartDate != null) {
+            statement.setDate(2, java.sql.Date.valueOf(periodStartDate));
+        }
+    }
+
+    private int querySummedInteger(
+            java.sql.Connection connection,
+            String tableName,
+            String valueColumn,
+            UUID playerId,
+            LocalDate periodStartDate) throws Exception {
+        String sql = """
+                SELECT COALESCE(SUM(%s), 0) AS total
+                FROM %s
+                WHERE player_uuid = ? AND stat_date >= ?
+                """.formatted(valueColumn, tableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setDate(2, java.sql.Date.valueOf(periodStartDate));
+            try (var resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt("total");
+            }
+        }
+    }
+
+    private double querySummedDouble(
+            java.sql.Connection connection,
+            String tableName,
+            String valueColumn,
+            UUID playerId,
+            LocalDate periodStartDate) throws Exception {
+        String sql = """
+                SELECT COALESCE(SUM(%s), 0) AS total
+                FROM %s
+                WHERE player_uuid = ? AND stat_date >= ?
+                """.formatted(valueColumn, tableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setDate(2, java.sql.Date.valueOf(periodStartDate));
+            try (var resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getDouble("total");
+            }
+        }
+    }
+
+    private long queryPlayTime(java.sql.Connection connection, UUID playerId, Instant periodStart) throws Exception {
+        String sql = """
+                SELECT session_start, session_end
+                FROM %s
+                WHERE player_uuid = ? AND session_end >= ?
+                """.formatted(this.playSessionsTableName);
+        long totalSeconds = 0L;
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setTimestamp(2, Timestamp.from(periodStart));
+            try (var resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    Instant sessionStart = resultSet.getTimestamp("session_start").toInstant();
+                    Instant sessionEnd = resultSet.getTimestamp("session_end").toInstant();
+                    Instant effectiveStart = sessionStart.isAfter(periodStart) ? sessionStart : periodStart;
+                    if (sessionEnd.isAfter(effectiveStart)) {
+                        totalSeconds += Duration.between(effectiveStart, sessionEnd).getSeconds();
+                    }
+                }
+            }
+        }
+        return totalSeconds;
     }
 
     /**

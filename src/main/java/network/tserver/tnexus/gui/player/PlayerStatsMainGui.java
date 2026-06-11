@@ -244,6 +244,19 @@ public final class PlayerStatsMainGui extends BaseGui {
         lore.add(getPlugin().getMessageConfig().getMessage(
                 "stats.gui.entry.period",
                 this.statsViewerManager.getPeriodLabel(this.periodFilter)));
+        if (entry.material() == Material.PLAYER_HEAD && entry.playerHeadId() != null) {
+            ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) item.getItemMeta();
+            if (meta == null) {
+                return item;
+            }
+            meta.setOwningPlayer(getPlugin().getServer().getOfflinePlayer(entry.playerHeadId()));
+            meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&', entry.displayName()));
+            meta.setLore(lore.stream().map(line ->
+                    org.bukkit.ChatColor.translateAlternateColorCodes('&', line)).toList());
+            item.setItemMeta(meta);
+            return item;
+        }
         return createItem(entry.material(), entry.displayName(), lore);
     }
 }

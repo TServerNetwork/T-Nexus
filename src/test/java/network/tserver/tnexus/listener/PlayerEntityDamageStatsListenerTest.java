@@ -129,6 +129,20 @@ class PlayerEntityDamageStatsListenerTest {
         assertEquals(0.0D, readEntityDamage(plugin, victim, "WOLF", "damage_taken"));
     }
 
+    @Test
+    void shouldRecordFallDamageAsEnvironmentDamageTaken() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock victim = this.server.addPlayer("FallVictim");
+
+        this.server.getPluginManager().callEvent(new EntityDamageEvent(
+                victim,
+                EntityDamageEvent.DamageCause.FALL,
+                6.5D));
+        plugin.getPlayerStatsManager().flushPendingEntityDamageStats().join();
+
+        assertEquals(6.5D, readEntityDamage(plugin, victim, "FALL", "damage_taken"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -138,11 +152,12 @@ class PlayerEntityDamageStatsListenerTest {
         return plugin.getDatabaseManager().queryAsync(() -> {
             try (var connection = plugin.getDatabaseManager().getConnection();
                  var statement = connection.prepareStatement(
-                         "SELECT " + columnName + " FROM tnexus_entity_damage_stats WHERE player_uuid = ? AND entity_type = ?")) {
+                         "SELECT COALESCE(SUM(" + columnName + "), 0) AS total FROM tnexus_entity_damage_stats "
+                                 + "WHERE player_uuid = ? AND entity_type = ?")) {
                 statement.setString(1, player.getUniqueId().toString());
                 statement.setString(2, identifier);
                 try (var resultSet = statement.executeQuery()) {
-                    return resultSet.next() ? resultSet.getDouble(columnName) : 0.0D;
+                    return resultSet.next() ? resultSet.getDouble("total") : 0.0D;
                 }
             } catch (Exception exception) {
                 throw new IllegalStateException(exception);

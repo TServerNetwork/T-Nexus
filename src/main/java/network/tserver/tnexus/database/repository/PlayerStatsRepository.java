@@ -188,8 +188,8 @@ public final class PlayerStatsRepository {
                 ON DUPLICATE KEY UPDATE distance = distance + VALUES(distance)
                 """.formatted(this.tableName);
         String travelDistanceSql = """
-                INSERT INTO %s (player_uuid, travel_type, distance)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, travel_type, stat_date, distance)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE distance = distance + VALUES(distance)
                 """.formatted(this.distanceStatsTableName);
         return this.databaseManager.queryAsync(() -> {
@@ -242,8 +242,8 @@ public final class PlayerStatsRepository {
                     blocks_broken = blocks_broken + VALUES(blocks_broken)
                 """.formatted(this.tableName);
         String materialSql = """
-                INSERT INTO %s (player_uuid, material, placed_count, broken_count)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, placed_count, broken_count)
+                VALUES (?, ?, CURRENT_DATE, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     placed_count = placed_count + VALUES(placed_count),
                     broken_count = broken_count + VALUES(broken_count)
@@ -284,8 +284,8 @@ public final class PlayerStatsRepository {
         }
 
         String sql = """
-                INSERT INTO %s (player_uuid, entity_type, damage_dealt, damage_taken)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO %s (player_uuid, entity_type, stat_date, damage_dealt, damage_taken)
+                VALUES (?, ?, CURRENT_DATE, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     damage_dealt = damage_dealt + VALUES(damage_dealt),
                     damage_taken = damage_taken + VALUES(damage_taken)
@@ -315,8 +315,8 @@ public final class PlayerStatsRepository {
         }
 
         String sql = """
-                INSERT INTO %s (player_uuid, target, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, target, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.killStatsTableName);
         return this.databaseManager.queryAsync(() -> {
@@ -344,8 +344,8 @@ public final class PlayerStatsRepository {
         }
 
         String sql = """
-                INSERT INTO %s (player_uuid, material, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.craftStatsTableName);
         return this.databaseManager.queryAsync(() -> {
@@ -388,18 +388,18 @@ public final class PlayerStatsRepository {
                 ON DUPLICATE KEY UPDATE brew_count = brew_count + VALUES(brew_count)
                 """.formatted(this.tableName);
         String smeltSql = """
-                INSERT INTO %s (player_uuid, material, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.smeltStatsTableName);
         String enchantSql = """
-                INSERT INTO %s (player_uuid, enchantment, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, enchantment, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.enchantStatsTableName);
         String enchantItemSql = """
-                INSERT INTO %s (player_uuid, material, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.enchantItemStatsTableName);
         return this.databaseManager.queryAsync(() -> {
@@ -451,18 +451,18 @@ public final class PlayerStatsRepository {
         }
 
         String harvestSql = """
-                INSERT INTO %s (player_uuid, material, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.harvestStatsTableName);
         String breedSql = """
-                INSERT INTO %s (player_uuid, entity_type, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, entity_type, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.breedStatsTableName);
         String fishSql = """
-                INSERT INTO %s (player_uuid, material, count)
-                VALUES (?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.fishStatsTableName);
         return this.databaseManager.queryAsync(() -> {
@@ -504,8 +504,8 @@ public final class PlayerStatsRepository {
         }
 
         String sql = """
-                INSERT INTO %s (player_uuid, material, pickup_count, drop_count)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO %s (player_uuid, material, stat_date, pickup_count, drop_count)
+                VALUES (?, ?, CURRENT_DATE, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     pickup_count = pickup_count + VALUES(pickup_count),
                     drop_count = drop_count + VALUES(drop_count)
@@ -588,8 +588,8 @@ public final class PlayerStatsRepository {
         Objects.requireNonNull(playerId, "playerId");
         Objects.requireNonNull(entityType, "entityType");
         String sql = """
-                INSERT INTO %s (player_uuid, entity_type, count)
-                VALUES (?, ?, 1)
+                INSERT INTO %s (player_uuid, entity_type, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, 1)
                 ON DUPLICATE KEY UPDATE count = count + 1
                 """.formatted(this.projectileStatsTableName);
         return this.databaseManager.queryAsync(() -> {
@@ -616,8 +616,8 @@ public final class PlayerStatsRepository {
         Objects.requireNonNull(playerId, "playerId");
         Objects.requireNonNull(cause, "cause");
         String sql = """
-                INSERT INTO %s (player_uuid, cause, count)
-                VALUES (?, ?, 1)
+                INSERT INTO %s (player_uuid, cause, stat_date, count)
+                VALUES (?, ?, CURRENT_DATE, 1)
                 ON DUPLICATE KEY UPDATE count = count + 1
                 """.formatted(this.deathStatsTableName);
         return this.databaseManager.queryAsync(() -> {
