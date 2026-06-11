@@ -29,6 +29,7 @@ public final class PlayerStatsRepository {
     private final String fishStatsTableName;
     private final String itemStatsTableName;
     private final String projectileStatsTableName;
+    private final String playSessionsTableName;
 
     /**
      * Creates a new player stats repository.
@@ -52,6 +53,7 @@ public final class PlayerStatsRepository {
         this.fishStatsTableName = this.databaseManager.getTablePrefix() + "fish_stats";
         this.itemStatsTableName = this.databaseManager.getTablePrefix() + "item_stats";
         this.projectileStatsTableName = this.databaseManager.getTablePrefix() + "projectile_stats";
+        this.playSessionsTableName = this.databaseManager.getTablePrefix() + "player_play_sessions";
     }
 
     /**
@@ -105,6 +107,61 @@ public final class PlayerStatsRepository {
                 return null;
             } catch (Exception exception) {
                 throw new IllegalStateException("Failed to update player play time", exception);
+            }
+        });
+    }
+
+    /**
+     * Records a completed player session in both aggregate and historical tables.
+     *
+     * @param playerId player id
+     * @param sessionStart session start time
+     * @param sessionEnd session end time
+     * @param playTimeSeconds session duration in seconds
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordPlaySession(
+            UUID playerId,
+            Instant sessionStart,
+            Instant sessionEnd,
+            long playTimeSeconds) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(sessionStart, "sessionStart");
+        Objects.requireNonNull(sessionEnd, "sessionEnd");
+        String totalSql = """
+                INSERT INTO %s (player_uuid, play_time)
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE play_time = play_time + VALUES(play_time)
+                """.formatted(this.tableName);
+        String historySql = """
+                INSERT INTO %s (player_uuid, session_start, session_end, duration_seconds)
+                VALUES (?, ?, ?, ?)
+                """.formatted(this.playSessionsTableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try (var totalStatement = connection.prepareStatement(totalSql);
+                     var historyStatement = connection.prepareStatement(historySql)) {
+                    totalStatement.setString(1, playerId.toString());
+                    totalStatement.setLong(2, playTimeSeconds);
+                    totalStatement.executeUpdate();
+
+                    historyStatement.setString(1, playerId.toString());
+                    historyStatement.setTimestamp(2, Timestamp.from(sessionStart));
+                    historyStatement.setTimestamp(3, Timestamp.from(sessionEnd));
+                    historyStatement.setLong(4, playTimeSeconds);
+                    historyStatement.executeUpdate();
+
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to persist player play session", exception);
             }
         });
     }

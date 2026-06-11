@@ -304,7 +304,7 @@ server-stats:
       lore: "&7現在値: &f{0}件"
 stats:
   command:
-    usage: "&c使い方: /stats [player]"
+    usage: "&c使い方: /stats [player|ranking]"
     player-not-found: "&cプレイヤー {0} は見つかりませんでした。"
     load-failed: "&c統計情報の読み込みに失敗しました。"
     favorites-full: "&cピン留め枠がいっぱいです。先に他のピン留めを解除してください。"
@@ -377,6 +377,10 @@ stats:
         current: "&7現在の設定: &a{0}"
         options: "&7(今日/今週/今月/全期間)"
         hint: "&7クリックで切り替え"
+      ranking:
+        name: "&eプレイ時間ランキング"
+        period: "&7期間: &f{0}"
+        hint: "&7ランキング画面を開きます。"
       sort:
         name: "&eソート順"
         current: "&7現在の設定: &a{0}"
@@ -406,3 +410,32 @@ stats:
       value: "&7記録値: &a{0}"
       period: "&7期間: &f{0}"
       favorite-hint: "&e▶ 右クリックでお気に入りにピン留め / 解除"
+  ranking:
+    gui:
+      title: "&6&lプレイ時間ランキング"
+      header:
+        name: "&6&lプレイ時間ランキング"
+        period: "&7期間: &f{0}"
+        lore: "&7期間を切り替えながら上位プレイヤーを確認できます。"
+      filter:
+        name: "&e期間フィルター"
+        current: "&7現在の設定: &a{0}"
+        options: "&7(今日/今週/今月/全期間)"
+        hint: "&7クリックで切り替え"
+      self:
+        name: "&eあなたの順位"
+        rank: "&7順位: &a{0}"
+        play-time: "&7プレイ時間: &f{0}"
+        period: "&7期間: &f{0}"
+        unranked:
+          name: "&8あなたの順位"
+          lore: "&7この期間ではまだ記録がありません。"
+      empty:
+        name: "&cランキングデータがありません"
+        lore: "&7この期間で集計されたプレイ時間はありません。"
+      entry:
+        name: "&e{0} &f{1}"
+        name-self: "&a★ {0} &f{1}"
+        play-time: "&7プレイ時間: &f{0}"
+        period: "&7期間: &f{0}"
+        self-highlight: "&aあなたの順位です。"

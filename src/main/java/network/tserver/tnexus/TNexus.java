@@ -12,6 +12,7 @@ import network.tserver.tnexus.config.MessageConfig;
 import network.tserver.tnexus.database.DatabaseManager;
 import network.tserver.tnexus.database.repository.PayQueueRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import network.tserver.tnexus.database.repository.PlayerStatsRankingRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsViewRepository;
 import network.tserver.tnexus.database.repository.ServerStatsRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
@@ -21,6 +22,7 @@ import network.tserver.tnexus.manager.AuditLogManager;
 import network.tserver.tnexus.manager.EconomyManager;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PlayerStatsManager;
+import network.tserver.tnexus.manager.PlayerStatsRankingManager;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager;
 import network.tserver.tnexus.manager.PluginHookManager;
 import network.tserver.tnexus.manager.ServerStatsManager;
@@ -61,6 +63,7 @@ public class TNexus extends JavaPlugin {
     private EconomyManager economyManager;
     private PaymentManager paymentManager;
     private PlayerStatsManager playerStatsManager;
+    private PlayerStatsRankingManager playerStatsRankingManager;
     private PlayerStatsViewerManager playerStatsViewerManager;
     private ServerStatsManager serverStatsManager;
     private PaymentNotificationListener paymentNotificationListener;
@@ -112,6 +115,7 @@ public class TNexus extends JavaPlugin {
         this.auditLogManager = new AuditLogManager(this);
         this.paymentManager = createPaymentManager();
         this.playerStatsManager = createPlayerStatsManager();
+        this.playerStatsRankingManager = createPlayerStatsRankingManager();
         this.playerStatsViewerManager = createPlayerStatsViewerManager();
         this.serverStatsManager = createServerStatsManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
@@ -289,6 +293,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the player stats ranking manager instance.
+     *
+     * @return player stats ranking manager
+     */
+    public PlayerStatsRankingManager getPlayerStatsRankingManager() {
+        return this.playerStatsRankingManager;
+    }
+
+    /**
      * Returns the server stats manager instance.
      *
      * @return server stats manager
@@ -374,6 +387,18 @@ public class TNexus extends JavaPlugin {
      */
     protected PlayerStatsViewerManager createPlayerStatsViewerManager() {
         return new PlayerStatsViewerManager(this, new PlayerStatsViewRepository(this.databaseManager));
+    }
+
+    /**
+     * Creates the player stats ranking manager used during startup.
+     *
+     * @return player stats ranking manager
+     */
+    protected PlayerStatsRankingManager createPlayerStatsRankingManager() {
+        return new PlayerStatsRankingManager(
+                this,
+                new PlayerStatsRankingRepository(this.databaseManager),
+                this.playerStatsManager);
     }
 
     /**

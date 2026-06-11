@@ -28,6 +28,7 @@ public final class PlayerStatsMainGui extends BaseGui {
 
     private static final int ROWS = 6;
     private static final int PLAYER_INFO_SLOT = 4;
+    private static final int RANKING_SLOT = 6;
     private static final int FILTER_SLOT = 7;
     private static final int SORT_SLOT = 8;
     private static final int GENERAL_SLOT = 20;
@@ -80,6 +81,9 @@ public final class PlayerStatsMainGui extends BaseGui {
     @Override
     protected void buildContent() {
         setItem(PLAYER_INFO_SLOT, createPlayerHead(), null);
+        setItem(RANKING_SLOT, createRankingItem(), event -> getPlugin()
+                .getPlayerStatsRankingManager()
+                .openRankingGui(this.viewer, this.periodFilter));
         setItem(FILTER_SLOT, createFilterItem(), event -> this.statsViewerManager.openMainGui(
                 this.viewer,
                 this.target,
@@ -165,6 +169,17 @@ public final class PlayerStatsMainGui extends BaseGui {
                                 this.statsViewerManager.getPeriodLabel(this.periodFilter)),
                         getPlugin().getMessageConfig().getMessage("stats.gui.main.filter.options"),
                         getPlugin().getMessageConfig().getMessage("stats.gui.main.filter.hint")));
+    }
+
+    private ItemStack createRankingItem() {
+        return createItem(
+                Material.PLAYER_HEAD,
+                getPlugin().getMessageConfig().getMessage("stats.gui.main.ranking.name"),
+                List.of(
+                        getPlugin().getMessageConfig().getMessage(
+                                "stats.gui.main.ranking.period",
+                                this.statsViewerManager.getPeriodLabel(this.periodFilter)),
+                        getPlugin().getMessageConfig().getMessage("stats.gui.main.ranking.hint")));
     }
 
     private ItemStack createSortItem() {

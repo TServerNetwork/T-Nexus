@@ -61,7 +61,7 @@ public final class TestPluginSupport {
                 usage: "/history [player]"
               stats:
                 description: test stats command
-                usage: "/stats [player]"
+                usage: "/stats [player|ranking]"
               server-stats:
                 description: test server stats command
                 usage: "/server-stats"
