@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import network.tserver.tnexus.database.DatabaseManager;
 
 /**
@@ -125,6 +126,32 @@ public final class PlayerStatsRepository {
             Instant sessionStart,
             Instant sessionEnd,
             long playTimeSeconds) {
+        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, false);
+    }
+
+    /**
+     * Records a completed player session synchronously, intended for plugin shutdown.
+     *
+     * @param playerId player id
+     * @param sessionStart session start time
+     * @param sessionEnd session end time
+     * @param playTimeSeconds session duration in seconds
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordPlaySessionSync(
+            UUID playerId,
+            Instant sessionStart,
+            Instant sessionEnd,
+            long playTimeSeconds) {
+        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, true);
+    }
+
+    private CompletableFuture<Void> recordPlaySession(
+            UUID playerId,
+            Instant sessionStart,
+            Instant sessionEnd,
+            long playTimeSeconds,
+            boolean synchronous) {
         Objects.requireNonNull(playerId, "playerId");
         Objects.requireNonNull(sessionStart, "sessionStart");
         Objects.requireNonNull(sessionEnd, "sessionEnd");
@@ -137,7 +164,7 @@ public final class PlayerStatsRepository {
                 INSERT INTO %s (player_uuid, session_start, session_end, duration_seconds)
                 VALUES (?, ?, ?, ?)
                 """.formatted(this.playSessionsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection()) {
                 connection.setAutoCommit(false);
                 try (var totalStatement = connection.prepareStatement(totalSql);
@@ -176,6 +203,26 @@ public final class PlayerStatsRepository {
     public CompletableFuture<Void> addDistanceStats(
             Map<UUID, Double> totalDistances,
             Map<UUID, Map<String, Double>> travelDistances) {
+        return addDistanceStats(totalDistances, travelDistances, false);
+    }
+
+    /**
+     * Adds aggregate distance statistics synchronously, intended for plugin shutdown.
+     *
+     * @param totalDistances total distance by player id
+     * @param travelDistances travel-type distance by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addDistanceStatsSync(
+            Map<UUID, Double> totalDistances,
+            Map<UUID, Map<String, Double>> travelDistances) {
+        return addDistanceStats(totalDistances, travelDistances, true);
+    }
+
+    private CompletableFuture<Void> addDistanceStats(
+            Map<UUID, Double> totalDistances,
+            Map<UUID, Map<String, Double>> travelDistances,
+            boolean synchronous) {
         Objects.requireNonNull(totalDistances, "totalDistances");
         Objects.requireNonNull(travelDistances, "travelDistances");
         if (totalDistances.isEmpty() && travelDistances.isEmpty()) {
@@ -192,7 +239,7 @@ public final class PlayerStatsRepository {
                 VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE distance = distance + VALUES(distance)
                 """.formatted(this.distanceStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection()) {
                 connection.setAutoCommit(false);
                 try (var totalDistanceStatement = connection.prepareStatement(totalDistanceSql);
@@ -227,6 +274,29 @@ public final class PlayerStatsRepository {
             Map<UUID, Integer> totalPlacedCounts,
             Map<UUID, Integer> totalBrokenCounts,
             Map<UUID, Map<String, BlockStatsDelta>> materialStats) {
+        return addBlockStats(totalPlacedCounts, totalBrokenCounts, materialStats, false);
+    }
+
+    /**
+     * Adds aggregate block statistics synchronously, intended for plugin shutdown.
+     *
+     * @param totalPlacedCounts total placed counts by player id
+     * @param totalBrokenCounts total broken counts by player id
+     * @param materialStats material deltas by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addBlockStatsSync(
+            Map<UUID, Integer> totalPlacedCounts,
+            Map<UUID, Integer> totalBrokenCounts,
+            Map<UUID, Map<String, BlockStatsDelta>> materialStats) {
+        return addBlockStats(totalPlacedCounts, totalBrokenCounts, materialStats, true);
+    }
+
+    private CompletableFuture<Void> addBlockStats(
+            Map<UUID, Integer> totalPlacedCounts,
+            Map<UUID, Integer> totalBrokenCounts,
+            Map<UUID, Map<String, BlockStatsDelta>> materialStats,
+            boolean synchronous) {
         Objects.requireNonNull(totalPlacedCounts, "totalPlacedCounts");
         Objects.requireNonNull(totalBrokenCounts, "totalBrokenCounts");
         Objects.requireNonNull(materialStats, "materialStats");
@@ -248,7 +318,7 @@ public final class PlayerStatsRepository {
                     placed_count = placed_count + VALUES(placed_count),
                     broken_count = broken_count + VALUES(broken_count)
                 """.formatted(this.blockStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection()) {
                 connection.setAutoCommit(false);
                 try (var totalStatement = connection.prepareStatement(totalSql);
@@ -278,6 +348,22 @@ public final class PlayerStatsRepository {
      * @return completion future
      */
     public CompletableFuture<Void> addEntityDamageStats(Map<UUID, Map<String, EntityDamageDelta>> damageStats) {
+        return addEntityDamageStats(damageStats, false);
+    }
+
+    /**
+     * Adds aggregate entity damage statistics synchronously, intended for plugin shutdown.
+     *
+     * @param damageStats damage deltas by player id and entity identifier
+     * @return completion future
+     */
+    public CompletableFuture<Void> addEntityDamageStatsSync(Map<UUID, Map<String, EntityDamageDelta>> damageStats) {
+        return addEntityDamageStats(damageStats, true);
+    }
+
+    private CompletableFuture<Void> addEntityDamageStats(
+            Map<UUID, Map<String, EntityDamageDelta>> damageStats,
+            boolean synchronous) {
         Objects.requireNonNull(damageStats, "damageStats");
         if (damageStats.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -290,7 +376,7 @@ public final class PlayerStatsRepository {
                     damage_dealt = damage_dealt + VALUES(damage_dealt),
                     damage_taken = damage_taken + VALUES(damage_taken)
                 """.formatted(this.entityDamageStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql)) {
                 addEntityDamageBatch(statement, damageStats);
@@ -309,6 +395,22 @@ public final class PlayerStatsRepository {
      * @return completion future
      */
     public CompletableFuture<Void> addKillStats(Map<UUID, Map<String, Integer>> killStats) {
+        return addKillStats(killStats, false);
+    }
+
+    /**
+     * Adds aggregate kill statistics synchronously, intended for plugin shutdown.
+     *
+     * @param killStats kill counts by player id and target identifier
+     * @return completion future
+     */
+    public CompletableFuture<Void> addKillStatsSync(Map<UUID, Map<String, Integer>> killStats) {
+        return addKillStats(killStats, true);
+    }
+
+    private CompletableFuture<Void> addKillStats(
+            Map<UUID, Map<String, Integer>> killStats,
+            boolean synchronous) {
         Objects.requireNonNull(killStats, "killStats");
         if (killStats.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -319,7 +421,7 @@ public final class PlayerStatsRepository {
                 VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.killStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql)) {
                 addNamedStatsBatch(statement, killStats);
@@ -338,6 +440,22 @@ public final class PlayerStatsRepository {
      * @return completion future
      */
     public CompletableFuture<Void> addCraftStats(Map<UUID, Map<String, Integer>> craftStats) {
+        return addCraftStats(craftStats, false);
+    }
+
+    /**
+     * Adds aggregate craft statistics synchronously, intended for plugin shutdown.
+     *
+     * @param craftStats crafted item counts by player id and material
+     * @return completion future
+     */
+    public CompletableFuture<Void> addCraftStatsSync(Map<UUID, Map<String, Integer>> craftStats) {
+        return addCraftStats(craftStats, true);
+    }
+
+    private CompletableFuture<Void> addCraftStats(
+            Map<UUID, Map<String, Integer>> craftStats,
+            boolean synchronous) {
         Objects.requireNonNull(craftStats, "craftStats");
         if (craftStats.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -348,7 +466,7 @@ public final class PlayerStatsRepository {
                 VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.craftStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql)) {
                 addCraftStatsBatch(statement, craftStats);
@@ -374,6 +492,32 @@ public final class PlayerStatsRepository {
             Map<UUID, Map<String, Integer>> smeltStats,
             Map<UUID, Map<String, Integer>> enchantStats,
             Map<UUID, Map<String, Integer>> enchantItemStats) {
+        return addProcessingStats(brewCounts, smeltStats, enchantStats, enchantItemStats, false);
+    }
+
+    /**
+     * Adds aggregate processing statistics synchronously, intended for plugin shutdown.
+     *
+     * @param brewCounts brew counts by player id
+     * @param smeltStats smelted material counts by player id
+     * @param enchantStats enchantment counts by player id
+     * @param enchantItemStats enchanted item material counts by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addProcessingStatsSync(
+            Map<UUID, Integer> brewCounts,
+            Map<UUID, Map<String, Integer>> smeltStats,
+            Map<UUID, Map<String, Integer>> enchantStats,
+            Map<UUID, Map<String, Integer>> enchantItemStats) {
+        return addProcessingStats(brewCounts, smeltStats, enchantStats, enchantItemStats, true);
+    }
+
+    private CompletableFuture<Void> addProcessingStats(
+            Map<UUID, Integer> brewCounts,
+            Map<UUID, Map<String, Integer>> smeltStats,
+            Map<UUID, Map<String, Integer>> enchantStats,
+            Map<UUID, Map<String, Integer>> enchantItemStats,
+            boolean synchronous) {
         Objects.requireNonNull(brewCounts, "brewCounts");
         Objects.requireNonNull(smeltStats, "smeltStats");
         Objects.requireNonNull(enchantStats, "enchantStats");
@@ -402,7 +546,7 @@ public final class PlayerStatsRepository {
                 VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.enchantItemStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection()) {
                 connection.setAutoCommit(false);
                 try (var brewStatement = connection.prepareStatement(brewSql);
@@ -443,6 +587,29 @@ public final class PlayerStatsRepository {
             Map<UUID, Map<String, Integer>> harvestStats,
             Map<UUID, Map<String, Integer>> breedStats,
             Map<UUID, Map<String, Integer>> fishStats) {
+        return addFarmingStats(harvestStats, breedStats, fishStats, false);
+    }
+
+    /**
+     * Adds aggregate farming statistics synchronously, intended for plugin shutdown.
+     *
+     * @param harvestStats harvested material counts by player id
+     * @param breedStats bred entity counts by player id
+     * @param fishStats caught fish material counts by player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> addFarmingStatsSync(
+            Map<UUID, Map<String, Integer>> harvestStats,
+            Map<UUID, Map<String, Integer>> breedStats,
+            Map<UUID, Map<String, Integer>> fishStats) {
+        return addFarmingStats(harvestStats, breedStats, fishStats, true);
+    }
+
+    private CompletableFuture<Void> addFarmingStats(
+            Map<UUID, Map<String, Integer>> harvestStats,
+            Map<UUID, Map<String, Integer>> breedStats,
+            Map<UUID, Map<String, Integer>> fishStats,
+            boolean synchronous) {
         Objects.requireNonNull(harvestStats, "harvestStats");
         Objects.requireNonNull(breedStats, "breedStats");
         Objects.requireNonNull(fishStats, "fishStats");
@@ -465,7 +632,7 @@ public final class PlayerStatsRepository {
                 VALUES (?, ?, CURRENT_DATE, ?)
                 ON DUPLICATE KEY UPDATE count = count + VALUES(count)
                 """.formatted(this.fishStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection()) {
                 connection.setAutoCommit(false);
                 try (var harvestStatement = connection.prepareStatement(harvestSql);
@@ -498,6 +665,22 @@ public final class PlayerStatsRepository {
      * @return completion future
      */
     public CompletableFuture<Void> addItemStats(Map<UUID, Map<String, ItemStatsDelta>> itemStats) {
+        return addItemStats(itemStats, false);
+    }
+
+    /**
+     * Adds aggregate pickup and drop statistics synchronously, intended for plugin shutdown.
+     *
+     * @param itemStats item deltas by player id and material
+     * @return completion future
+     */
+    public CompletableFuture<Void> addItemStatsSync(Map<UUID, Map<String, ItemStatsDelta>> itemStats) {
+        return addItemStats(itemStats, true);
+    }
+
+    private CompletableFuture<Void> addItemStats(
+            Map<UUID, Map<String, ItemStatsDelta>> itemStats,
+            boolean synchronous) {
         Objects.requireNonNull(itemStats, "itemStats");
         if (itemStats.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -510,7 +693,7 @@ public final class PlayerStatsRepository {
                     pickup_count = pickup_count + VALUES(pickup_count),
                     drop_count = drop_count + VALUES(drop_count)
                 """.formatted(this.itemStatsTableName);
-        return this.databaseManager.queryAsync(() -> {
+        return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection();
                  var statement = connection.prepareStatement(sql)) {
                 addItemStatsBatch(statement, itemStats);
@@ -777,5 +960,9 @@ public final class PlayerStatsRepository {
                 statement.addBatch();
             }
         }
+    }
+
+    private <T> CompletableFuture<T> submitQuery(boolean synchronous, Supplier<T> supplier) {
+        return synchronous ? this.databaseManager.querySync(supplier) : this.databaseManager.queryAsync(supplier);
     }
 }

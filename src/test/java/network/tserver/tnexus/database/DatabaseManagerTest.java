@@ -116,6 +116,29 @@ class DatabaseManagerTest {
     }
 
     @Test
+    void shouldRunSyncQueriesOnCurrentThread() throws Exception {
+        TNexus plugin = loadPlugin();
+        this.databaseManager = createH2DatabaseManager(plugin, "database_sync");
+        assertTrue(this.databaseManager.initialize());
+
+        Boolean ranOnPrimaryThread = this.databaseManager.querySync(Bukkit::isPrimaryThread)
+                .get(5, TimeUnit.SECONDS);
+        Integer migrationCount = this.databaseManager.querySync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("SELECT COUNT(*) FROM tnexus_schema_version")) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            } catch (SQLException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }).get(5, TimeUnit.SECONDS);
+
+        assertTrue(ranOnPrimaryThread);
+        assertEquals(19, migrationCount);
+    }
+
+    @Test
     void shouldSkipAlreadyAppliedMigrations() throws SQLException {
         TNexus plugin = loadPlugin();
         this.databaseManager = createH2DatabaseManager(plugin, "database_reinitialize");

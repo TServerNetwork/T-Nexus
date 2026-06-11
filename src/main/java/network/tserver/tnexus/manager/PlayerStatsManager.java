@@ -70,6 +70,7 @@ public class PlayerStatsManager {
     private final Map<BlockPosition, ProcessingAttribution> processingStationAttributions;
     private final Map<UUID, Instant> worldEditSuppressionWindows;
     private final BukkitTask statsFlushTask;
+    private volatile boolean shutdownInProgress;
 
     /**
      * Creates a new player stats manager.
@@ -164,6 +165,7 @@ public class PlayerStatsManager {
         this.worldEditSuppressionWindows = Objects.requireNonNull(
                 worldEditSuppressionWindows,
                 "worldEditSuppressionWindows");
+        this.shutdownInProgress = false;
         this.statsFlushTask = scheduleDistanceFlushTask
                 ? this.plugin.getServer().getScheduler().runTaskTimer(
                         this.plugin,
@@ -194,7 +196,7 @@ public class PlayerStatsManager {
      */
     public CompletableFuture<Void> recordSessionEnd(Player player) {
         Objects.requireNonNull(player, "player");
-        return persistSession(player.getUniqueId(), this.clock.instant());
+        return persistSession(player.getUniqueId(), this.clock.instant(), false);
     }
 
     /**
@@ -204,11 +206,17 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushOnlineSessions(Collection<? extends Player> onlinePlayers) {
+        return flushOnlineSessions(onlinePlayers, this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushOnlineSessions(
+            Collection<? extends Player> onlinePlayers,
+            boolean synchronous) {
         Objects.requireNonNull(onlinePlayers, "onlinePlayers");
         Instant flushTime = this.clock.instant();
         Collection<CompletableFuture<Void>> futures = new ArrayList<>();
         for (Player player : onlinePlayers) {
-            futures.add(persistSession(player.getUniqueId(), flushTime));
+            futures.add(persistSession(player.getUniqueId(), flushTime, synchronous));
         }
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
@@ -597,6 +605,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingDistanceStats() {
+        return flushPendingDistanceStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingDistanceStats(boolean synchronous) {
         DistanceStatsSnapshot snapshot;
         synchronized (this.distanceLock) {
             if (this.pendingTotalDistances.isEmpty() && this.pendingTravelDistances.isEmpty()) {
@@ -606,7 +618,13 @@ public class PlayerStatsManager {
             this.pendingTotalDistances.clear();
             this.pendingTravelDistances.clear();
         }
-        return this.playerStatsRepository.addDistanceStats(snapshot.totalDistances(), snapshot.travelDistances())
+        return (synchronous
+                        ? this.playerStatsRepository.addDistanceStatsSync(
+                                snapshot.totalDistances(),
+                                snapshot.travelDistances())
+                        : this.playerStatsRepository.addDistanceStats(
+                                snapshot.totalDistances(),
+                                snapshot.travelDistances()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreDistanceStatsSnapshot(snapshot);
@@ -620,6 +638,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingBlockStats() {
+        return flushPendingBlockStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingBlockStats(boolean synchronous) {
         BlockStatsSnapshot snapshot;
         synchronized (this.blockLock) {
             if (this.pendingBlocksPlaced.isEmpty()
@@ -632,8 +654,15 @@ public class PlayerStatsManager {
             this.pendingBlocksBroken.clear();
             this.pendingBlockStats.clear();
         }
-        return this.playerStatsRepository
-                .addBlockStats(snapshot.totalPlacedCounts(), snapshot.totalBrokenCounts(), snapshot.materialStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addBlockStatsSync(
+                                snapshot.totalPlacedCounts(),
+                                snapshot.totalBrokenCounts(),
+                                snapshot.materialStats())
+                        : this.playerStatsRepository.addBlockStats(
+                                snapshot.totalPlacedCounts(),
+                                snapshot.totalBrokenCounts(),
+                                snapshot.materialStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreBlockStatsSnapshot(snapshot);
@@ -647,6 +676,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingEntityDamageStats() {
+        return flushPendingEntityDamageStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingEntityDamageStats(boolean synchronous) {
         EntityDamageStatsSnapshot snapshot;
         synchronized (this.entityDamageLock) {
             if (this.pendingEntityDamageStats.isEmpty()) {
@@ -655,7 +688,9 @@ public class PlayerStatsManager {
             snapshot = createEntityDamageStatsSnapshot();
             this.pendingEntityDamageStats.clear();
         }
-        return this.playerStatsRepository.addEntityDamageStats(snapshot.damageStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addEntityDamageStatsSync(snapshot.damageStats())
+                        : this.playerStatsRepository.addEntityDamageStats(snapshot.damageStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreEntityDamageStatsSnapshot(snapshot);
@@ -669,6 +704,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingKillStats() {
+        return flushPendingKillStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingKillStats(boolean synchronous) {
         KillStatsSnapshot snapshot;
         synchronized (this.killLock) {
             if (this.pendingKillStats.isEmpty()) {
@@ -677,7 +716,9 @@ public class PlayerStatsManager {
             snapshot = createKillStatsSnapshot();
             this.pendingKillStats.clear();
         }
-        return this.playerStatsRepository.addKillStats(snapshot.killStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addKillStatsSync(snapshot.killStats())
+                        : this.playerStatsRepository.addKillStats(snapshot.killStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreKillStatsSnapshot(snapshot);
@@ -691,6 +732,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingCraftStats() {
+        return flushPendingCraftStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingCraftStats(boolean synchronous) {
         CraftStatsSnapshot snapshot;
         synchronized (this.craftLock) {
             if (this.pendingCraftStats.isEmpty()) {
@@ -699,7 +744,9 @@ public class PlayerStatsManager {
             snapshot = createCraftStatsSnapshot();
             this.pendingCraftStats.clear();
         }
-        return this.playerStatsRepository.addCraftStats(snapshot.craftStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addCraftStatsSync(snapshot.craftStats())
+                        : this.playerStatsRepository.addCraftStats(snapshot.craftStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreCraftStatsSnapshot(snapshot);
@@ -713,6 +760,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingProcessingStats() {
+        return flushPendingProcessingStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingProcessingStats(boolean synchronous) {
         ProcessingStatsSnapshot snapshot;
         synchronized (this.processingLock) {
             if (this.pendingBrewCounts.isEmpty()
@@ -727,12 +778,17 @@ public class PlayerStatsManager {
             this.pendingEnchantStats.clear();
             this.pendingEnchantItemStats.clear();
         }
-        return this.playerStatsRepository
-                .addProcessingStats(
-                        snapshot.brewCounts(),
-                        snapshot.smeltStats(),
-                        snapshot.enchantStats(),
-                        snapshot.enchantItemStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addProcessingStatsSync(
+                                snapshot.brewCounts(),
+                                snapshot.smeltStats(),
+                                snapshot.enchantStats(),
+                                snapshot.enchantItemStats())
+                        : this.playerStatsRepository.addProcessingStats(
+                                snapshot.brewCounts(),
+                                snapshot.smeltStats(),
+                                snapshot.enchantStats(),
+                                snapshot.enchantItemStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreProcessingStatsSnapshot(snapshot);
@@ -746,6 +802,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingFarmingStats() {
+        return flushPendingFarmingStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingFarmingStats(boolean synchronous) {
         FarmingStatsSnapshot snapshot;
         synchronized (this.farmingLock) {
             if (this.pendingHarvestStats.isEmpty()
@@ -758,8 +818,15 @@ public class PlayerStatsManager {
             this.pendingBreedStats.clear();
             this.pendingFishStats.clear();
         }
-        return this.playerStatsRepository
-                .addFarmingStats(snapshot.harvestStats(), snapshot.breedStats(), snapshot.fishStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addFarmingStatsSync(
+                                snapshot.harvestStats(),
+                                snapshot.breedStats(),
+                                snapshot.fishStats())
+                        : this.playerStatsRepository.addFarmingStats(
+                                snapshot.harvestStats(),
+                                snapshot.breedStats(),
+                                snapshot.fishStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreFarmingStatsSnapshot(snapshot);
@@ -773,6 +840,10 @@ public class PlayerStatsManager {
      * @return completion future
      */
     public CompletableFuture<Void> flushPendingItemStats() {
+        return flushPendingItemStats(this.shutdownInProgress);
+    }
+
+    private CompletableFuture<Void> flushPendingItemStats(boolean synchronous) {
         ItemStatsSnapshot snapshot;
         synchronized (this.itemLock) {
             if (this.pendingItemStats.isEmpty()) {
@@ -781,7 +852,9 @@ public class PlayerStatsManager {
             snapshot = createItemStatsSnapshot();
             this.pendingItemStats.clear();
         }
-        return this.playerStatsRepository.addItemStats(snapshot.itemStats())
+        return (synchronous
+                        ? this.playerStatsRepository.addItemStatsSync(snapshot.itemStats())
+                        : this.playerStatsRepository.addItemStats(snapshot.itemStats()))
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         restoreItemStatsSnapshot(snapshot);
@@ -800,6 +873,7 @@ public class PlayerStatsManager {
         if (this.statsFlushTask != null) {
             this.statsFlushTask.cancel();
         }
+        this.shutdownInProgress = true;
         return CompletableFuture.allOf(
                 flushOnlineSessions(onlinePlayers),
                 flushPendingDistanceStats(),
@@ -821,7 +895,7 @@ public class PlayerStatsManager {
         return Map.copyOf(this.sessionStartTimes);
     }
 
-    private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd) {
+    private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd, boolean synchronous) {
         Instant sessionStart = this.sessionStartTimes.remove(playerId);
         if (sessionStart == null) {
             return CompletableFuture.completedFuture(null);
@@ -831,7 +905,9 @@ public class PlayerStatsManager {
         if (playTimeSeconds <= 0L) {
             return CompletableFuture.completedFuture(null);
         }
-        return this.playerStatsRepository.recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds);
+        return synchronous
+                ? this.playerStatsRepository.recordPlaySessionSync(playerId, sessionStart, sessionEnd, playTimeSeconds)
+                : this.playerStatsRepository.recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds);
     }
 
     private void flushPendingStatsSafely() {

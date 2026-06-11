@@ -113,6 +113,20 @@ public class DatabaseManager {
     }
 
     /**
+     * Runs a task synchronously on the current thread.
+     *
+     * @param task task to run
+     */
+    public void executeSync(Runnable task) {
+        try {
+            task.run();
+        } catch (Exception exception) {
+            this.plugin.getLogger().severe("Sync DB operation failed: " + exception.getMessage());
+            throw exception;
+        }
+    }
+
+    /**
      * Runs a supplier asynchronously and returns its completion future.
      *
      * @param supplier query supplier
@@ -128,6 +142,23 @@ public class DatabaseManager {
                 future.completeExceptionally(exception);
             }
         });
+        return future;
+    }
+
+    /**
+     * Runs a supplier synchronously on the current thread and returns a completed future.
+     *
+     * @param supplier query supplier
+     * @param <T> result type
+     * @return completed future for the supplier result
+     */
+    public <T> CompletableFuture<T> querySync(Supplier<T> supplier) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        try {
+            executeSync(() -> future.complete(supplier.get()));
+        } catch (Exception exception) {
+            future.completeExceptionally(exception);
+        }
         return future;
     }
 
