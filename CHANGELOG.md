@@ -1,3 +1,18 @@
+# [0.32.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.31.0...v0.32.0) (2026-06-11)
+
+
+### Bug Fixes
+
+* **stats:** fix player head skin loading for damage stats ([#96](https://github.com/TServerNetwork/T-Nexus/issues/96)) ([906c279](https://github.com/TServerNetwork/T-Nexus/commit/906c279087f18f64de86e12f16935827e239f254))
+* **stats:** migrate to daily aggregate schema for period filter support ([#96](https://github.com/TServerNetwork/T-Nexus/issues/96)) ([8909f29](https://github.com/TServerNetwork/T-Nexus/commit/8909f292a3656e82577a50cda2bc0db9f1dcbdd0))
+
+
+### Features
+
+* **stats:** add projectile and damage sub-GUIs to combat category ([#96](https://github.com/TServerNetwork/T-Nexus/issues/96)) ([d06a96f](https://github.com/TServerNetwork/T-Nexus/commit/d06a96fca1ee3e2998f95e259c5f3ea585a5d036))
+* **stats:** separate mob and player damage display in GUI ([#96](https://github.com/TServerNetwork/T-Nexus/issues/96)) ([9beff5a](https://github.com/TServerNetwork/T-Nexus/commit/9beff5ac7d42590cff0c7ab0497a8d25cce552d1))
+* **stats:** track fall damage in entity damage stats ([#96](https://github.com/TServerNetwork/T-Nexus/issues/96)) ([292a679](https://github.com/TServerNetwork/T-Nexus/commit/292a67930f2086b6f2f22cbe311303927af85aa0))
+
 # [0.31.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.30.0...v0.31.0) (2026-06-11)
 
 
