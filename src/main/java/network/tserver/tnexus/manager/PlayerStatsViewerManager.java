@@ -2,19 +2,16 @@ package network.tserver.tnexus.manager;
 
 import java.text.NumberFormat;
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +30,7 @@ import network.tserver.tnexus.database.repository.PlayerStatsViewRepository.Favo
 import network.tserver.tnexus.database.repository.PlayerStatsViewRepository.RawPlayerStatsData;
 import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.gui.player.PlayerStatsCategoryGui;
+import network.tserver.tnexus.gui.player.PlayerStatsCombatDetailGui;
 import network.tserver.tnexus.gui.player.PlayerStatsMainGui;
 import network.tserver.tnexus.util.CurrencyFormatter;
 import org.bukkit.Bukkit;
@@ -137,6 +135,41 @@ public final class PlayerStatsViewerManager {
     }
 
     /**
+     * Opens a combat detail sub-GUI for the viewer and target.
+     *
+     * @param viewer viewing player
+     * @param target target player
+     * @param detailType selected combat detail type
+     * @param periodFilter active period filter
+     * @param sortOrder active sort order
+     */
+    public void openCombatDetailGui(
+            Player viewer,
+            OfflinePlayer target,
+            CombatDetailType detailType,
+            StatsPeriodFilter periodFilter,
+            StatsSortOrder sortOrder) {
+        Objects.requireNonNull(viewer, "viewer");
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(detailType, "detailType");
+        loadSnapshot(viewer.getUniqueId(), target, periodFilter)
+                .whenComplete((snapshot, throwable) -> Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(viewer, "stats.command.load-failed");
+                        return;
+                    }
+                    new PlayerStatsCombatDetailGui(
+                            this.plugin,
+                            this,
+                            viewer,
+                            Objects.requireNonNull(snapshot, "snapshot"),
+                            detailType,
+                            periodFilter,
+                            sortOrder).open();
+                }));
+    }
+
+    /**
      * Loads a formatted snapshot for the target.
      *
      * @param viewerId viewer UUID used for favorites
@@ -151,9 +184,10 @@ public final class PlayerStatsViewerManager {
         Objects.requireNonNull(viewerId, "viewerId");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(periodFilter, "periodFilter");
-        Instant periodStart = resolvePeriodStart(periodFilter);
+        LocalDate periodStartDate = resolvePeriodStartDate(periodFilter);
+        Instant periodStartInstant = resolvePeriodStartInstant(periodStartDate);
         CompletableFuture<RawPlayerStatsData> statsFuture =
-                this.repository.loadSnapshot(viewerId, target.getUniqueId(), periodStart);
+                this.repository.loadSnapshot(viewerId, target.getUniqueId(), periodStartDate, periodStartInstant);
         CompletableFuture<Double> balanceFuture =
                 this.plugin.getEconomyManager().getBalance(target.getUniqueId());
         return statsFuture.thenCombine(balanceFuture, (stats, balance) -> buildSnapshot(target, periodFilter, stats, balance));
@@ -189,6 +223,18 @@ public final class PlayerStatsViewerManager {
     }
 
     /**
+     * Returns the localized combat detail label.
+     *
+     * @param detailType detail type
+     * @return localized label
+     */
+    public String getCombatDetailLabel(CombatDetailType detailType) {
+        return this.plugin.getMessageConfig().getMessage(
+                "stats.dynamic.combat.name",
+                prettifyKey(detailType.name()));
+    }
+
+    /**
      * Returns the localized period label.
      *
      * @param filter filter
@@ -208,14 +254,33 @@ public final class PlayerStatsViewerManager {
         return this.plugin.getMessageConfig().getMessage(sortOrder.labelKey());
     }
 
+    /**
+     * Resolves a combat summary key to its target sub-GUI.
+     *
+     * @param entryKey summary entry key
+     * @return detail type or {@code null}
+     */
+    public @Nullable CombatDetailType resolveCombatDetailType(String entryKey) {
+        return switch (entryKey) {
+            case "COMBAT_SUMMARY_MOB_DAMAGE" -> CombatDetailType.MOB_DAMAGE;
+            case "COMBAT_SUMMARY_PLAYER_DAMAGE" -> CombatDetailType.PLAYER_DAMAGE;
+            case "COMBAT_SUMMARY_PROJECTILES" -> CombatDetailType.PROJECTILES;
+            default -> null;
+        };
+    }
+
     private PlayerStatsSnapshot buildSnapshot(
             OfflinePlayer target,
             StatsPeriodFilter periodFilter,
             RawPlayerStatsData rawData,
             double currentBalance) {
         EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory = new EnumMap<>(StatsCategory.class);
+        EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries = new EnumMap<>(CombatDetailType.class);
         for (StatsCategory category : StatsCategory.values()) {
             entriesByCategory.put(category, new ArrayList<>());
+        }
+        for (CombatDetailType detailType : CombatDetailType.values()) {
+            combatDetailEntries.put(detailType, new ArrayList<>());
         }
 
         addGeneralEntries(entriesByCategory.get(StatsCategory.GENERAL), target, rawData.playerSummary());
@@ -223,8 +288,10 @@ public final class PlayerStatsViewerManager {
         addBlockEntries(entriesByCategory.get(StatsCategory.BLOCKS), rawData.blockStats());
         addCombatEntries(
                 entriesByCategory.get(StatsCategory.COMBAT),
+                combatDetailEntries,
                 rawData.entityDamageStats(),
-                rawData.killStats());
+                rawData.killStats(),
+                rawData.projectileStats());
         addActivityEntries(entriesByCategory.get(StatsCategory.ACTIVITY), rawData);
 
         return new PlayerStatsSnapshot(
@@ -233,6 +300,7 @@ public final class PlayerStatsViewerManager {
                 resolveFirstLogin(target, rawData.playerSummary().firstLogin()),
                 periodFilter,
                 entriesByCategory,
+                combatDetailEntries,
                 rawData.favorites());
     }
 
@@ -299,7 +367,8 @@ public final class PlayerStatsViewerManager {
                         ? this.plugin.getMessageConfig().getMessage("stats.values.unavailable")
                         : DATE_TIME_FORMAT.format(firstLogin),
                 List.of(),
-                firstLogin == null ? 0.0D : firstLogin.getEpochSecond()));
+                firstLogin == null ? 0.0D : firstLogin.getEpochSecond(),
+                target.getUniqueId()));
     }
 
     private void addEconomyEntries(
@@ -384,17 +453,66 @@ public final class PlayerStatsViewerManager {
                             this.plugin.getMessageConfig().getMessage(
                                     "stats.dynamic.block.broken",
                                     formatWholeNumber(delta.brokenCount()))),
-                    total));
+                    total,
+                    null));
         }
     }
 
     private void addCombatEntries(
-            List<StatsEntry> entries,
+            List<StatsEntry> summaryEntries,
+            EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries,
+            Map<String, EntityDamageDelta> entityDamageStats,
+            Map<String, Integer> killStats,
+            Map<String, Integer> projectileStats) {
+        Map<String, CombatAggregate> mobAggregates = new LinkedHashMap<>();
+        Map<String, CombatAggregate> playerAggregates = new LinkedHashMap<>();
+        mergeCombatAggregates(mobAggregates, playerAggregates, entityDamageStats, killStats);
+
+        List<StatsEntry> mobEntries = createCombatDetailEntries(mobAggregates, false);
+        List<StatsEntry> playerEntries = createCombatDetailEntries(playerAggregates, true);
+        List<StatsEntry> projectileEntries = createProjectileEntries(projectileStats);
+
+        combatDetailEntries.put(CombatDetailType.MOB_DAMAGE, mobEntries);
+        combatDetailEntries.put(CombatDetailType.PLAYER_DAMAGE, playerEntries);
+        combatDetailEntries.put(CombatDetailType.PROJECTILES, projectileEntries);
+
+        summaryEntries.add(createCombatSummaryEntry(
+                "COMBAT_SUMMARY_MOB_DAMAGE",
+                Material.ZOMBIE_HEAD,
+                prettifyKey(CombatDetailType.MOB_DAMAGE.name()),
+                mobEntries,
+                sumCombatKills(mobAggregates),
+                sumCombatDealt(mobAggregates),
+                sumCombatTaken(mobAggregates)));
+        summaryEntries.add(createCombatSummaryEntry(
+                "COMBAT_SUMMARY_PLAYER_DAMAGE",
+                Material.IRON_SWORD,
+                prettifyKey(CombatDetailType.PLAYER_DAMAGE.name()),
+                playerEntries,
+                sumCombatKills(playerAggregates),
+                sumCombatDealt(playerAggregates),
+                sumCombatTaken(playerAggregates)));
+        summaryEntries.add(new StatsEntry(
+                "COMBAT_SUMMARY_PROJECTILES",
+                StatsCategory.COMBAT,
+                Material.BOW,
+                this.plugin.getMessageConfig().getMessage(
+                        "stats.dynamic.combat.name",
+                        prettifyKey(CombatDetailType.PROJECTILES.name())),
+                formatWholeNumber(sumIntegers(projectileStats)),
+                List.of(),
+                sumIntegers(projectileStats),
+                null));
+    }
+
+    private void mergeCombatAggregates(
+            Map<String, CombatAggregate> mobAggregates,
+            Map<String, CombatAggregate> playerAggregates,
             Map<String, EntityDamageDelta> entityDamageStats,
             Map<String, Integer> killStats) {
-        Map<String, CombatAggregate> aggregates = new LinkedHashMap<>();
         for (Map.Entry<String, EntityDamageDelta> entry : entityDamageStats.entrySet()) {
-            aggregates.put(
+            Map<String, CombatAggregate> targetMap = isUuid(entry.getKey()) ? playerAggregates : mobAggregates;
+            targetMap.put(
                     entry.getKey(),
                     new CombatAggregate(
                             entry.getKey(),
@@ -403,16 +521,21 @@ public final class PlayerStatsViewerManager {
                             entry.getValue().damageTaken()));
         }
         for (Map.Entry<String, Integer> entry : killStats.entrySet()) {
-            aggregates.computeIfAbsent(entry.getKey(), key -> new CombatAggregate(key, 0, 0.0D, 0.0D))
+            Map<String, CombatAggregate> targetMap = isUuid(entry.getKey()) ? playerAggregates : mobAggregates;
+            targetMap.computeIfAbsent(entry.getKey(), key -> new CombatAggregate(key, 0, 0.0D, 0.0D))
                     .setKillCount(entry.getValue());
         }
+    }
 
+    private List<StatsEntry> createCombatDetailEntries(Map<String, CombatAggregate> aggregates, boolean playerEntries) {
+        List<StatsEntry> entries = new ArrayList<>();
         for (CombatAggregate aggregate : aggregates.values()) {
             double sortValue = aggregate.killCount + aggregate.damageDealt + aggregate.damageTaken;
+            UUID playerHeadId = playerEntries ? UUID.fromString(aggregate.key) : null;
             entries.add(new StatsEntry(
-                    "COMBAT:" + aggregate.key,
+                    (playerEntries ? "COMBAT_PLAYER:" : "COMBAT_MOB:") + aggregate.key,
                     StatsCategory.COMBAT,
-                    resolveCombatMaterial(aggregate.key),
+                    playerEntries ? Material.PLAYER_HEAD : resolveCombatMaterial(aggregate.key),
                     this.plugin.getMessageConfig().getMessage(
                             "stats.dynamic.combat.name",
                             resolveEntityName(aggregate.key)),
@@ -427,8 +550,56 @@ public final class PlayerStatsViewerManager {
                             this.plugin.getMessageConfig().getMessage(
                                     "stats.dynamic.combat.damage-taken",
                                     formatDecimal(aggregate.damageTaken))),
-                    sortValue));
+                    sortValue,
+                    playerHeadId));
         }
+        return List.copyOf(entries);
+    }
+
+    private List<StatsEntry> createProjectileEntries(Map<String, Integer> projectileStats) {
+        List<StatsEntry> entries = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : projectileStats.entrySet()) {
+            entries.add(new StatsEntry(
+                    "PROJECTILE:" + entry.getKey(),
+                    StatsCategory.COMBAT,
+                    resolveProjectileMaterial(entry.getKey()),
+                    this.plugin.getMessageConfig().getMessage(
+                            "stats.dynamic.combat.name",
+                            prettifyKey(entry.getKey())),
+                    formatWholeNumber(entry.getValue()),
+                    List.of(),
+                    entry.getValue(),
+                    null));
+        }
+        return List.copyOf(entries);
+    }
+
+    private StatsEntry createCombatSummaryEntry(
+            String key,
+            Material material,
+            String label,
+            List<StatsEntry> detailEntries,
+            double killCount,
+            double damageDealt,
+            double damageTaken) {
+        return new StatsEntry(
+                key,
+                StatsCategory.COMBAT,
+                material,
+                this.plugin.getMessageConfig().getMessage("stats.dynamic.combat.name", label),
+                formatWholeNumber(detailEntries.size()),
+                List.of(
+                        this.plugin.getMessageConfig().getMessage(
+                                "stats.dynamic.combat.kills",
+                                formatWholeNumber(killCount)),
+                        this.plugin.getMessageConfig().getMessage(
+                                "stats.dynamic.combat.damage-dealt",
+                                formatDecimal(damageDealt)),
+                        this.plugin.getMessageConfig().getMessage(
+                                "stats.dynamic.combat.damage-taken",
+                                formatDecimal(damageTaken))),
+                killCount + damageDealt + damageTaken,
+                null);
     }
 
     private void addActivityEntries(List<StatsEntry> entries, RawPlayerStatsData rawData) {
@@ -518,7 +689,8 @@ public final class PlayerStatsViewerManager {
                 this.plugin.getMessageConfig().getMessage(labelKey),
                 valueText,
                 List.of(),
-                sortValue);
+                sortValue,
+                null);
     }
 
     private FavoriteToggleResult applyFavoriteMutation(PlayerStatsSnapshot snapshot, FavoriteMutation mutation) {
@@ -533,18 +705,23 @@ public final class PlayerStatsViewerManager {
         return new FavoriteToggleResult(status, mutation.slotPosition());
     }
 
-    private @Nullable Instant resolvePeriodStart(StatsPeriodFilter filter) {
+    private @Nullable LocalDate resolvePeriodStartDate(StatsPeriodFilter filter) {
         LocalDate today = LocalDate.now(this.clock);
         return switch (filter) {
             case ALL_TIME -> null;
-            case TODAY -> LocalDateTime.of(today, LocalTime.MIN).atZone(this.clock.getZone()).toInstant();
-            case THIS_WEEK -> LocalDateTime.of(
-                    today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)),
-                    LocalTime.MIN).atZone(this.clock.getZone()).toInstant();
-            case THIS_MONTH -> LocalDateTime.of(
-                    today.withDayOfMonth(1),
-                    LocalTime.MIN).atZone(this.clock.getZone()).toInstant();
+            case TODAY -> today;
+            case THIS_WEEK -> today.minusDays(6L);
+            case THIS_MONTH -> today.minusDays(29L);
         };
+    }
+
+    private @Nullable Instant resolvePeriodStartInstant(@Nullable LocalDate periodStartDate) {
+        if (periodStartDate == null) {
+            return null;
+        }
+        return LocalDateTime.of(periodStartDate, LocalTime.MIN)
+                .atZone(this.clock.getZone())
+                .toInstant();
     }
 
     private @Nullable Instant resolveFirstLogin(OfflinePlayer target, @Nullable Instant persistedFirstLogin) {
@@ -572,9 +749,22 @@ public final class PlayerStatsViewerManager {
             case "WITHER_SKELETON" -> Material.WITHER_SKELETON_SKULL;
             case "CREEPER" -> Material.CREEPER_HEAD;
             case "ZOMBIE" -> Material.ZOMBIE_HEAD;
+            case "FALL" -> Material.FEATHER;
             case "PIGLIN", "PIGLIN_BRUTE" -> Material.GOLDEN_SWORD;
-            case "PLAYER" -> Material.PLAYER_HEAD;
-            default -> isUuid(entityKey) ? Material.PLAYER_HEAD : Material.DIAMOND_SWORD;
+            default -> Material.DIAMOND_SWORD;
+        };
+    }
+
+    private Material resolveProjectileMaterial(String entityType) {
+        return switch (entityType) {
+            case "ARROW", "SPECTRAL_ARROW", "TIPPED_ARROW" -> Material.ARROW;
+            case "TRIDENT" -> Material.TRIDENT;
+            case "SNOWBALL" -> Material.SNOWBALL;
+            case "EGG" -> Material.EGG;
+            case "ENDER_PEARL" -> Material.ENDER_PEARL;
+            case "FIREBALL", "SMALL_FIREBALL", "DRAGON_FIREBALL" -> Material.FIRE_CHARGE;
+            case "POTION" -> Material.SPLASH_POTION;
+            default -> Material.BOW;
         };
     }
 
@@ -634,12 +824,36 @@ public final class PlayerStatsViewerManager {
         return values.values().stream().mapToInt(ItemStatsDelta::dropCount).sum();
     }
 
+    private double sumCombatKills(Map<String, CombatAggregate> aggregates) {
+        return aggregates.values().stream().mapToInt(CombatAggregate::killCount).sum();
+    }
+
+    private double sumCombatDealt(Map<String, CombatAggregate> aggregates) {
+        return aggregates.values().stream().mapToDouble(CombatAggregate::damageDealt).sum();
+    }
+
+    private double sumCombatTaken(Map<String, CombatAggregate> aggregates) {
+        return aggregates.values().stream().mapToDouble(CombatAggregate::damageTaken).sum();
+    }
+
+    private Comparator<StatsEntry> createComparator(StatsSortOrder sortOrder) {
+        return switch (sortOrder) {
+            case VALUE_DESC -> Comparator.comparingDouble(StatsEntry::sortValue)
+                    .reversed()
+                    .thenComparing(entry -> entry.displayName().toLowerCase(Locale.ROOT));
+            case VALUE_ASC -> Comparator.comparingDouble(StatsEntry::sortValue)
+                    .thenComparing(entry -> entry.displayName().toLowerCase(Locale.ROOT));
+            case NAME_ASC -> Comparator.comparing((StatsEntry entry) -> entry.displayName().toLowerCase(Locale.ROOT))
+                    .thenComparing(Comparator.comparingDouble(StatsEntry::sortValue).reversed());
+        };
+    }
+
     private static final class CombatAggregate {
 
         private final String key;
         private int killCount;
-        private double damageDealt;
-        private double damageTaken;
+        private final double damageDealt;
+        private final double damageTaken;
 
         private CombatAggregate(String key, int killCount, double damageDealt, double damageTaken) {
             this.key = key;
@@ -650,6 +864,18 @@ public final class PlayerStatsViewerManager {
 
         private void setKillCount(int killCount) {
             this.killCount = killCount;
+        }
+
+        private int killCount() {
+            return this.killCount;
+        }
+
+        private double damageDealt() {
+            return this.damageDealt;
+        }
+
+        private double damageTaken() {
+            return this.damageTaken;
         }
     }
 
@@ -683,6 +909,31 @@ public final class PlayerStatsViewerManager {
         String labelKey() {
             return this.labelKey;
         }
+    }
+
+    /**
+     * Combat sub-GUI types.
+     */
+    public enum CombatDetailType {
+        MOB_DAMAGE(Material.ZOMBIE_HEAD),
+        PLAYER_DAMAGE(Material.IRON_SWORD),
+        PROJECTILES(Material.BOW);
+
+        private final Material icon;
+
+        CombatDetailType(Material icon) {
+            this.icon = icon;
+        }
+
+        /**
+         * Returns the icon material.
+         *
+         * @return icon material
+         */
+        public Material icon() {
+            return this.icon;
+        }
+
     }
 
     /**
@@ -761,6 +1012,7 @@ public final class PlayerStatsViewerManager {
      * @param valueText localized value text
      * @param detailLines additional detail lines
      * @param sortValue numeric sort value
+     * @param playerHeadId optional player UUID for PLAYER_HEAD skin rendering
      */
     public record StatsEntry(
             String key,
@@ -769,19 +1021,21 @@ public final class PlayerStatsViewerManager {
             String displayName,
             String valueText,
             List<String> detailLines,
-            double sortValue) {
+            double sortValue,
+            @Nullable UUID playerHeadId) {
     }
 
     /**
      * Mutable GUI snapshot.
      */
-    public static final class PlayerStatsSnapshot {
+    public final class PlayerStatsSnapshot {
 
         private final UUID targetId;
         private final String targetName;
         private final @Nullable Instant firstLogin;
         private final StatsPeriodFilter periodFilter;
         private final EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory;
+        private final EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries;
         private final Map<String, StatsEntry> entriesByKey;
         private final Map<Integer, String> favorites;
 
@@ -791,16 +1045,25 @@ public final class PlayerStatsViewerManager {
                 @Nullable Instant firstLogin,
                 StatsPeriodFilter periodFilter,
                 EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory,
+                EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries,
                 Map<Integer, String> favorites) {
             this.targetId = targetId;
             this.targetName = targetName;
             this.firstLogin = firstLogin;
             this.periodFilter = periodFilter;
             this.entriesByCategory = new EnumMap<>(StatsCategory.class);
+            this.combatDetailEntries = new EnumMap<>(CombatDetailType.class);
             this.entriesByKey = new LinkedHashMap<>();
             for (StatsCategory category : StatsCategory.values()) {
                 List<StatsEntry> entries = List.copyOf(entriesByCategory.getOrDefault(category, List.of()));
                 this.entriesByCategory.put(category, entries);
+                for (StatsEntry entry : entries) {
+                    this.entriesByKey.put(entry.key(), entry);
+                }
+            }
+            for (CombatDetailType detailType : CombatDetailType.values()) {
+                List<StatsEntry> entries = List.copyOf(combatDetailEntries.getOrDefault(detailType, List.of()));
+                this.combatDetailEntries.put(detailType, entries);
                 for (StatsEntry entry : entries) {
                     this.entriesByKey.put(entry.key(), entry);
                 }
@@ -862,16 +1125,24 @@ public final class PlayerStatsViewerManager {
          * @return sorted entries
          */
         public List<StatsEntry> getSortedEntries(StatsCategory category, StatsSortOrder sortOrder) {
-            Comparator<StatsEntry> comparator = switch (sortOrder) {
-                case VALUE_DESC -> Comparator.comparingDouble(StatsEntry::sortValue)
-                        .reversed()
-                        .thenComparing(entry -> entry.displayName().toLowerCase(Locale.ROOT));
-                case VALUE_ASC -> Comparator.comparingDouble(StatsEntry::sortValue)
-                        .thenComparing(entry -> entry.displayName().toLowerCase(Locale.ROOT));
-                case NAME_ASC -> Comparator.comparing((StatsEntry entry) -> entry.displayName().toLowerCase(Locale.ROOT))
-                        .thenComparing(Comparator.comparingDouble(StatsEntry::sortValue).reversed());
-            };
-            return getEntries(category).stream().sorted(comparator).toList();
+            return getEntries(category).stream()
+                    .sorted(createComparator(sortOrder))
+                    .toList();
+        }
+
+        /**
+         * Returns the detail entries sorted by the requested sort order.
+         *
+         * @param detailType detail type
+         * @param sortOrder sort order
+         * @return sorted detail entries
+         */
+        public List<StatsEntry> getSortedCombatDetailEntries(
+                CombatDetailType detailType,
+                StatsSortOrder sortOrder) {
+            return this.combatDetailEntries.getOrDefault(detailType, List.of()).stream()
+                    .sorted(createComparator(sortOrder))
+                    .toList();
         }
 
         /**

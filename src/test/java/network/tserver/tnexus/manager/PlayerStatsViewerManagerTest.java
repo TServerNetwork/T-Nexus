@@ -1,6 +1,7 @@
 package network.tserver.tnexus.manager;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,7 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlayerStatsViewerManagerTest {
@@ -59,7 +61,7 @@ class PlayerStatsViewerManagerTest {
         assertFalse(snapshot.getEntries(PlayerStatsViewerManager.StatsCategory.ACTIVITY).isEmpty());
         assertNotNull(snapshot.getEntry("GENERAL_PLAY_TIME"));
         assertNotNull(snapshot.getEntry("BLOCK:STONE"));
-        assertNotNull(snapshot.getEntry("COMBAT:ZOMBIE"));
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("ACTIVITY_CRAFT_TOTAL"));
     }
 
@@ -121,6 +123,90 @@ class PlayerStatsViewerManagerTest {
 
         assertEquals(PlayerStatsViewerManager.FavoriteToggleStatus.FULL, result.status());
         assertEquals(14, snapshot.getFavorites().size());
+    }
+
+    @Test
+    void shouldFilterDailyAggregateStatsBySelectedPeriod() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        insertHistoricalBlockStat(plugin, target.getUniqueId(), "DIAMOND_ORE", 8, 1, LocalDate.now().minusDays(40));
+        insertHistoricalDamageStat(plugin, target.getUniqueId(), "ZOMBIE", 20.0D, 5.0D, LocalDate.now().minusDays(40));
+        insertHistoricalProjectileStat(plugin, target.getUniqueId(), "TRIDENT", 9, LocalDate.now().minusDays(40));
+
+        PlayerStatsViewerManager manager = plugin.getPlayerStatsViewerManager();
+        PlayerStatsViewerManager.PlayerStatsSnapshot todaySnapshot = manager
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.TODAY)
+                .get(5, TimeUnit.SECONDS);
+        PlayerStatsViewerManager.PlayerStatsSnapshot allTimeSnapshot = manager
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        assertNull(todaySnapshot.getEntry("BLOCK:DIAMOND_ORE"));
+        assertNotNull(allTimeSnapshot.getEntry("BLOCK:DIAMOND_ORE"));
+
+        PlayerStatsViewerManager.StatsEntry todayProjectileSummary =
+                todaySnapshot.getEntry("COMBAT_SUMMARY_PROJECTILES");
+        PlayerStatsViewerManager.StatsEntry allTimeProjectileSummary =
+                allTimeSnapshot.getEntry("COMBAT_SUMMARY_PROJECTILES");
+        assertNotNull(todayProjectileSummary);
+        assertNotNull(allTimeProjectileSummary);
+        assertEquals("1", todayProjectileSummary.valueText());
+        assertEquals("10", allTimeProjectileSummary.valueText());
+    }
+
+    @Test
+    void shouldSeparateMobAndPlayerCombatDetails() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+        PlayerMock rival = this.server.addPlayer("Rival");
+
+        seedStats(plugin, target);
+        PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
+        repository.addEntityDamageStats(Map.of(
+                        target.getUniqueId(),
+                        Map.of(rival.getUniqueId().toString(), new EntityDamageDelta(7.0D, 2.0D))))
+                .get(5, TimeUnit.SECONDS);
+        repository.addKillStats(Map.of(target.getUniqueId(), Map.of(rival.getUniqueId().toString(), 1)))
+                .get(5, TimeUnit.SECONDS);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PLAYER_DAMAGE"));
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
+
+        List<PlayerStatsViewerManager.StatsEntry> mobEntries = snapshot.getSortedCombatDetailEntries(
+                PlayerStatsViewerManager.CombatDetailType.MOB_DAMAGE,
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+        List<PlayerStatsViewerManager.StatsEntry> playerEntries = snapshot.getSortedCombatDetailEntries(
+                PlayerStatsViewerManager.CombatDetailType.PLAYER_DAMAGE,
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+        List<PlayerStatsViewerManager.StatsEntry> projectileEntries = snapshot.getSortedCombatDetailEntries(
+                PlayerStatsViewerManager.CombatDetailType.PROJECTILES,
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+
+        assertTrue(mobEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_MOB:ZOMBIE")));
+        assertTrue(playerEntries.stream().anyMatch(entry ->
+                entry.key().equals("COMBAT_PLAYER:" + rival.getUniqueId())
+                        && rival.getUniqueId().equals(entry.playerHeadId())));
+        assertTrue(projectileEntries.stream().anyMatch(entry -> entry.key().equals("PROJECTILE:ARROW")));
     }
 
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {
@@ -220,6 +306,64 @@ class PlayerStatsViewerManagerTest {
                 }
                 statement.executeBatch();
             }
+        }
+    }
+
+    private void insertHistoricalBlockStat(
+            TNexus plugin,
+            java.util.UUID playerId,
+            String material,
+            int placedCount,
+            int brokenCount,
+            LocalDate statDate) throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "INSERT INTO tnexus_block_stats "
+                             + "(player_uuid, material, stat_date, placed_count, broken_count) VALUES (?, ?, ?, ?, ?)")) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, material);
+            statement.setDate(3, java.sql.Date.valueOf(statDate));
+            statement.setInt(4, placedCount);
+            statement.setInt(5, brokenCount);
+            statement.executeUpdate();
+        }
+    }
+
+    private void insertHistoricalDamageStat(
+            TNexus plugin,
+            java.util.UUID playerId,
+            String entityType,
+            double damageDealt,
+            double damageTaken,
+            LocalDate statDate) throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "INSERT INTO tnexus_entity_damage_stats "
+                             + "(player_uuid, entity_type, stat_date, damage_dealt, damage_taken) VALUES (?, ?, ?, ?, ?)")) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, entityType);
+            statement.setDate(3, java.sql.Date.valueOf(statDate));
+            statement.setDouble(4, damageDealt);
+            statement.setDouble(5, damageTaken);
+            statement.executeUpdate();
+        }
+    }
+
+    private void insertHistoricalProjectileStat(
+            TNexus plugin,
+            java.util.UUID playerId,
+            String entityType,
+            int count,
+            LocalDate statDate) throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "INSERT INTO tnexus_projectile_stats "
+                             + "(player_uuid, entity_type, stat_date, count) VALUES (?, ?, ?, ?)")) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, entityType);
+            statement.setDate(3, java.sql.Date.valueOf(statDate));
+            statement.setInt(4, count);
+            statement.executeUpdate();
         }
     }
 }
