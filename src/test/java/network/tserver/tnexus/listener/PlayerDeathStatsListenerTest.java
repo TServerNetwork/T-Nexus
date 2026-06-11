@@ -54,7 +54,10 @@ class PlayerDeathStatsListenerTest {
                 false,
                 PlayerRespawnEvent.RespawnReason.DEATH));
 
-        waitUntil(() -> readCauseCount(plugin, victim, "Killer") == 1 && readPlayerStat(plugin, victim, "respawns") == 1);
+        waitUntil(() ->
+                readPlayerStat(plugin, victim, "deaths") == 1
+                        && readPlayerStat(plugin, victim, "respawns") == 1
+                        && readCauseCount(plugin, victim, "Killer") == 1);
 
         assertEquals(1, readPlayerStat(plugin, victim, "deaths"));
         assertEquals(1, readPlayerStat(plugin, victim, "respawns"));
@@ -84,7 +87,10 @@ class PlayerDeathStatsListenerTest {
                 false,
                 PlayerRespawnEvent.RespawnReason.DEATH));
 
-        waitUntil(() -> readCauseCount(plugin, victim, "VOID") == 1 && readPlayerStat(plugin, victim, "respawns") == 1);
+        waitUntil(() ->
+                readPlayerStat(plugin, victim, "deaths") == 1
+                        && readPlayerStat(plugin, victim, "respawns") == 1
+                        && readCauseCount(plugin, victim, "VOID") == 1);
 
         assertEquals(1, readPlayerStat(plugin, victim, "deaths"));
         assertEquals(1, readPlayerStat(plugin, victim, "respawns"));
