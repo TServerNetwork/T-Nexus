@@ -155,9 +155,9 @@ class PlayerStatsViewerManagerTest {
         assertNotNull(allTimeSnapshot.getEntry("BLOCK:DIAMOND_ORE"));
 
         PlayerStatsViewerManager.StatsEntry todayProjectileSummary =
-                todaySnapshot.getEntry("COMBAT_SUMMARY_PROJECTILES");
+                todaySnapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL");
         PlayerStatsViewerManager.StatsEntry allTimeProjectileSummary =
-                allTimeSnapshot.getEntry("COMBAT_SUMMARY_PROJECTILES");
+                allTimeSnapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL");
         assertNotNull(todayProjectileSummary);
         assertNotNull(allTimeProjectileSummary);
         assertEquals("1", todayProjectileSummary.valueText());
@@ -190,7 +190,8 @@ class PlayerStatsViewerManagerTest {
 
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PLAYER_DAMAGE"));
-        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
+        assertNotNull(snapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL"));
+        assertNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
 
         List<PlayerStatsViewerManager.StatsEntry> mobEntries = snapshot.getSortedCombatDetailEntries(
                 PlayerStatsViewerManager.CombatDetailType.MOB_DAMAGE,
@@ -198,15 +199,11 @@ class PlayerStatsViewerManagerTest {
         List<PlayerStatsViewerManager.StatsEntry> playerEntries = snapshot.getSortedCombatDetailEntries(
                 PlayerStatsViewerManager.CombatDetailType.PLAYER_DAMAGE,
                 PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
-        List<PlayerStatsViewerManager.StatsEntry> projectileEntries = snapshot.getSortedCombatDetailEntries(
-                PlayerStatsViewerManager.CombatDetailType.PROJECTILES,
-                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
 
         assertTrue(mobEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_MOB:ZOMBIE")));
         assertTrue(playerEntries.stream().anyMatch(entry ->
                 entry.key().equals("COMBAT_PLAYER:" + rival.getUniqueId())
                         && rival.getUniqueId().equals(entry.playerHeadId())));
-        assertTrue(projectileEntries.stream().anyMatch(entry -> entry.key().equals("PROJECTILE:ARROW")));
     }
 
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {

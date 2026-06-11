@@ -264,7 +264,6 @@ public final class PlayerStatsViewerManager {
         return switch (entryKey) {
             case "COMBAT_SUMMARY_MOB_DAMAGE" -> CombatDetailType.MOB_DAMAGE;
             case "COMBAT_SUMMARY_PLAYER_DAMAGE" -> CombatDetailType.PLAYER_DAMAGE;
-            case "COMBAT_SUMMARY_PROJECTILES" -> CombatDetailType.PROJECTILES;
             default -> null;
         };
     }
@@ -290,8 +289,7 @@ public final class PlayerStatsViewerManager {
                 entriesByCategory.get(StatsCategory.COMBAT),
                 combatDetailEntries,
                 rawData.entityDamageStats(),
-                rawData.killStats(),
-                rawData.projectileStats());
+                rawData.killStats());
         addActivityEntries(entriesByCategory.get(StatsCategory.ACTIVITY), rawData);
 
         return new PlayerStatsSnapshot(
@@ -462,19 +460,16 @@ public final class PlayerStatsViewerManager {
             List<StatsEntry> summaryEntries,
             EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries,
             Map<String, EntityDamageDelta> entityDamageStats,
-            Map<String, Integer> killStats,
-            Map<String, Integer> projectileStats) {
+            Map<String, Integer> killStats) {
         Map<String, CombatAggregate> mobAggregates = new LinkedHashMap<>();
         Map<String, CombatAggregate> playerAggregates = new LinkedHashMap<>();
         mergeCombatAggregates(mobAggregates, playerAggregates, entityDamageStats, killStats);
 
         List<StatsEntry> mobEntries = createCombatDetailEntries(mobAggregates, false);
         List<StatsEntry> playerEntries = createCombatDetailEntries(playerAggregates, true);
-        List<StatsEntry> projectileEntries = createProjectileEntries(projectileStats);
 
         combatDetailEntries.put(CombatDetailType.MOB_DAMAGE, mobEntries);
         combatDetailEntries.put(CombatDetailType.PLAYER_DAMAGE, playerEntries);
-        combatDetailEntries.put(CombatDetailType.PROJECTILES, projectileEntries);
 
         summaryEntries.add(createCombatSummaryEntry(
                 "COMBAT_SUMMARY_MOB_DAMAGE",
@@ -492,17 +487,6 @@ public final class PlayerStatsViewerManager {
                 sumCombatKills(playerAggregates),
                 sumCombatDealt(playerAggregates),
                 sumCombatTaken(playerAggregates)));
-        summaryEntries.add(new StatsEntry(
-                "COMBAT_SUMMARY_PROJECTILES",
-                StatsCategory.COMBAT,
-                Material.BOW,
-                this.plugin.getMessageConfig().getMessage(
-                        "stats.dynamic.combat.name",
-                        prettifyKey(CombatDetailType.PROJECTILES.name())),
-                formatWholeNumber(sumIntegers(projectileStats)),
-                List.of(),
-                sumIntegers(projectileStats),
-                null));
     }
 
     private void mergeCombatAggregates(
@@ -552,24 +536,6 @@ public final class PlayerStatsViewerManager {
                                     formatDecimal(aggregate.damageTaken))),
                     sortValue,
                     playerHeadId));
-        }
-        return List.copyOf(entries);
-    }
-
-    private List<StatsEntry> createProjectileEntries(Map<String, Integer> projectileStats) {
-        List<StatsEntry> entries = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : projectileStats.entrySet()) {
-            entries.add(new StatsEntry(
-                    "PROJECTILE:" + entry.getKey(),
-                    StatsCategory.COMBAT,
-                    resolveProjectileMaterial(entry.getKey()),
-                    this.plugin.getMessageConfig().getMessage(
-                            "stats.dynamic.combat.name",
-                            prettifyKey(entry.getKey())),
-                    formatWholeNumber(entry.getValue()),
-                    List.of(),
-                    entry.getValue(),
-                    null));
         }
         return List.copyOf(entries);
     }
