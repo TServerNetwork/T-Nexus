@@ -17,6 +17,7 @@ import network.tserver.tnexus.database.repository.BlockStatsDelta;
 import network.tserver.tnexus.database.repository.EntityDamageDelta;
 import network.tserver.tnexus.database.repository.ItemStatsDelta;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
+import network.tserver.tnexus.util.PlayerStatsResetTarget;
 import network.tserver.tnexus.util.BlockPosition;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -571,6 +572,50 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Resets every tracked stat for one player.
+     *
+     * @param playerId player id
+     * @return completion future
+     */
+    public CompletableFuture<ResetResult> resetAllStatsForPlayer(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        clearAllPendingStats(playerId);
+        resetActiveSession(playerId);
+        return this.playerStatsRepository.resetAllStatsForPlayer(playerId)
+                .thenApply(ignored -> new ResetResult(true, "ALL", 1));
+    }
+
+    /**
+     * Resets one specific tracked stat for one player.
+     *
+     * @param playerId player id
+     * @param resetTarget parsed reset target
+     * @return completion future
+     */
+    public CompletableFuture<ResetResult> resetSpecificStat(UUID playerId, PlayerStatsResetTarget resetTarget) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(resetTarget, "resetTarget");
+        clearPendingStat(playerId, resetTarget);
+        if (resetTarget.type() == PlayerStatsResetTarget.Type.PLAY_TIME) {
+            resetActiveSession(playerId);
+        }
+        return this.playerStatsRepository.resetSpecificStat(playerId, resetTarget)
+                .thenApply(success -> new ResetResult(success, resetTarget.canonicalKey(), success ? 1 : 0));
+    }
+
+    /**
+     * Resets every tracked stat for every player.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<ResetResult> resetAllPlayersStats() {
+        clearAllPendingStats(null);
+        resetAllActiveSessions();
+        return this.playerStatsRepository.resetAllStats()
+                .thenApply(affectedPlayers -> new ResetResult(true, "ALL", affectedPlayers));
+    }
+
+    /**
      * Marks a player as currently performing a WorldEdit-driven bulk edit.
      *
      * @param playerId player id
@@ -893,6 +938,232 @@ public class PlayerStatsManager {
      */
     public Map<UUID, Instant> getActiveSessionStarts() {
         return Map.copyOf(this.sessionStartTimes);
+    }
+
+    private void clearAllPendingStats(UUID playerId) {
+        clearPendingDistanceStats(playerId);
+        clearPendingBlockStats(playerId, null);
+        clearPendingEntityDamageStats(playerId, null);
+        clearPendingKillStats(playerId, null);
+        clearPendingCraftStats(playerId, null);
+        clearPendingProcessingStats(playerId, PlayerStatsResetTarget.Type.BREW_COUNT);
+        clearPendingFarmingStats(playerId, PlayerStatsResetTarget.Type.HARVEST_ALL, null);
+        clearPendingItemStats(playerId, null);
+        if (playerId == null) {
+            this.processingStationAttributions.clear();
+            this.worldEditSuppressionWindows.clear();
+        } else {
+            this.worldEditSuppressionWindows.remove(playerId);
+        }
+    }
+
+    private void clearPendingStat(UUID playerId, PlayerStatsResetTarget resetTarget) {
+        switch (resetTarget.type()) {
+            case PLAY_TIME -> {
+            }
+            case DISTANCE -> clearPendingDistanceStats(playerId);
+            case DEATHS, RESPAWNS, CHAT_COUNT, SLEEP_COUNT, PORTAL_COUNT -> {
+            }
+            case BREW_COUNT -> clearPendingProcessingStats(playerId, PlayerStatsResetTarget.Type.BREW_COUNT);
+            case BLOCK_MATERIAL -> clearPendingBlockStats(playerId, resetTarget.qualifier());
+            case ENTITY_DAMAGE_TARGET -> clearPendingEntityDamageStats(playerId, resetTarget.qualifier());
+            case KILL_TARGET -> clearPendingKillStats(playerId, resetTarget.qualifier());
+            case COMBAT_TARGET -> {
+                clearPendingEntityDamageStats(playerId, resetTarget.qualifier());
+                clearPendingKillStats(playerId, resetTarget.qualifier());
+            }
+            case CRAFT_ALL, CRAFT_MATERIAL -> clearPendingCraftStats(playerId, resetTarget.qualifier());
+            case SMELT_ALL, SMELT_MATERIAL, ENCHANT_ALL, ENCHANTMENT, ENCHANT_ITEM_MATERIAL ->
+                    clearPendingProcessingStats(playerId, resetTarget.type(), resetTarget.qualifier());
+            case HARVEST_ALL, HARVEST_MATERIAL, BREED_ALL, BREED_ENTITY, FISH_ALL, FISH_MATERIAL ->
+                    clearPendingFarmingStats(playerId, resetTarget.type(), resetTarget.qualifier());
+            case ITEM_ALL, ITEM_MATERIAL -> clearPendingItemStats(playerId, resetTarget.qualifier());
+            case PROJECTILE_ALL, PROJECTILE_TYPE -> {
+            }
+        }
+    }
+
+    private void resetActiveSession(UUID playerId) {
+        if (this.sessionStartTimes.containsKey(playerId)) {
+            this.sessionStartTimes.put(playerId, this.clock.instant());
+        }
+    }
+
+    private void resetAllActiveSessions() {
+        Instant resetTime = this.clock.instant();
+        for (UUID playerId : this.sessionStartTimes.keySet()) {
+            this.sessionStartTimes.put(playerId, resetTime);
+        }
+    }
+
+    private void clearPendingDistanceStats(UUID playerId) {
+        synchronized (this.distanceLock) {
+            if (playerId == null) {
+                this.pendingTotalDistances.clear();
+                this.pendingTravelDistances.clear();
+                return;
+            }
+            this.pendingTotalDistances.remove(playerId);
+            this.pendingTravelDistances.remove(playerId);
+        }
+    }
+
+    private void clearPendingBlockStats(UUID playerId, String materialKey) {
+        synchronized (this.blockLock) {
+            if (playerId == null) {
+                this.pendingBlocksPlaced.clear();
+                this.pendingBlocksBroken.clear();
+                this.pendingBlockStats.clear();
+                return;
+            }
+            if (materialKey == null) {
+                this.pendingBlocksPlaced.remove(playerId);
+                this.pendingBlocksBroken.remove(playerId);
+                this.pendingBlockStats.remove(playerId);
+                return;
+            }
+
+            Map<String, BlockStatsDelta> playerStats = this.pendingBlockStats.get(playerId);
+            if (playerStats == null) {
+                return;
+            }
+            BlockStatsDelta removed = playerStats.remove(materialKey);
+            if (removed == null) {
+                return;
+            }
+            mergePendingInteger(this.pendingBlocksPlaced, playerId, -removed.placedCount());
+            mergePendingInteger(this.pendingBlocksBroken, playerId, -removed.brokenCount());
+            if (playerStats.isEmpty()) {
+                this.pendingBlockStats.remove(playerId);
+            }
+        }
+    }
+
+    private void clearPendingEntityDamageStats(UUID playerId, String entityKey) {
+        synchronized (this.entityDamageLock) {
+            if (playerId == null) {
+                this.pendingEntityDamageStats.clear();
+                return;
+            }
+            if (entityKey == null) {
+                this.pendingEntityDamageStats.remove(playerId);
+                return;
+            }
+            removePendingNestedKey(this.pendingEntityDamageStats, playerId, entityKey);
+        }
+    }
+
+    private void clearPendingKillStats(UUID playerId, String targetKey) {
+        synchronized (this.killLock) {
+            if (playerId == null) {
+                this.pendingKillStats.clear();
+                return;
+            }
+            if (targetKey == null) {
+                this.pendingKillStats.remove(playerId);
+                return;
+            }
+            removePendingNestedKey(this.pendingKillStats, playerId, targetKey);
+        }
+    }
+
+    private void clearPendingCraftStats(UUID playerId, String materialKey) {
+        synchronized (this.craftLock) {
+            if (playerId == null) {
+                this.pendingCraftStats.clear();
+                return;
+            }
+            if (materialKey == null) {
+                this.pendingCraftStats.remove(playerId);
+                return;
+            }
+            removePendingNestedKey(this.pendingCraftStats, playerId, materialKey);
+        }
+    }
+
+    private void clearPendingProcessingStats(UUID playerId, PlayerStatsResetTarget.Type targetType) {
+        clearPendingProcessingStats(playerId, targetType, null);
+    }
+
+    private void clearPendingProcessingStats(
+            UUID playerId,
+            PlayerStatsResetTarget.Type targetType,
+            String qualifier) {
+        synchronized (this.processingLock) {
+            if (playerId == null) {
+                this.pendingBrewCounts.clear();
+                this.pendingSmeltStats.clear();
+                this.pendingEnchantStats.clear();
+                this.pendingEnchantItemStats.clear();
+                return;
+            }
+            switch (targetType) {
+                case BREW_COUNT -> this.pendingBrewCounts.remove(playerId);
+                case SMELT_ALL -> this.pendingSmeltStats.remove(playerId);
+                case SMELT_MATERIAL -> removePendingNestedKey(this.pendingSmeltStats, playerId, qualifier);
+                case ENCHANT_ALL -> this.pendingEnchantStats.remove(playerId);
+                case ENCHANTMENT -> removePendingNestedKey(this.pendingEnchantStats, playerId, qualifier);
+                case ENCHANT_ITEM_MATERIAL -> removePendingNestedKey(this.pendingEnchantItemStats, playerId, qualifier);
+                default -> {
+                }
+            }
+        }
+    }
+
+    private void clearPendingFarmingStats(UUID playerId, PlayerStatsResetTarget.Type targetType, String qualifier) {
+        synchronized (this.farmingLock) {
+            if (playerId == null) {
+                this.pendingHarvestStats.clear();
+                this.pendingBreedStats.clear();
+                this.pendingFishStats.clear();
+                return;
+            }
+            switch (targetType) {
+                case HARVEST_ALL -> this.pendingHarvestStats.remove(playerId);
+                case HARVEST_MATERIAL -> removePendingNestedKey(this.pendingHarvestStats, playerId, qualifier);
+                case BREED_ALL -> this.pendingBreedStats.remove(playerId);
+                case BREED_ENTITY -> removePendingNestedKey(this.pendingBreedStats, playerId, qualifier);
+                case FISH_ALL -> this.pendingFishStats.remove(playerId);
+                case FISH_MATERIAL -> removePendingNestedKey(this.pendingFishStats, playerId, qualifier);
+                default -> {
+                }
+            }
+        }
+    }
+
+    private void clearPendingItemStats(UUID playerId, String materialKey) {
+        synchronized (this.itemLock) {
+            if (playerId == null) {
+                this.pendingItemStats.clear();
+                return;
+            }
+            if (materialKey == null) {
+                this.pendingItemStats.remove(playerId);
+                return;
+            }
+            removePendingNestedKey(this.pendingItemStats, playerId, materialKey);
+        }
+    }
+
+    private <T> void removePendingNestedKey(Map<UUID, Map<String, T>> pendingStats, UUID playerId, String key) {
+        Map<String, T> playerStats = pendingStats.get(playerId);
+        if (playerStats == null) {
+            return;
+        }
+        playerStats.remove(key);
+        if (playerStats.isEmpty()) {
+            pendingStats.remove(playerId);
+        }
+    }
+
+    private void mergePendingInteger(Map<UUID, Integer> pendingValues, UUID playerId, int delta) {
+        if (delta == 0) {
+            return;
+        }
+        pendingValues.compute(playerId, (ignored, current) -> {
+            int updated = (current == null ? 0 : current) + delta;
+            return updated > 0 ? updated : null;
+        });
     }
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd, boolean synchronous) {
@@ -1257,6 +1528,16 @@ public class PlayerStatsManager {
     }
 
     private record ProcessingAttribution(UUID playerId, Instant expiresAt) {
+    }
+
+    /**
+     * Reset result payload.
+     *
+     * @param success whether the requested reset was handled
+     * @param canonicalKey canonical key that was reset
+     * @param affectedPlayers affected player count
+     */
+    public record ResetResult(boolean success, String canonicalKey, int affectedPlayers) {
     }
 
     enum TravelType {
