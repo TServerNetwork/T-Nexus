@@ -1,3 +1,10 @@
+## [0.32.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.32.0...v0.32.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **stats:** use sync DB execution on plugin shutdown to avoid scheduler error ([1604292](https://github.com/TServerNetwork/T-Nexus/commit/16042922e1e6db1640945aa7292a2a4dc34944c4))
+
 # [0.32.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.31.0...v0.32.0) (2026-06-11)
 
 
