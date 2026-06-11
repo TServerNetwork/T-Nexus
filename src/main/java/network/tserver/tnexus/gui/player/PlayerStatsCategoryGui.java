@@ -5,6 +5,7 @@ import java.util.List;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.gui.BaseGui;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager;
+import network.tserver.tnexus.manager.PlayerStatsViewerManager.CombatDetailType;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.FavoriteToggleStatus;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.PlayerStatsSnapshot;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsCategory;
@@ -17,6 +18,8 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.SkullMeta;
 
 /**
  * Category detail GUI for player stats entries.
@@ -110,6 +113,18 @@ public final class PlayerStatsCategoryGui extends BaseGui {
             addPaginatedItem(createEntryItem(entry), event -> {
                 if (event.getClick() == ClickType.RIGHT) {
                     toggleFavorite(entry);
+                    return;
+                }
+                if (this.category == StatsCategory.COMBAT) {
+                    CombatDetailType detailType = this.statsViewerManager.resolveCombatDetailType(entry.key());
+                    if (detailType != null) {
+                        this.statsViewerManager.openCombatDetailGui(
+                                this.viewer,
+                                this.target,
+                                detailType,
+                                this.periodFilter,
+                                this.sortOrder);
+                    }
                 }
             });
         }
@@ -170,7 +185,7 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                         getPlugin().getMessageConfig().getMessage("stats.gui.main.sort.hint")));
     }
 
-    private org.bukkit.inventory.ItemStack createEntryItem(StatsEntry entry) {
+    private ItemStack createEntryItem(StatsEntry entry) {
         List<String> lore = new ArrayList<>();
         if (this.snapshot.getFavorites().containsValue(entry.key())) {
             lore.add(getPlugin().getMessageConfig().getMessage("stats.gui.entry.pinned"));
@@ -184,6 +199,19 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                 this.statsViewerManager.getPeriodLabel(this.periodFilter)));
         lore.add(getPlugin().getMessageConfig().getMessage("stats.gui.entry.separator"));
         lore.add(getPlugin().getMessageConfig().getMessage("stats.gui.entry.favorite-hint"));
+        if (entry.material() == Material.PLAYER_HEAD && entry.playerHeadId() != null) {
+            ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) item.getItemMeta();
+            if (meta == null) {
+                return item;
+            }
+            meta.setOwningPlayer(getPlugin().getServer().getOfflinePlayer(entry.playerHeadId()));
+            meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&', entry.displayName()));
+            meta.setLore(lore.stream().map(line ->
+                    org.bukkit.ChatColor.translateAlternateColorCodes('&', line)).toList());
+            item.setItemMeta(meta);
+            return item;
+        }
         return createItem(entry.material(), entry.displayName(), lore);
     }
 }
