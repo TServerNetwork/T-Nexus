@@ -68,6 +68,7 @@ class DatabaseManagerTest {
         assertMigrationRecorded(17, "stats favorites");
         assertMigrationRecorded(18, "player play sessions");
         assertMigrationRecorded(19, "stats daily aggregates");
+        assertMigrationRecorded(20, "resource world resets");
         assertTableExists("tnexus_transactions");
         assertTableExists("tnexus_shops");
         assertTableExists("tnexus_shop_chests");
@@ -89,6 +90,7 @@ class DatabaseManagerTest {
         assertTableExists("tnexus_kill_stats");
         assertTableExists("tnexus_stats_favorites");
         assertTableExists("tnexus_player_play_sessions");
+        assertTableExists("tnexus_resource_world_resets");
     }
 
     @Test
@@ -112,7 +114,7 @@ class DatabaseManagerTest {
         }).get(5, TimeUnit.SECONDS);
 
         assertFalse(ranOnPrimaryThread);
-        assertEquals(19, migrationCount);
+        assertEquals(20, migrationCount);
     }
 
     @Test
@@ -135,7 +137,7 @@ class DatabaseManagerTest {
         }).get(5, TimeUnit.SECONDS);
 
         assertTrue(ranOnPrimaryThread);
-        assertEquals(19, migrationCount);
+        assertEquals(20, migrationCount);
     }
 
     @Test
@@ -152,7 +154,7 @@ class DatabaseManagerTest {
              var statement = connection.createStatement();
              var resultSet = statement.executeQuery("SELECT COUNT(*) FROM tnexus_schema_version")) {
             resultSet.next();
-            assertEquals(19, resultSet.getInt(1));
+            assertEquals(20, resultSet.getInt(1));
         }
     }
 
