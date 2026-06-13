@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import network.tserver.tnexus.database.DatabaseManager;
+import network.tserver.tnexus.util.PlayerStatsResetTarget;
 
 /**
  * Persists aggregate player session statistics.
@@ -706,6 +707,90 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Resets every tracked stat for the given player while preserving identity fields.
+     *
+     * @param playerId player id
+     * @return completion future
+     */
+    public CompletableFuture<Void> resetAllStatsForPlayer(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try {
+                    zeroAggregateColumns(connection, playerId);
+                    deleteAllDetailStats(connection, playerId);
+                    connection.commit();
+                    return null;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to reset all player stats", exception);
+            }
+        });
+    }
+
+    /**
+     * Resets every tracked stat for every player.
+     *
+     * @return completion future with affected player count
+     */
+    public CompletableFuture<Integer> resetAllStats() {
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try {
+                    int affectedPlayers = countTrackedPlayers(connection);
+                    zeroAggregateColumns(connection, null);
+                    deleteAllDetailStats(connection, null);
+                    connection.commit();
+                    return affectedPlayers;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to reset all tracked stats", exception);
+            }
+        });
+    }
+
+    /**
+     * Resets one specific stat target for the given player.
+     *
+     * @param playerId player id
+     * @param resetTarget parsed reset target
+     * @return completion future resolving to {@code true} when handled
+     */
+    public CompletableFuture<Boolean> resetSpecificStat(UUID playerId, PlayerStatsResetTarget resetTarget) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(resetTarget, "resetTarget");
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try {
+                    boolean handled = resetSpecificStat(connection, playerId, resetTarget);
+                    connection.commit();
+                    return handled;
+                } catch (Exception exception) {
+                    connection.rollback();
+                    throw exception;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to reset player stat " + resetTarget.canonicalKey(), exception);
+            }
+        });
+    }
+
+    /**
      * Increments the total death counter for the given player.
      *
      * @param playerId player id
@@ -832,6 +917,315 @@ public final class PlayerStatsRepository {
                 throw new IllegalStateException("Failed to update player stat column " + columnName, exception);
             }
         });
+    }
+
+    private boolean resetSpecificStat(
+            java.sql.Connection connection,
+            UUID playerId,
+            PlayerStatsResetTarget resetTarget) throws Exception {
+        return switch (resetTarget.type()) {
+            case PLAY_TIME -> {
+                updateAggregateColumn(connection, "play_time", playerId, 0);
+                deleteByPlayer(connection, this.playSessionsTableName, playerId);
+                yield true;
+            }
+            case DISTANCE -> {
+                updateAggregateColumn(connection, "distance", playerId, 0);
+                deleteByPlayer(connection, this.distanceStatsTableName, playerId);
+                yield true;
+            }
+            case DEATHS -> {
+                updateAggregateColumn(connection, "deaths", playerId, 0);
+                deleteByPlayer(connection, this.deathStatsTableName, playerId);
+                yield true;
+            }
+            case RESPAWNS -> {
+                updateAggregateColumn(connection, "respawns", playerId, 0);
+                yield true;
+            }
+            case CHAT_COUNT -> {
+                updateAggregateColumn(connection, "chat_count", playerId, 0);
+                yield true;
+            }
+            case SLEEP_COUNT -> {
+                updateAggregateColumn(connection, "sleep_count", playerId, 0);
+                yield true;
+            }
+            case PORTAL_COUNT -> {
+                updateAggregateColumn(connection, "portal_count", playerId, 0);
+                yield true;
+            }
+            case BREW_COUNT -> {
+                updateAggregateColumn(connection, "brew_count", playerId, 0);
+                yield true;
+            }
+            case BLOCK_MATERIAL -> {
+                BlockStatsDelta delta = queryBlockStatsDelta(connection, playerId, Objects.requireNonNull(resetTarget.qualifier()));
+                deleteByColumn(connection, this.blockStatsTableName, playerId, "material", resetTarget.qualifier());
+                if (delta != null) {
+                    decrementBlockAggregates(connection, playerId, delta);
+                }
+                yield true;
+            }
+            case ENTITY_DAMAGE_TARGET -> {
+                deleteByColumn(connection, this.entityDamageStatsTableName, playerId, "entity_type", resetTarget.qualifier());
+                yield true;
+            }
+            case KILL_TARGET -> {
+                deleteByColumn(connection, this.killStatsTableName, playerId, "target", resetTarget.qualifier());
+                yield true;
+            }
+            case COMBAT_TARGET -> {
+                deleteByColumn(connection, this.entityDamageStatsTableName, playerId, "entity_type", resetTarget.qualifier());
+                deleteByColumn(connection, this.killStatsTableName, playerId, "target", resetTarget.qualifier());
+                yield true;
+            }
+            case CRAFT_ALL -> {
+                deleteByPlayer(connection, this.craftStatsTableName, playerId);
+                yield true;
+            }
+            case CRAFT_MATERIAL -> {
+                deleteByColumn(connection, this.craftStatsTableName, playerId, "material", resetTarget.qualifier());
+                yield true;
+            }
+            case SMELT_ALL -> {
+                deleteByPlayer(connection, this.smeltStatsTableName, playerId);
+                yield true;
+            }
+            case SMELT_MATERIAL -> {
+                deleteByColumn(connection, this.smeltStatsTableName, playerId, "material", resetTarget.qualifier());
+                yield true;
+            }
+            case ENCHANT_ALL -> {
+                deleteByPlayer(connection, this.enchantStatsTableName, playerId);
+                yield true;
+            }
+            case ENCHANTMENT -> {
+                deleteByColumn(connection, this.enchantStatsTableName, playerId, "enchantment", resetTarget.qualifier());
+                yield true;
+            }
+            case ENCHANT_ITEM_MATERIAL -> {
+                deleteByColumn(connection, this.enchantItemStatsTableName, playerId, "material", resetTarget.qualifier());
+                yield true;
+            }
+            case HARVEST_ALL -> {
+                deleteByPlayer(connection, this.harvestStatsTableName, playerId);
+                yield true;
+            }
+            case HARVEST_MATERIAL -> {
+                deleteByColumn(connection, this.harvestStatsTableName, playerId, "material", resetTarget.qualifier());
+                yield true;
+            }
+            case BREED_ALL -> {
+                deleteByPlayer(connection, this.breedStatsTableName, playerId);
+                yield true;
+            }
+            case BREED_ENTITY -> {
+                deleteByColumn(connection, this.breedStatsTableName, playerId, "entity_type", resetTarget.qualifier());
+                yield true;
+            }
+            case FISH_ALL -> {
+                deleteByPlayer(connection, this.fishStatsTableName, playerId);
+                yield true;
+            }
+            case FISH_MATERIAL -> {
+                deleteByColumn(connection, this.fishStatsTableName, playerId, "material", resetTarget.qualifier());
+                yield true;
+            }
+            case ITEM_ALL -> {
+                deleteByPlayer(connection, this.itemStatsTableName, playerId);
+                yield true;
+            }
+            case ITEM_MATERIAL -> {
+                deleteByColumn(connection, this.itemStatsTableName, playerId, "material", resetTarget.qualifier());
+                yield true;
+            }
+            case PROJECTILE_ALL -> {
+                deleteByPlayer(connection, this.projectileStatsTableName, playerId);
+                yield true;
+            }
+            case PROJECTILE_TYPE -> {
+                deleteByColumn(connection, this.projectileStatsTableName, playerId, "entity_type", resetTarget.qualifier());
+                yield true;
+            }
+        };
+    }
+
+    private void zeroAggregateColumns(java.sql.Connection connection, UUID playerId) throws Exception {
+        String sql = playerId == null
+                ? """
+                UPDATE %s
+                SET play_time = 0,
+                    deaths = 0,
+                    respawns = 0,
+                    distance = 0,
+                    blocks_placed = 0,
+                    blocks_broken = 0,
+                    sleep_count = 0,
+                    portal_count = 0,
+                    chat_count = 0,
+                    brew_count = 0
+                """.formatted(this.tableName)
+                : """
+                UPDATE %s
+                SET play_time = 0,
+                    deaths = 0,
+                    respawns = 0,
+                    distance = 0,
+                    blocks_placed = 0,
+                    blocks_broken = 0,
+                    sleep_count = 0,
+                    portal_count = 0,
+                    chat_count = 0,
+                    brew_count = 0
+                WHERE player_uuid = ?
+                """.formatted(this.tableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            if (playerId != null) {
+                statement.setString(1, playerId.toString());
+            }
+            statement.executeUpdate();
+        }
+    }
+
+    private void deleteAllDetailStats(java.sql.Connection connection, UUID playerId) throws Exception {
+        deleteByPlayer(connection, this.deathStatsTableName, playerId);
+        deleteByPlayer(connection, this.distanceStatsTableName, playerId);
+        deleteByPlayer(connection, this.blockStatsTableName, playerId);
+        deleteByPlayer(connection, this.entityDamageStatsTableName, playerId);
+        deleteByPlayer(connection, this.killStatsTableName, playerId);
+        deleteByPlayer(connection, this.craftStatsTableName, playerId);
+        deleteByPlayer(connection, this.smeltStatsTableName, playerId);
+        deleteByPlayer(connection, this.enchantStatsTableName, playerId);
+        deleteByPlayer(connection, this.enchantItemStatsTableName, playerId);
+        deleteByPlayer(connection, this.harvestStatsTableName, playerId);
+        deleteByPlayer(connection, this.breedStatsTableName, playerId);
+        deleteByPlayer(connection, this.fishStatsTableName, playerId);
+        deleteByPlayer(connection, this.itemStatsTableName, playerId);
+        deleteByPlayer(connection, this.projectileStatsTableName, playerId);
+        deleteByPlayer(connection, this.playSessionsTableName, playerId);
+    }
+
+    private void updateAggregateColumn(
+            java.sql.Connection connection,
+            String columnName,
+            UUID playerId,
+            int value) throws Exception {
+        String sql = """
+                UPDATE %s
+                SET %s = ?
+                WHERE player_uuid = ?
+                """.formatted(this.tableName, columnName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, value);
+            statement.setString(2, playerId.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    private void updateAggregateColumn(
+            java.sql.Connection connection,
+            String columnName,
+            UUID playerId,
+            double value) throws Exception {
+        String sql = """
+                UPDATE %s
+                SET %s = ?
+                WHERE player_uuid = ?
+                """.formatted(this.tableName, columnName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setDouble(1, value);
+            statement.setString(2, playerId.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    private void deleteByPlayer(java.sql.Connection connection, String tableName, UUID playerId) throws Exception {
+        String sql = playerId == null
+                ? "DELETE FROM %s".formatted(tableName)
+                : "DELETE FROM %s WHERE player_uuid = ?".formatted(tableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            if (playerId != null) {
+                statement.setString(1, playerId.toString());
+            }
+            statement.executeUpdate();
+        }
+    }
+
+    private void deleteByColumn(
+            java.sql.Connection connection,
+            String tableName,
+            UUID playerId,
+            String columnName,
+            @org.jetbrains.annotations.Nullable String value) throws Exception {
+        String sql = """
+                DELETE FROM %s
+                WHERE player_uuid = ? AND %s = ?
+                """.formatted(tableName, columnName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, value);
+            statement.executeUpdate();
+        }
+    }
+
+    private BlockStatsDelta queryBlockStatsDelta(
+            java.sql.Connection connection,
+            UUID playerId,
+            String material) throws Exception {
+        String sql = """
+                SELECT COALESCE(SUM(placed_count), 0) AS placed_total,
+                       COALESCE(SUM(broken_count), 0) AS broken_total
+                FROM %s
+                WHERE player_uuid = ? AND material = ?
+                """.formatted(this.blockStatsTableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, material);
+            try (var resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return null;
+                }
+                return new BlockStatsDelta(
+                        resultSet.getInt("placed_total"),
+                        resultSet.getInt("broken_total"));
+            }
+        }
+    }
+
+    private void decrementBlockAggregates(
+            java.sql.Connection connection,
+            UUID playerId,
+            BlockStatsDelta delta) throws Exception {
+        String sql = """
+                UPDATE %s
+                SET blocks_placed = CASE
+                        WHEN blocks_placed >= ? THEN blocks_placed - ?
+                        ELSE 0
+                    END,
+                    blocks_broken = CASE
+                        WHEN blocks_broken >= ? THEN blocks_broken - ?
+                        ELSE 0
+                    END
+                WHERE player_uuid = ?
+                """.formatted(this.tableName);
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, delta.placedCount());
+            statement.setInt(2, delta.placedCount());
+            statement.setInt(3, delta.brokenCount());
+            statement.setInt(4, delta.brokenCount());
+            statement.setString(5, playerId.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    private int countTrackedPlayers(java.sql.Connection connection) throws Exception {
+        String sql = "SELECT COUNT(*) AS player_count FROM %s".formatted(this.tableName);
+        try (var statement = connection.prepareStatement(sql);
+             var resultSet = statement.executeQuery()) {
+            resultSet.next();
+            return resultSet.getInt("player_count");
+        }
     }
 
     private void addTotalDistanceBatch(

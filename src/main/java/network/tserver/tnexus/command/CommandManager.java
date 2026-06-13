@@ -23,6 +23,7 @@ import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.command.subcommand.HelpCommand;
 import network.tserver.tnexus.command.subcommand.MenuCommand;
 import network.tserver.tnexus.command.subcommand.ReloadCommand;
+import network.tserver.tnexus.command.subcommand.StatsCommand;
 import network.tserver.tnexus.command.subcommand.VersionCommand;
 import network.tserver.tnexus.manager.AuditLogFilter;
 import network.tserver.tnexus.manager.PaymentManager;
@@ -82,6 +83,7 @@ public final class CommandManager {
         this.subcommands = new LinkedHashMap<>();
         registerSubcommand(new HelpCommand(plugin));
         registerSubcommand(new ReloadCommand(plugin));
+        registerSubcommand(new StatsCommand(plugin));
         registerSubcommand(new VersionCommand(plugin));
     }
 

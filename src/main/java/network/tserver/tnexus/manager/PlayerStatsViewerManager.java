@@ -31,6 +31,7 @@ import network.tserver.tnexus.database.repository.PlayerStatsViewRepository.RawP
 import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.gui.player.PlayerStatsCategoryGui;
 import network.tserver.tnexus.gui.player.PlayerStatsCombatDetailGui;
+import network.tserver.tnexus.gui.player.PlayerStatsItemDetailGui;
 import network.tserver.tnexus.gui.player.PlayerStatsMainGui;
 import network.tserver.tnexus.util.CurrencyFormatter;
 import org.bukkit.Bukkit;
@@ -170,6 +171,37 @@ public final class PlayerStatsViewerManager {
     }
 
     /**
+     * Opens the per-item pickup/drop detail GUI for the viewer and target.
+     *
+     * @param viewer viewing player
+     * @param target target player
+     * @param periodFilter active period filter
+     * @param sortOrder active sort order
+     */
+    public void openItemDetailGui(
+            Player viewer,
+            OfflinePlayer target,
+            StatsPeriodFilter periodFilter,
+            StatsSortOrder sortOrder) {
+        Objects.requireNonNull(viewer, "viewer");
+        Objects.requireNonNull(target, "target");
+        loadSnapshot(viewer.getUniqueId(), target, periodFilter)
+                .whenComplete((snapshot, throwable) -> Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(viewer, "stats.command.load-failed");
+                        return;
+                    }
+                    new PlayerStatsItemDetailGui(
+                            this.plugin,
+                            this,
+                            viewer,
+                            Objects.requireNonNull(snapshot, "snapshot"),
+                            periodFilter,
+                            sortOrder).open();
+                }));
+    }
+
+    /**
      * Loads a formatted snapshot for the target.
      *
      * @param viewerId viewer UUID used for favorites
@@ -264,7 +296,6 @@ public final class PlayerStatsViewerManager {
         return switch (entryKey) {
             case "COMBAT_SUMMARY_MOB_DAMAGE" -> CombatDetailType.MOB_DAMAGE;
             case "COMBAT_SUMMARY_PLAYER_DAMAGE" -> CombatDetailType.PLAYER_DAMAGE;
-            case "COMBAT_SUMMARY_PROJECTILES" -> CombatDetailType.PROJECTILES;
             default -> null;
         };
     }
@@ -276,6 +307,7 @@ public final class PlayerStatsViewerManager {
             double currentBalance) {
         EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory = new EnumMap<>(StatsCategory.class);
         EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries = new EnumMap<>(CombatDetailType.class);
+        List<StatsEntry> itemDetailEntries = new ArrayList<>();
         for (StatsCategory category : StatsCategory.values()) {
             entriesByCategory.put(category, new ArrayList<>());
         }
@@ -290,9 +322,9 @@ public final class PlayerStatsViewerManager {
                 entriesByCategory.get(StatsCategory.COMBAT),
                 combatDetailEntries,
                 rawData.entityDamageStats(),
-                rawData.killStats(),
-                rawData.projectileStats());
+                rawData.killStats());
         addActivityEntries(entriesByCategory.get(StatsCategory.ACTIVITY), rawData);
+        itemDetailEntries.addAll(createItemDetailEntries(rawData.itemStats()));
 
         return new PlayerStatsSnapshot(
                 target.getUniqueId(),
@@ -301,6 +333,7 @@ public final class PlayerStatsViewerManager {
                 periodFilter,
                 entriesByCategory,
                 combatDetailEntries,
+                itemDetailEntries,
                 rawData.favorites());
     }
 
@@ -462,19 +495,16 @@ public final class PlayerStatsViewerManager {
             List<StatsEntry> summaryEntries,
             EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries,
             Map<String, EntityDamageDelta> entityDamageStats,
-            Map<String, Integer> killStats,
-            Map<String, Integer> projectileStats) {
+            Map<String, Integer> killStats) {
         Map<String, CombatAggregate> mobAggregates = new LinkedHashMap<>();
         Map<String, CombatAggregate> playerAggregates = new LinkedHashMap<>();
         mergeCombatAggregates(mobAggregates, playerAggregates, entityDamageStats, killStats);
 
         List<StatsEntry> mobEntries = createCombatDetailEntries(mobAggregates, false);
         List<StatsEntry> playerEntries = createCombatDetailEntries(playerAggregates, true);
-        List<StatsEntry> projectileEntries = createProjectileEntries(projectileStats);
 
         combatDetailEntries.put(CombatDetailType.MOB_DAMAGE, mobEntries);
         combatDetailEntries.put(CombatDetailType.PLAYER_DAMAGE, playerEntries);
-        combatDetailEntries.put(CombatDetailType.PROJECTILES, projectileEntries);
 
         summaryEntries.add(createCombatSummaryEntry(
                 "COMBAT_SUMMARY_MOB_DAMAGE",
@@ -492,17 +522,6 @@ public final class PlayerStatsViewerManager {
                 sumCombatKills(playerAggregates),
                 sumCombatDealt(playerAggregates),
                 sumCombatTaken(playerAggregates)));
-        summaryEntries.add(new StatsEntry(
-                "COMBAT_SUMMARY_PROJECTILES",
-                StatsCategory.COMBAT,
-                Material.BOW,
-                this.plugin.getMessageConfig().getMessage(
-                        "stats.dynamic.combat.name",
-                        prettifyKey(CombatDetailType.PROJECTILES.name())),
-                formatWholeNumber(sumIntegers(projectileStats)),
-                List.of(),
-                sumIntegers(projectileStats),
-                null));
     }
 
     private void mergeCombatAggregates(
@@ -552,24 +571,6 @@ public final class PlayerStatsViewerManager {
                                     formatDecimal(aggregate.damageTaken))),
                     sortValue,
                     playerHeadId));
-        }
-        return List.copyOf(entries);
-    }
-
-    private List<StatsEntry> createProjectileEntries(Map<String, Integer> projectileStats) {
-        List<StatsEntry> entries = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : projectileStats.entrySet()) {
-            entries.add(new StatsEntry(
-                    "PROJECTILE:" + entry.getKey(),
-                    StatsCategory.COMBAT,
-                    resolveProjectileMaterial(entry.getKey()),
-                    this.plugin.getMessageConfig().getMessage(
-                            "stats.dynamic.combat.name",
-                            prettifyKey(entry.getKey())),
-                    formatWholeNumber(entry.getValue()),
-                    List.of(),
-                    entry.getValue(),
-                    null));
         }
         return List.copyOf(entries);
     }
@@ -673,6 +674,30 @@ public final class PlayerStatsViewerManager {
                 "stats.labels.activity.projectile-total",
                 formatWholeNumber(sumIntegers(rawData.projectileStats())),
                 sumIntegers(rawData.projectileStats())));
+    }
+
+    private List<StatsEntry> createItemDetailEntries(Map<String, ItemStatsDelta> itemStats) {
+        List<StatsEntry> entries = new ArrayList<>();
+        for (Map.Entry<String, ItemStatsDelta> entry : itemStats.entrySet()) {
+            ItemStatsDelta delta = entry.getValue();
+            double total = delta.pickupCount() + delta.dropCount();
+            entries.add(new StatsEntry(
+                    "ITEM:" + entry.getKey(),
+                    StatsCategory.ACTIVITY,
+                    resolveMaterial(entry.getKey(), Material.CHEST),
+                    this.plugin.getMessageConfig().getMessage("stats.dynamic.block.name", prettifyKey(entry.getKey())),
+                    formatWholeNumber((long) total),
+                    List.of(
+                            this.plugin.getMessageConfig().getMessage(
+                                    "stats.dynamic.item.pickup",
+                                    formatWholeNumber(delta.pickupCount())),
+                            this.plugin.getMessageConfig().getMessage(
+                                    "stats.dynamic.item.drop",
+                                    formatWholeNumber(delta.dropCount()))),
+                    total,
+                    null));
+        }
+        return List.copyOf(entries);
     }
 
     private StatsEntry createFixedEntry(
@@ -1036,6 +1061,7 @@ public final class PlayerStatsViewerManager {
         private final StatsPeriodFilter periodFilter;
         private final EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory;
         private final EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries;
+        private final List<StatsEntry> itemDetailEntries;
         private final Map<String, StatsEntry> entriesByKey;
         private final Map<Integer, String> favorites;
 
@@ -1046,6 +1072,7 @@ public final class PlayerStatsViewerManager {
                 StatsPeriodFilter periodFilter,
                 EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory,
                 EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries,
+                List<StatsEntry> itemDetailEntries,
                 Map<Integer, String> favorites) {
             this.targetId = targetId;
             this.targetName = targetName;
@@ -1053,6 +1080,7 @@ public final class PlayerStatsViewerManager {
             this.periodFilter = periodFilter;
             this.entriesByCategory = new EnumMap<>(StatsCategory.class);
             this.combatDetailEntries = new EnumMap<>(CombatDetailType.class);
+            this.itemDetailEntries = List.copyOf(itemDetailEntries);
             this.entriesByKey = new LinkedHashMap<>();
             for (StatsCategory category : StatsCategory.values()) {
                 List<StatsEntry> entries = List.copyOf(entriesByCategory.getOrDefault(category, List.of()));
@@ -1067,6 +1095,9 @@ public final class PlayerStatsViewerManager {
                 for (StatsEntry entry : entries) {
                     this.entriesByKey.put(entry.key(), entry);
                 }
+            }
+            for (StatsEntry entry : this.itemDetailEntries) {
+                this.entriesByKey.put(entry.key(), entry);
             }
             this.favorites = new LinkedHashMap<>(favorites);
         }
@@ -1141,6 +1172,18 @@ public final class PlayerStatsViewerManager {
                 CombatDetailType detailType,
                 StatsSortOrder sortOrder) {
             return this.combatDetailEntries.getOrDefault(detailType, List.of()).stream()
+                    .sorted(createComparator(sortOrder))
+                    .toList();
+        }
+
+        /**
+         * Returns the item pickup/drop detail entries sorted by the requested sort order.
+         *
+         * @param sortOrder sort order
+         * @return sorted item detail entries
+         */
+        public List<StatsEntry> getSortedItemDetailEntries(StatsSortOrder sortOrder) {
+            return this.itemDetailEntries.stream()
                     .sorted(createComparator(sortOrder))
                     .toList();
         }

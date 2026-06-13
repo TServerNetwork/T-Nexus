@@ -6,6 +6,7 @@ general:
   database-initialization-failed: "&cデータベースの初期化に失敗したため、T-Nexus を無効化しました。"
   no-permission: "&cこの操作を行う権限がありません。"
   player-only: "&cこのコマンドはプレイヤーのみ実行できます。"
+  console-only: "&cThis command can only be run from the console."
   reload-success: "&a設定ファイルとメッセージを再読み込みしました。"
   unknown-command: "&c不明なコマンドです。/tnexus help を使用してください。"
 hook:
@@ -308,6 +309,14 @@ stats:
     player-not-found: "&cプレイヤー {0} は見つかりませんでした。"
     load-failed: "&c統計情報の読み込みに失敗しました。"
     favorites-full: "&cピン留め枠がいっぱいです。先に他のピン留めを解除してください。"
+  reset:
+    usage: "&cUsage: /tnexus stats reset <player> [key] | /tnexus stats reset all [CONFIRM]"
+    invalid-key: "&cUnsupported stats reset key: {0}"
+    failed: "&cFailed to reset stats."
+    confirm-all: "&eRun /tnexus stats reset all CONFIRM to reset stats for every player."
+    success-player: "&aReset all stats for {0}."
+    success-key: "&aReset stat {1} for {0}."
+    success-all: "&aReset stats for all players. Affected players: {0}"
   categories:
     general: "&a全般統計"
     economy: "&a経済統計"
@@ -355,11 +364,15 @@ stats:
       pickup-total: "&eアイテム拾得数"
       drop-total: "&eアイテム投棄数"
       projectile-total: "&e射出物使用数"
+      item-breakdown: "&eItem Breakdown"
   dynamic:
     block:
       name: "&e{0}"
       placed: "&7設置数: &f{0}"
       broken: "&7破壊数: &f{0}"
+    item:
+      pickup: "&7Picked Up: &f{0}"
+      drop: "&7Dropped: &f{0}"
     combat:
       name: "&e{0}"
       kills: "&7討伐数: &f{0}"

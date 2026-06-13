@@ -3,6 +3,7 @@ package network.tserver.tnexus.command;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -11,6 +12,8 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
+import network.tserver.tnexus.database.repository.ItemStatsDelta;
+import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository.AuditRecord;
 import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
@@ -516,6 +519,70 @@ class CommandManagerTest {
     }
 
     @Test
+    void shouldRejectStatsResetFromPlayers() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("Admin");
+        player.addAttachment(plugin, "tnexus.stats.admin", true);
+
+        assertTrue(this.server.dispatchCommand(player, "tnexus stats reset all"));
+        assertEquals(plugin.getMessageConfig().getMessage("prefix")
+                        + plugin.getMessageConfig().getMessage("general.console-only"),
+                player.nextMessage());
+    }
+
+    @Test
+    void shouldResetSpecificStatsAndRequireConfirmationForAll() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        ConsoleCommandSenderMock console = (ConsoleCommandSenderMock) this.server.getConsoleSender();
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStatsForReset(plugin, target);
+
+        assertTrue(this.server.dispatchCommand(console, "tnexus stats reset Target ITEM:DIAMOND"));
+        waitUntil(() -> {
+            try {
+                return plugin.getPlayerStatsViewerManager()
+                        .loadSnapshot(viewer.getUniqueId(), target, network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                        .get(5, TimeUnit.SECONDS)
+                        .getEntry("ITEM:DIAMOND") == null;
+            } catch (Exception exception) {
+                return false;
+            }
+        });
+
+        assertTrue(this.server.dispatchCommand(console, "tnexus stats reset all"));
+        waitUntil(() -> {
+            Component message = console.nextComponentMessage();
+            return message != null
+                    && PlainTextComponentSerializer.plainText().serialize(message).contains("CONFIRM");
+        });
+
+        assertTrue(this.server.dispatchCommand(console, "tnexus stats reset all CONFIRM"));
+        waitUntil(() -> {
+            try {
+                network.tserver.tnexus.manager.PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin
+                        .getPlayerStatsViewerManager()
+                        .loadSnapshot(
+                                viewer.getUniqueId(),
+                                target,
+                                network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                        .get(5, TimeUnit.SECONDS);
+                network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsEntry playTime = snapshot.getEntry("GENERAL_PLAY_TIME");
+                network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsEntry projectile = snapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL");
+                return playTime != null
+                        && "0:00:00".equals(playTime.valueText())
+                        && projectile != null
+                        && "0".equals(projectile.valueText());
+            } catch (Exception exception) {
+                return false;
+            }
+        });
+    }
+
+    @Test
     void shouldOpenOwnHistoryGui() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
@@ -618,6 +685,18 @@ class CommandManagerTest {
                 statement.executeUpdate();
             }
         }
+    }
+
+    private void seedStatsForReset(TNexus plugin, PlayerMock target) throws Exception {
+        PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
+        repository.ensurePlayerExists(target.getUniqueId(), Instant.parse("2026-06-01T00:00:00Z")).get(5, TimeUnit.SECONDS);
+        repository.addPlayTime(target.getUniqueId(), 120L).get(5, TimeUnit.SECONDS);
+        repository.addItemStats(
+                        java.util.Map.of(
+                                target.getUniqueId(),
+                                java.util.Map.of(Material.DIAMOND.name(), new ItemStatsDelta(4, 1))))
+                .get(5, TimeUnit.SECONDS);
+        repository.incrementProjectileCount(target.getUniqueId(), "ARROW").get(5, TimeUnit.SECONDS);
     }
 
     private static final class TestCommand extends Command {

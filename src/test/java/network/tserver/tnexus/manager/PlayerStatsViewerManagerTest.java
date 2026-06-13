@@ -63,6 +63,7 @@ class PlayerStatsViewerManagerTest {
         assertNotNull(snapshot.getEntry("BLOCK:STONE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("ACTIVITY_CRAFT_TOTAL"));
+        assertNotNull(snapshot.getEntry("ITEM:DIAMOND"));
     }
 
     @Test
@@ -155,9 +156,9 @@ class PlayerStatsViewerManagerTest {
         assertNotNull(allTimeSnapshot.getEntry("BLOCK:DIAMOND_ORE"));
 
         PlayerStatsViewerManager.StatsEntry todayProjectileSummary =
-                todaySnapshot.getEntry("COMBAT_SUMMARY_PROJECTILES");
+                todaySnapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL");
         PlayerStatsViewerManager.StatsEntry allTimeProjectileSummary =
-                allTimeSnapshot.getEntry("COMBAT_SUMMARY_PROJECTILES");
+                allTimeSnapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL");
         assertNotNull(todayProjectileSummary);
         assertNotNull(allTimeProjectileSummary);
         assertEquals("1", todayProjectileSummary.valueText());
@@ -190,7 +191,8 @@ class PlayerStatsViewerManagerTest {
 
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PLAYER_DAMAGE"));
-        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
+        assertNotNull(snapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL"));
+        assertNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
 
         List<PlayerStatsViewerManager.StatsEntry> mobEntries = snapshot.getSortedCombatDetailEntries(
                 PlayerStatsViewerManager.CombatDetailType.MOB_DAMAGE,
@@ -198,15 +200,36 @@ class PlayerStatsViewerManagerTest {
         List<PlayerStatsViewerManager.StatsEntry> playerEntries = snapshot.getSortedCombatDetailEntries(
                 PlayerStatsViewerManager.CombatDetailType.PLAYER_DAMAGE,
                 PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
-        List<PlayerStatsViewerManager.StatsEntry> projectileEntries = snapshot.getSortedCombatDetailEntries(
-                PlayerStatsViewerManager.CombatDetailType.PROJECTILES,
-                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
 
         assertTrue(mobEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_MOB:ZOMBIE")));
         assertTrue(playerEntries.stream().anyMatch(entry ->
                 entry.key().equals("COMBAT_PLAYER:" + rival.getUniqueId())
                         && rival.getUniqueId().equals(entry.playerHeadId())));
-        assertTrue(projectileEntries.stream().anyMatch(entry -> entry.key().equals("PROJECTILE:ARROW")));
+    }
+
+    @Test
+    void shouldExposePerItemPickupDropBreakdownEntries() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        List<PlayerStatsViewerManager.StatsEntry> itemEntries = snapshot.getSortedItemDetailEntries(
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+
+        assertTrue(itemEntries.stream().anyMatch(entry -> entry.key().equals("ITEM:DIAMOND")));
+        PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("ITEM:DIAMOND");
+        assertNotNull(entry);
+        assertEquals("8", entry.valueText());
     }
 
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {
