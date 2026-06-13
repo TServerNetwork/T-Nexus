@@ -63,6 +63,7 @@ class PlayerStatsViewerManagerTest {
         assertNotNull(snapshot.getEntry("BLOCK:STONE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("ACTIVITY_CRAFT_TOTAL"));
+        assertNotNull(snapshot.getEntry("ACTIVITY_ITEM_TOTAL"));
         assertNotNull(snapshot.getEntry("ITEM:DIAMOND"));
     }
 
@@ -259,6 +260,9 @@ class PlayerStatsViewerManagerTest {
                 PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
 
         assertTrue(itemEntries.stream().anyMatch(entry -> entry.key().equals("ITEM:DIAMOND")));
+        assertNull(snapshot.getEntry("ACTIVITY_PICKUP_TOTAL"));
+        assertNull(snapshot.getEntry("ACTIVITY_DROP_TOTAL"));
+        assertNotNull(snapshot.getEntry("ACTIVITY_ITEM_TOTAL"));
         PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("ITEM:DIAMOND");
         assertNotNull(entry);
         assertEquals("8", entry.valueText());

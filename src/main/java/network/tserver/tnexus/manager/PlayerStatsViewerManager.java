@@ -722,20 +722,22 @@ public final class PlayerStatsViewerManager {
                 "stats.labels.activity.fish-total",
                 formatWholeNumber(sumIntegers(rawData.fishStats())),
                 sumIntegers(rawData.fishStats())));
-        entries.add(createFixedEntry(
-                "ACTIVITY_PICKUP_TOTAL",
+        double itemTotal = sumItemPickups(rawData.itemStats()) + sumItemDrops(rawData.itemStats());
+        entries.add(new StatsEntry(
+                "ACTIVITY_ITEM_TOTAL",
                 StatsCategory.ACTIVITY,
-                Material.HOPPER,
-                "stats.labels.activity.pickup-total",
-                formatWholeNumber(sumItemPickups(rawData.itemStats())),
-                sumItemPickups(rawData.itemStats())));
-        entries.add(createFixedEntry(
-                "ACTIVITY_DROP_TOTAL",
-                StatsCategory.ACTIVITY,
-                Material.DROPPER,
-                "stats.labels.activity.drop-total",
-                formatWholeNumber(sumItemDrops(rawData.itemStats())),
-                sumItemDrops(rawData.itemStats())));
+                Material.CHEST,
+                this.plugin.getMessageConfig().getMessage("stats.labels.activity.item-total"),
+                formatWholeNumber(itemTotal),
+                List.of(
+                        this.plugin.getMessageConfig().getMessage(
+                                "stats.dynamic.item.pickup",
+                                formatWholeNumber(sumItemPickups(rawData.itemStats()))),
+                        this.plugin.getMessageConfig().getMessage(
+                                "stats.dynamic.item.drop",
+                                formatWholeNumber(sumItemDrops(rawData.itemStats())))),
+                itemTotal,
+                null));
         entries.add(createFixedEntry(
                 "ACTIVITY_PROJECTILE_TOTAL",
                 StatsCategory.ACTIVITY,

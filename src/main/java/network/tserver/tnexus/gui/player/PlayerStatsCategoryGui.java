@@ -128,8 +128,7 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                     return;
                 }
                 if (this.category == StatsCategory.ACTIVITY
-                        && ("ACTIVITY_PICKUP_TOTAL".equals(entry.key())
-                        || "ACTIVITY_DROP_TOTAL".equals(entry.key()))) {
+                        && "ACTIVITY_ITEM_TOTAL".equals(entry.key())) {
                     this.statsViewerManager.openItemDetailGui(
                             this.viewer,
                             this.target,

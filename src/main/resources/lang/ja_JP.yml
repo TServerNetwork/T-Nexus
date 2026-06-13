@@ -365,18 +365,19 @@ stats:
       harvest-total: "&e収穫数"
       breed-total: "&e繁殖数"
       fish-total: "&e釣果数"
+      item-total: "&eアイテム統計"
       pickup-total: "&eアイテム拾得数"
       drop-total: "&eアイテム投棄数"
       projectile-total: "&e射出物使用数"
-      item-breakdown: "&eItem Breakdown"
+      item-breakdown: "&eアイテム詳細"
   dynamic:
     block:
       name: "&e{0}"
       placed: "&7設置数: &f{0}"
       broken: "&7破壊数: &f{0}"
     item:
-      pickup: "&7Picked Up: &f{0}"
-      drop: "&7Dropped: &f{0}"
+      pickup: "&7拾得: &f{0}個"
+      drop: "&7投棄: &f{0}個"
     combat:
       name: "&e{0}"
       kills: "&7討伐数: &f{0}"
