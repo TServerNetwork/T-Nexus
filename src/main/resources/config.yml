@@ -55,6 +55,7 @@ resource-world:
   backup-generations: 3
   fallback-world: "lobby"
   seed-obfuscation-key: 1234567890
+  show-real-seed-to-admin: false
   worlds:
     - name: "resource"
       dimension: "NORMAL"

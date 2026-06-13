@@ -106,6 +106,35 @@ class ResourceWorldResetRepositoryTest {
     }
 
     @Test
+    void shouldUpdateCompletedSeedOnExistingResetEntry() throws Exception {
+        TNexus plugin = loadPlugin();
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        LocalDateTime resetAt = LocalDateTime.of(2026, 6, 14, 4, 0);
+        LocalDateTime nextResetAt = resetAt.plusDays(7);
+
+        long id = repository.insert(ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
+                        "resource",
+                        resetAt,
+                        nextResetAt,
+                        null))
+                .get(5, TimeUnit.SECONDS);
+
+        assertTrue(repository.updateStatusAndSeed(
+                        id,
+                        ResourceWorldResetRepository.ResetStatus.COMPLETED,
+                        987654321L)
+                .get(5, TimeUnit.SECONDS));
+
+        ResourceWorldResetRepository.ResourceWorldResetEntry entry = repository
+                .findByWorldNameAndNextResetAt("resource", nextResetAt)
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+        assertEquals(ResourceWorldResetRepository.ResetStatus.COMPLETED, entry.status());
+        assertEquals(987654321L, entry.seed());
+        assertNull(entry.errorMessage());
+    }
+
+    @Test
     void shouldUpsertLatestNextResetTimeByWorld() throws Exception {
         TNexus plugin = loadPlugin();
         ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());

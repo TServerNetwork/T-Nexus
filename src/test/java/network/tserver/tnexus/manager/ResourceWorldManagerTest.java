@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -151,7 +152,19 @@ class ResourceWorldManagerTest {
         assertNotNull(completeMessage);
         assertTrue(startMessage.contains("resource"));
         assertTrue(completeMessage.contains("resource"));
-        assertTrue(repository.findByWorldNameAndNextResetAt("resource", currentReset).get(5, TimeUnit.SECONDS).isPresent());
+        ResourceWorldResetRepository.ResourceWorldResetEntry completedEntry = repository
+                .findByWorldNameAndNextResetAt("resource", currentReset)
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+        assertEquals(ResourceWorldResetRepository.ResetStatus.COMPLETED, completedEntry.status());
+        assertEquals(123456L, completedEntry.seed());
+
+        ResourceWorldResetRepository.ResourceWorldResetEntry scheduledEntry = repository
+                .findByWorldNameAndNextResetAt("resource", nextReset)
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+        assertEquals(ResourceWorldResetRepository.ResetStatus.SCHEDULED, scheduledEntry.status());
+        assertNull(scheduledEntry.seed());
     }
 
     @Test

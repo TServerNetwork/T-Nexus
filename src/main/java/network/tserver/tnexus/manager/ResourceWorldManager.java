@@ -1,8 +1,8 @@
 package network.tserver.tnexus.manager;
 
 import com.onarandombox.MultiverseCore.api.MVWorldManager;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -77,7 +77,7 @@ public final class ResourceWorldManager {
                 clock,
                 new ResourceWorldFileManager(plugin),
                 new FaweResourceWorldEditService(plugin),
-                () -> Math.abs(java.util.concurrent.ThreadLocalRandom.current().nextLong()));
+                new SecureRandom()::nextLong);
     }
 
     ResourceWorldManager(
@@ -115,7 +115,7 @@ public final class ResourceWorldManager {
                     return this.repository.upsertScheduledReset(
                             worldDefinition.name(),
                             nextResetTime,
-                            obfuscateSeed(worldDefinition));
+                            null);
                 })
                 .toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(futures);
@@ -266,6 +266,35 @@ public final class ResourceWorldManager {
         return Optional.ofNullable(this.worldDefinitions.get(worldName));
     }
 
+    /**
+     * Returns whether the given world is managed as a resource world.
+     *
+     * @param worldName world name
+     * @return {@code true} when configured as a resource world
+     */
+    public boolean isResourceWorld(String worldName) {
+        return this.worldDefinitions.containsKey(worldName);
+    }
+
+    /**
+     * Returns whether admins should see the real world seed.
+     *
+     * @return {@code true} when admin bypass is enabled
+     */
+    public boolean shouldShowRealSeedToAdmin() {
+        return this.settings.showRealSeedToAdmin();
+    }
+
+    /**
+     * Obfuscates a world seed for player-facing display.
+     *
+     * @param actualSeed real world seed
+     * @return obfuscated seed value
+     */
+    public long obfuscateSeed(long actualSeed) {
+        return actualSeed ^ this.settings.seedObfuscationKey();
+    }
+
     LocalDateTime calculateNextResetTime(
             ConfigManager.ResourceWorldDefinition worldDefinition,
             LocalDateTime currentTime) {
@@ -403,10 +432,10 @@ public final class ResourceWorldManager {
     }
 
     private CompletableFuture<LocalDateTime> persistResetSuccess(ResetContext context, long seed) {
-        return this.repository.updateStatus(
+        return this.repository.updateStatusAndSeed(
                         context.currentEntryId(),
                         ResourceWorldResetRepository.ResetStatus.COMPLETED,
-                        null)
+                        seed)
                 .thenAccept(updated -> {
                     if (!updated) {
                         throw new IllegalStateException("Failed to mark reset as completed for " + context.worldName());
@@ -417,7 +446,7 @@ public final class ResourceWorldManager {
                                 context.worldName(),
                                 context.nextScheduledReset(),
                                 context.nextScheduledReset(),
-                                seed)))
+                                null)))
                 .thenApply(ignored -> context.nextScheduledReset());
     }
 
@@ -597,15 +626,6 @@ public final class ResourceWorldManager {
             }
         });
         return future;
-    }
-
-    private Long obfuscateSeed(ConfigManager.ResourceWorldDefinition worldDefinition) {
-        long baseSeed = worldDefinition.name().getBytes(StandardCharsets.UTF_8).length;
-        long mixedSeed = baseSeed;
-        for (byte value : worldDefinition.name().getBytes(StandardCharsets.UTF_8)) {
-            mixedSeed = (mixedSeed * 31) + value;
-        }
-        return mixedSeed ^ this.settings.seedObfuscationKey();
     }
 
     private Throwable unwrap(Throwable throwable) {
