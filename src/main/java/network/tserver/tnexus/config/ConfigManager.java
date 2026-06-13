@@ -267,6 +267,7 @@ public final class ConfigManager {
                 section.getInt("backup-generations", 3),
                 section.getString("fallback-world", "lobby"),
                 section.getLong("seed-obfuscation-key", 1234567890L),
+                section.getBoolean("show-real-seed-to-admin", false),
                 List.copyOf(worlds));
     }
 
@@ -356,6 +357,7 @@ public final class ConfigManager {
      * @param backupGenerations number of backups to retain
      * @param fallbackWorld fallback world name
      * @param seedObfuscationKey seed obfuscation key
+     * @param showRealSeedToAdmin whether admins should see the real seed
      * @param worlds configured resource worlds
      */
     public record ResourceWorldSettings(
@@ -363,6 +365,7 @@ public final class ConfigManager {
             int backupGenerations,
             String fallbackWorld,
             long seedObfuscationKey,
+            boolean showRealSeedToAdmin,
             List<ResourceWorldDefinition> worlds) {
     }
 

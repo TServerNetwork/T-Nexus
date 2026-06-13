@@ -47,6 +47,7 @@ import network.tserver.tnexus.listener.PlayerMiscStatsListener;
 import network.tserver.tnexus.listener.PlayerMovementStatsListener;
 import network.tserver.tnexus.listener.PlayerProcessingStatsListener;
 import network.tserver.tnexus.listener.PlayerSessionListener;
+import network.tserver.tnexus.listener.ResourceWorldSeedCommandListener;
 import network.tserver.tnexus.listener.SignShopListener;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -82,6 +83,7 @@ public class TNexus extends JavaPlugin {
     private PlayerItemStatsListener playerItemStatsListener;
     private PlayerKillStatsListener playerKillStatsListener;
     private PlayerMiscStatsListener playerMiscStatsListener;
+    private ResourceWorldSeedCommandListener resourceWorldSeedCommandListener;
     private AutoCloseable worldEditStatsListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
@@ -140,6 +142,7 @@ public class TNexus extends JavaPlugin {
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
         initializeResourceWorldManager();
+        this.resourceWorldSeedCommandListener = new ResourceWorldSeedCommandListener(this);
         this.signShopManager.initialize();
         registerCommands();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
@@ -192,6 +195,7 @@ public class TNexus extends JavaPlugin {
         this.playerItemStatsListener = null;
         this.playerKillStatsListener = null;
         this.playerMiscStatsListener = null;
+        this.resourceWorldSeedCommandListener = null;
         this.worldEditStatsListener = null;
         this.signShopManager = null;
         this.signShopListener = null;

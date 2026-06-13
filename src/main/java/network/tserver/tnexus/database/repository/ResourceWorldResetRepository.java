@@ -130,6 +130,34 @@ public final class ResourceWorldResetRepository {
     }
 
     /**
+     * Updates completion state for an existing reset record.
+     *
+     * @param id row id
+     * @param status new status
+     * @param seed applied world seed
+     * @return completion future indicating whether a row was updated
+     */
+    public CompletableFuture<Boolean> updateStatusAndSeed(long id, ResetStatus status, long seed) {
+        Objects.requireNonNull(status, "status");
+        String sql = """
+                UPDATE %s
+                SET status = ?, seed = ?, error_message = NULL
+                WHERE id = ?
+                """.formatted(this.tableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                statement.setString(1, status.databaseValue());
+                statement.setLong(2, seed);
+                statement.setLong(3, id);
+                return statement.executeUpdate() > 0;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update resource world reset status and seed", exception);
+            }
+        });
+    }
+
+    /**
      * Upserts the latest scheduled reset timestamp for a world.
      *
      * @param worldName world name

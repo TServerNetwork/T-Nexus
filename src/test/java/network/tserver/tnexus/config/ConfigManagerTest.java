@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +40,8 @@ class ConfigManagerTest {
                 configManager.getGuiSettings().pagerSettings().previous().enabledTexture());
         assertEquals(50, configManager.getGuiSettings().currentLocationSlot());
         assertEquals("plugins/T-Nexus/backups", configManager.getResourceWorldSettings().backupPath());
+        assertEquals(1234567890L, configManager.getResourceWorldSettings().seedObfuscationKey());
+        assertFalse(configManager.getResourceWorldSettings().showRealSeedToAdmin());
         assertEquals(3, configManager.getResourceWorldSettings().worlds().size());
         assertEquals("resource_end", configManager.getResourceWorldSettings().worlds().get(2).name());
         assertEquals("THE_END", configManager.getResourceWorldSettings().worlds().get(2).dimension().name());

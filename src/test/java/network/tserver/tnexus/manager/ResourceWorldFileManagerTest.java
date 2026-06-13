@@ -4,12 +4,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class ResourceWorldFileManagerTest {
 
@@ -47,5 +49,27 @@ class ResourceWorldFileManagerTest {
         assertEquals("three", Files.readString(backupRoot.resolve("1").resolve("marker.txt")));
         assertEquals("two", Files.readString(backupRoot.resolve("2").resolve("marker.txt")));
         assertEquals("one", Files.readString(backupRoot.resolve("3").resolve("marker.txt")));
+    }
+
+    @Test
+    void shouldRandomizeSpigotStructureSeedsPerWorld() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        ResourceWorldFileManager fileManager = new ResourceWorldFileManager(plugin);
+        Path spigotConfigPath = this.server.getWorldContainer().toPath().resolve("spigot.yml");
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("world-settings.resource.seed-village", 1L);
+        configuration.set("world-settings.resource.seed-desert", 2L);
+        configuration.set("world-settings.other.seed-village", 3L);
+        configuration.save(spigotConfigPath.toFile());
+
+        fileManager.randomizeStructureSeeds("resource");
+
+        YamlConfiguration updated = YamlConfiguration.loadConfiguration(spigotConfigPath.toFile());
+        assertNotEquals(1L, updated.getLong("world-settings.resource.seed-village"));
+        assertNotEquals(2L, updated.getLong("world-settings.resource.seed-desert"));
+        assertEquals(3L, updated.getLong("world-settings.other.seed-village"));
+        assertNotEquals(updated.getLong("world-settings.resource.seed-village"),
+                updated.getLong("world-settings.resource.seed-desert"));
     }
 }

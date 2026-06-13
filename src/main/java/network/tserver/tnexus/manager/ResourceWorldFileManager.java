@@ -10,10 +10,11 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
-import org.bukkit.configuration.file.YamlConfiguration;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * Handles filesystem work for resource-world resets.
@@ -35,9 +36,11 @@ public class ResourceWorldFileManager {
             "seed-mansion",
             "seed-fossil",
             "seed-portal");
+    private static final String WORLD_SETTINGS_PATH = "world-settings";
 
     private final TNexus plugin;
     private final ConfigManager.ResourceWorldSettings settings;
+    private final SecureRandom secureRandom;
 
     /**
      * Creates a new file manager.
@@ -47,6 +50,7 @@ public class ResourceWorldFileManager {
     public ResourceWorldFileManager(TNexus plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.settings = this.plugin.getConfigManager().getResourceWorldSettings();
+        this.secureRandom = new SecureRandom();
     }
 
     /**
@@ -107,15 +111,10 @@ public class ResourceWorldFileManager {
      * @return base random seed used for regeneration
      */
     public long randomizeStructureSeeds(String worldName) {
-        long baseSeed = ThreadLocalRandom.current().nextLong();
+        long baseSeed = this.secureRandom.nextLong();
         Path spigotConfigPath = this.plugin.getServer().getWorldContainer().toPath().resolve("spigot.yml");
-        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(spigotConfigPath.toFile());
-        String sectionPath = "world-settings." + worldName;
-        for (String key : STRUCTURE_SEED_KEYS) {
-            configuration.set(sectionPath + "." + key, baseSeed ^ key.hashCode());
-        }
         try {
-            configuration.save(spigotConfigPath.toFile());
+            updateStructureSeeds(spigotConfigPath, worldName);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to update spigot.yml structure seeds", exception);
         }
@@ -137,6 +136,41 @@ public class ResourceWorldFileManager {
 
     private Path getWorldFolder(String worldName) {
         return this.plugin.getServer().getWorldContainer().toPath().resolve(worldName);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void updateStructureSeeds(Path spigotConfigPath, String worldName) throws IOException {
+        String content = Files.exists(spigotConfigPath) ? Files.readString(spigotConfigPath) : "";
+        Yaml yaml = new Yaml(createDumperOptions());
+        Object loaded = content.isBlank() ? null : yaml.load(content);
+        java.util.Map<String, Object> root = loaded instanceof java.util.Map<?, ?> map
+                ? (java.util.Map<String, Object>) map
+                : new java.util.LinkedHashMap<>();
+        java.util.Map<String, Object> worldSettings = getOrCreateMap(root, WORLD_SETTINGS_PATH);
+        java.util.Map<String, Object> worldSection = getOrCreateMap(worldSettings, worldName);
+        for (String key : STRUCTURE_SEED_KEYS) {
+            worldSection.put(key, this.secureRandom.nextLong());
+        }
+        Files.writeString(spigotConfigPath, yaml.dump(root));
+    }
+
+    @SuppressWarnings("unchecked")
+    private java.util.Map<String, Object> getOrCreateMap(java.util.Map<String, Object> parent, String key) {
+        Object existing = parent.get(key);
+        if (existing instanceof java.util.Map<?, ?> map) {
+            return (java.util.Map<String, Object>) map;
+        }
+
+        java.util.Map<String, Object> created = new java.util.LinkedHashMap<>();
+        parent.put(key, created);
+        return created;
+    }
+
+    private DumperOptions createDumperOptions() {
+        DumperOptions options = new DumperOptions();
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        options.setPrettyFlow(true);
+        return options;
     }
 
     private Path getBackupWorldRoot(String worldName) {
