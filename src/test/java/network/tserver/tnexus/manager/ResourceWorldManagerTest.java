@@ -3,6 +3,8 @@ package network.tserver.tnexus.manager;
 import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -10,12 +12,14 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import org.bukkit.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -26,9 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResourceWorldManagerTest {
+
+    private static final ZoneId TOKYO = ZoneId.of("Asia/Tokyo");
 
     private ServerMock server;
 
@@ -44,8 +51,11 @@ class ResourceWorldManagerTest {
         ResourceWorldManager manager = new ResourceWorldManager(
                 plugin,
                 repository,
-                createTrackingWorldManager(new ConcurrentHashMap<>()),
-                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), ZoneId.of("Asia/Tokyo")));
+                createTrackingWorldManager(new TrackingWorldManagerState()),
+                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
 
         manager.onEnable().get(5, TimeUnit.SECONDS);
 
@@ -56,19 +66,22 @@ class ResourceWorldManagerTest {
 
         LocalDateTime expected = manager.calculateNextResetTime(
                 manager.getWorldDefinition("resource").orElseThrow(),
-                LocalDateTime.ofInstant(Instant.parse("2026-06-14T00:00:00Z"), ZoneId.of("Asia/Tokyo")));
+                LocalDateTime.ofInstant(Instant.parse("2026-06-14T00:00:00Z"), TOKYO));
         assertEquals(expected, manager.getNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
     }
 
     @Test
     void shouldTrackResettingStateAndDelegateWorldOperations() {
         TNexus plugin = loadPlugin();
-        Map<String, AtomicReference<String>> calls = new ConcurrentHashMap<>();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
         ResourceWorldManager manager = new ResourceWorldManager(
                 plugin,
                 new ResourceWorldResetRepository(plugin.getDatabaseManager()),
-                createTrackingWorldManager(calls),
-                Clock.systemDefaultZone());
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
 
         assertFalse(manager.isResetting("resource"));
         manager.markResetting("resource");
@@ -80,26 +93,37 @@ class ResourceWorldManagerTest {
         assertTrue(manager.regenerateWorld("resource", "12345"));
         assertTrue(manager.loadWorld("resource"));
 
-        assertEquals("resource", calls.get("unloadWorld").get());
-        assertEquals("resource", calls.get("loadWorld").get());
-        assertEquals("resource|12345", calls.get("regenWorld").get());
+        assertEquals("resource", state.unloadWorldCall.get());
+        assertEquals("resource", state.loadWorldCall.get());
+        assertEquals("resource|12345", state.regenWorldCall.get());
     }
 
     @Test
-    void shouldExecuteResetAndPersistNextSchedule() throws Exception {
+    void shouldExecuteResetFlowAndPasteSchematicWhenPresent() throws Exception {
         TNexus plugin = loadPlugin();
-        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
-                "name", "resource",
-                "dimension", "NORMAL",
-                "reset-interval-days", 1,
-                "reset-start-date", "2026-06-14T09:00:10")));
-        Map<String, AtomicReference<String>> calls = new ConcurrentHashMap<>();
+        configureSingleWorld(plugin);
+        this.server.addSimpleWorld("lobby");
+        World resourceWorld = this.server.addSimpleWorld("resource");
+        PlayerMock player = this.server.addPlayer();
+        player.teleport(resourceWorld.getSpawnLocation());
+
+        TrackingWorldManagerState worldState = new TrackingWorldManagerState();
+        TrackingFileManager fileManager = new TrackingFileManager(plugin);
+        Path schematicPath = plugin.getDataFolder().toPath().resolve("schematics").resolve("resource").resolve("spawn.schem");
+        Files.createDirectories(schematicPath.getParent());
+        Files.writeString(schematicPath, "test");
+        fileManager.schematicPath = schematicPath;
+
+        TrackingEditService editService = new TrackingEditService();
         ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
         ResourceWorldManager manager = new ResourceWorldManager(
                 plugin,
                 repository,
-                createTrackingWorldManager(calls),
-                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), ZoneId.of("Asia/Tokyo")));
+                createTrackingWorldManager(worldState),
+                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
+                fileManager,
+                editService,
+                () -> 777L);
 
         manager.onEnable().get(5, TimeUnit.SECONDS);
         LocalDateTime currentReset = manager.getNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow();
@@ -109,12 +133,18 @@ class ResourceWorldManagerTest {
 
         assertEquals(LocalDateTime.of(2026, 6, 15, 9, 0, 10), nextReset);
         assertEquals(nextReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
-        assertEquals("resource", calls.get("unloadWorld").get());
-        assertEquals("resource", calls.get("loadWorld").get());
-        assertNotNull(calls.get("regenWorld").get());
+        assertTrue(fileManager.backupCalled.get());
+        assertTrue(fileManager.deleteCalled.get());
+        assertTrue(editService.flattenCalled.get());
+        assertTrue(editService.pasteCalled.get());
+        assertEquals("resource", editService.flattenWorldName.get());
+        assertEquals("resource", editService.pasteWorldName.get());
+        assertEquals("resource", worldState.unloadWorldCall.get());
+        assertEquals("resource", worldState.loadWorldCall.get());
+        assertEquals("resource|123456", worldState.regenWorldCall.get());
+        assertSame(this.server.getWorld("lobby"), player.getWorld());
         assertFalse(manager.isResetting("resource"));
 
-        PlayerMock player = (PlayerMock) this.server.getPlayerExact("Player0");
         String startMessage = player.nextMessage();
         String completeMessage = player.nextMessage();
         assertNotNull(startMessage);
@@ -124,10 +154,105 @@ class ResourceWorldManagerTest {
         assertTrue(repository.findByWorldNameAndNextResetAt("resource", currentReset).get(5, TimeUnit.SECONDS).isPresent());
     }
 
+    @Test
+    void shouldRestoreBackupAndNotifyAdminsWhenResetFails() throws Exception {
+        TNexus plugin = loadPlugin();
+        configureSingleWorld(plugin);
+        this.server.addSimpleWorld("lobby");
+        this.server.addSimpleWorld("resource");
+        PlayerMock admin = this.server.addPlayer();
+        admin.addAttachment(plugin, "tnexus.admin", true);
+
+        TrackingWorldManagerState worldState = new TrackingWorldManagerState();
+        worldState.regenShouldSucceed = false;
+        TrackingFileManager fileManager = new TrackingFileManager(plugin);
+        TrackingEditService editService = new TrackingEditService();
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                repository,
+                createTrackingWorldManager(worldState),
+                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
+                fileManager,
+                editService,
+                () -> 999L);
+
+        manager.onEnable().get(5, TimeUnit.SECONDS);
+        LocalDateTime currentReset = manager.getNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow();
+        CompletableFuture<LocalDateTime> resetFuture = manager.executeReset("resource");
+        waitFor(resetFuture);
+
+        assertThrows(Exception.class, () -> resetFuture.get(5, TimeUnit.SECONDS));
+        assertTrue(fileManager.restoreCalled.get());
+        ResourceWorldResetRepository.ResourceWorldResetEntry failedEntry = repository
+                .findByWorldNameAndNextResetAt("resource", currentReset)
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+        assertEquals(ResourceWorldResetRepository.ResetStatus.FAILED, failedEntry.status());
+        assertTrue(failedEntry.errorMessage().contains("Failed to regenerate world resource"));
+
+        String startMessage = admin.nextMessage();
+        String adminMessage = admin.nextMessage();
+        String failedBroadcast = admin.nextMessage();
+        assertNotNull(startMessage);
+        assertNotNull(adminMessage);
+        assertNotNull(failedBroadcast);
+        assertTrue(adminMessage.contains("resource"));
+        assertTrue(adminMessage.contains("Failed to regenerate world resource"));
+        assertTrue(failedBroadcast.contains("resource"));
+    }
+
+    @Test
+    void shouldPersistFailedStatusSynchronouslyOnDisable() throws Exception {
+        TNexus plugin = loadPlugin();
+        configureSingleWorld(plugin);
+        this.server.addSimpleWorld("lobby");
+        this.server.addSimpleWorld("resource");
+
+        CountDownLatch backupStarted = new CountDownLatch(1);
+        CountDownLatch continueBackup = new CountDownLatch(1);
+        BlockingFileManager fileManager = new BlockingFileManager(plugin, backupStarted, continueBackup);
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                repository,
+                createTrackingWorldManager(new TrackingWorldManagerState()),
+                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
+                fileManager,
+                new TrackingEditService(),
+                () -> 321L);
+
+        manager.onEnable().get(5, TimeUnit.SECONDS);
+        LocalDateTime currentReset = manager.getNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow();
+        CompletableFuture<LocalDateTime> resetFuture = manager.executeReset("resource");
+
+        while (!backupStarted.await(50, TimeUnit.MILLISECONDS)) {
+            this.server.getScheduler().performOneTick();
+        }
+
+        manager.onDisable();
+        ResourceWorldResetRepository.ResourceWorldResetEntry failedEntry = repository
+                .findByWorldNameAndNextResetAt("resource", currentReset)
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+        assertEquals(ResourceWorldResetRepository.ResetStatus.FAILED, failedEntry.status());
+        assertEquals("Plugin disabled during reset", failedEntry.errorMessage());
+
+        continueBackup.countDown();
+        waitFor(resetFuture);
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
-        this.server.addPlayer();
-        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2DatabaseOnlyTNexus.class);
+    }
+
+    private void configureSingleWorld(TNexus plugin) {
+        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
+                "name", "resource",
+                "dimension", "NORMAL",
+                "reset-interval-days", 1,
+                "reset-start-date", "2026-06-14T09:00:10")));
     }
 
     private void waitFor(CompletableFuture<?> future) throws Exception {
@@ -141,20 +266,22 @@ class ResourceWorldManagerTest {
         }
     }
 
-    private MVWorldManager createTrackingWorldManager(Map<String, AtomicReference<String>> calls) {
+    private MVWorldManager createTrackingWorldManager(TrackingWorldManagerState state) {
         InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
             case "unloadWorld" -> {
-                calls.computeIfAbsent("unloadWorld", ignored -> new AtomicReference<>()).set((String) args[0]);
+                state.unloadWorldCall.set((String) args[0]);
                 yield true;
             }
             case "loadWorld" -> {
-                calls.computeIfAbsent("loadWorld", ignored -> new AtomicReference<>()).set((String) args[0]);
+                state.loadWorldCall.set((String) args[0]);
+                if (this.server.getWorld((String) args[0]) == null) {
+                    this.server.addSimpleWorld((String) args[0]);
+                }
                 yield true;
             }
             case "regenWorld" -> {
-                calls.computeIfAbsent("regenWorld", ignored -> new AtomicReference<>())
-                        .set(args[0] + "|" + args[3]);
-                yield true;
+                state.regenWorldCall.set(args[0] + "|" + args[3]);
+                yield state.regenShouldSucceed;
             }
             case "getMVWorlds", "getUnloadedWorlds", "getPotentialWorlds" -> java.util.List.of();
             default -> defaultValue(method.getReturnType());
@@ -178,5 +305,99 @@ class ResourceWorldManagerTest {
             return 0L;
         }
         return null;
+    }
+
+    private static final class TrackingWorldManagerState {
+        private final AtomicReference<String> unloadWorldCall = new AtomicReference<>();
+        private final AtomicReference<String> loadWorldCall = new AtomicReference<>();
+        private final AtomicReference<String> regenWorldCall = new AtomicReference<>();
+        private boolean regenShouldSucceed = true;
+    }
+
+    private static class TrackingFileManager extends ResourceWorldFileManager {
+        protected final AtomicBoolean backupCalled = new AtomicBoolean();
+        protected final AtomicBoolean deleteCalled = new AtomicBoolean();
+        protected final AtomicBoolean restoreCalled = new AtomicBoolean();
+        private Path schematicPath;
+
+        private TrackingFileManager(TNexus plugin) {
+            super(plugin);
+        }
+
+        @Override
+        public void backupWorld(String worldName) {
+            this.backupCalled.set(true);
+        }
+
+        @Override
+        public void restoreLatestBackup(String worldName) {
+            this.restoreCalled.set(true);
+        }
+
+        @Override
+        public void deleteWorldFolder(String worldName) {
+            this.deleteCalled.set(true);
+        }
+
+        @Override
+        public boolean hasLatestBackup(String worldName) {
+            return true;
+        }
+
+        @Override
+        public long randomizeStructureSeeds(String worldName) {
+            return 123456L;
+        }
+
+        @Override
+        public Path getSpawnSchematicPath(String worldName) {
+            return this.schematicPath == null ? Path.of("missing.schem") : this.schematicPath;
+        }
+    }
+
+    private static final class BlockingFileManager extends TrackingFileManager {
+        private final CountDownLatch backupStarted;
+        private final CountDownLatch continueBackup;
+
+        private BlockingFileManager(TNexus plugin, CountDownLatch backupStarted, CountDownLatch continueBackup) {
+            super(plugin);
+            this.backupStarted = backupStarted;
+            this.continueBackup = continueBackup;
+        }
+
+        @Override
+        public void backupWorld(String worldName) {
+            this.backupCalled.set(true);
+            this.backupStarted.countDown();
+            try {
+                this.continueBackup.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            }
+        }
+    }
+
+    private static final class TrackingEditService implements ResourceWorldEditService {
+        private final AtomicBoolean flattenCalled = new AtomicBoolean();
+        private final AtomicBoolean pasteCalled = new AtomicBoolean();
+        private final AtomicReference<String> flattenWorldName = new AtomicReference<>();
+        private final AtomicReference<String> pasteWorldName = new AtomicReference<>();
+
+        @Override
+        public void flattenArea(World world, int radius, int surfaceY) {
+            this.flattenCalled.set(true);
+            this.flattenWorldName.set(world.getName());
+            assertEquals(32, radius);
+        }
+
+        @Override
+        public void pasteSchematic(World world, Path schematicPath, int x, int y, int z) {
+            this.pasteCalled.set(true);
+            this.pasteWorldName.set(world.getName());
+            assertTrue(Files.exists(schematicPath));
+            assertEquals(0, x);
+            assertEquals(0, z);
+        }
     }
 }
