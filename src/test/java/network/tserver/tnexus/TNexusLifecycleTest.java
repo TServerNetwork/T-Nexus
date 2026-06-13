@@ -119,7 +119,7 @@ class TNexusLifecycleTest {
     private void registerRequiredPlugins() {
         registerPlugin("Vault");
         registerPlugin("LuckPerms");
-        registerPlugin("Multiverse-Core");
+        TestPluginSupport.registerMultiversePlugin(this.server);
         registerPlugin("FastAsyncWorldEdit");
         TestPluginSupport.registerEconomyProvider(this.server);
         TestPluginSupport.registerLuckPermsProvider(this.server);
@@ -145,6 +145,11 @@ class TNexusLifecycleTest {
                     getConfigManager(),
                     databaseInitializationShouldSucceed);
         }
+
+        @Override
+        protected void initializeResourceWorldManager() {
+            // Lifecycle tests isolate database and shutdown behavior.
+        }
     }
 
     public static class TrackingLifecycleTNexus extends TNexus {
@@ -165,6 +170,11 @@ class TNexusLifecycleTest {
                     this,
                     new PlayerStatsRepository(getDatabaseManager()));
             return this.trackingPlayerStatsManager;
+        }
+
+        @Override
+        protected void initializeResourceWorldManager() {
+            // Lifecycle tests isolate database and shutdown behavior.
         }
     }
 

@@ -1,5 +1,6 @@
 package network.tserver.tnexus;
 
+import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.io.StringReader;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -19,6 +20,7 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.ServicePriority;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.Assertions;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
@@ -67,6 +69,13 @@ public final class TestPluginSupport {
                 usage: "/server-stats"
             """;
 
+    private static final String MULTIVERSE_PLUGIN_YAML = """
+            name: Multiverse-Core
+            version: 4.3.1
+            main: %s
+            api-version: '26.1.2'
+            """;
+
     private TestPluginSupport() {
     }
 
@@ -103,7 +112,7 @@ public final class TestPluginSupport {
     public static void registerRequiredPlugins(ServerMock server) {
         registerPlugin(server, "Vault");
         registerPlugin(server, "LuckPerms");
-        registerPlugin(server, "Multiverse-Core");
+        registerMultiversePlugin(server);
         registerPlugin(server, "FastAsyncWorldEdit");
     }
 
@@ -120,6 +129,24 @@ public final class TestPluginSupport {
                 .build();
         server.getPluginManager().registerLoadedPlugin(dependencyPlugin);
         server.getPluginManager().enablePlugin(dependencyPlugin);
+    }
+
+    /**
+     * Registers a Multiverse-Core-compatible test plugin.
+     *
+     * @param server mocked server
+     */
+    public static void registerMultiversePlugin(ServerMock server) {
+        try {
+            PluginDescriptionFile description = new PluginDescriptionFile(
+                    new StringReader(MULTIVERSE_PLUGIN_YAML.formatted(TestMultiverseCorePlugin.class.getName())));
+            PluginManagerMock pluginManager = (PluginManagerMock) server.getPluginManager();
+            TestMultiverseCorePlugin plugin = pluginClassCast(
+                    pluginManager.loadPlugin(TestMultiverseCorePlugin.class, description, new Object[0]));
+            pluginManager.enablePlugin(plugin);
+        } catch (Exception exception) {
+            Assertions.fail("Failed to load Multiverse-Core test plugin", exception);
+        }
     }
 
     /**
@@ -186,6 +213,11 @@ public final class TestPluginSupport {
         protected DatabaseManager createDatabaseManager() {
             return new ReadyDatabaseManager(this, getConfigManager());
         }
+
+        @Override
+        protected void initializeResourceWorldManager() {
+            // Tests using the ready database do not initialize a real datasource.
+        }
     }
 
     /**
@@ -217,6 +249,23 @@ public final class TestPluginSupport {
         @Override
         public synchronized boolean initialize() {
             return true;
+        }
+    }
+
+    /**
+     * Minimal Multiverse-Core test double exposing MVWorldManager.
+     */
+    public static class TestMultiverseCorePlugin extends JavaPlugin {
+
+        private final MVWorldManager worldManager = createMultiverseWorldManagerProxy();
+
+        /**
+         * Returns the test MV world manager proxy.
+         *
+         * @return MV world manager proxy
+         */
+        public MVWorldManager getMVWorldManager() {
+            return this.worldManager;
         }
     }
 
@@ -342,9 +391,30 @@ public final class TestPluginSupport {
         if (returnType == int.class) {
             return 0;
         }
+        if (returnType == long.class) {
+            return 0L;
+        }
         if (returnType == double.class) {
             return 0.0D;
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T pluginClassCast(Object plugin) {
+        return (T) plugin;
+    }
+
+    private static MVWorldManager createMultiverseWorldManagerProxy() {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "regenWorld", "loadWorld", "unloadWorld", "deleteWorld", "addWorld", "cloneWorld",
+                    "saveWorldsConfig", "removeWorldFromConfig", "isMVWorld", "hasUnloadedWorld" -> true;
+            case "getUnloadedWorlds", "getPotentialWorlds", "getMVWorlds" -> java.util.List.of();
+            default -> defaultValue(method.getReturnType());
+        };
+        return (MVWorldManager) Proxy.newProxyInstance(
+                MVWorldManager.class.getClassLoader(),
+                new Class<?>[]{MVWorldManager.class},
+                handler);
     }
 }

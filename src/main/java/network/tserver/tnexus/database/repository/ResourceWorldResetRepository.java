@@ -129,6 +129,110 @@ public final class ResourceWorldResetRepository {
         });
     }
 
+    /**
+     * Upserts the latest scheduled reset timestamp for a world.
+     *
+     * @param worldName world name
+     * @param nextResetAt next scheduled reset timestamp
+     * @param seed optional seed value
+     * @return completion future
+     */
+    public CompletableFuture<Void> upsertScheduledReset(String worldName, LocalDateTime nextResetAt, @Nullable Long seed) {
+        Objects.requireNonNull(worldName, "worldName");
+        Objects.requireNonNull(nextResetAt, "nextResetAt");
+        String selectSql = """
+                SELECT id
+                FROM %s
+                WHERE world_name = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """.formatted(this.tableName);
+        String insertSql = """
+                INSERT INTO %s (world_name, reset_at, next_reset_at, status, seed, error_message)
+                VALUES (?, ?, ?, ?, ?, NULL)
+                """.formatted(this.tableName);
+        String updateSql = """
+                UPDATE %s
+                SET reset_at = ?, next_reset_at = ?, status = ?, seed = ?, error_message = NULL
+                WHERE id = ?
+                """.formatted(this.tableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection()) {
+                Long existingId = null;
+                try (var selectStatement = connection.prepareStatement(selectSql)) {
+                    selectStatement.setString(1, worldName);
+                    try (var resultSet = selectStatement.executeQuery()) {
+                        if (resultSet.next()) {
+                            existingId = resultSet.getLong("id");
+                        }
+                    }
+                }
+
+                if (existingId == null) {
+                    try (var insertStatement = connection.prepareStatement(insertSql)) {
+                        insertStatement.setString(1, worldName);
+                        insertStatement.setTimestamp(2, Timestamp.valueOf(nextResetAt));
+                        insertStatement.setTimestamp(3, Timestamp.valueOf(nextResetAt));
+                        insertStatement.setString(4, ResetStatus.SCHEDULED.databaseValue());
+                        if (seed == null) {
+                            insertStatement.setNull(5, java.sql.Types.BIGINT);
+                        } else {
+                            insertStatement.setLong(5, seed);
+                        }
+                        insertStatement.executeUpdate();
+                    }
+                } else {
+                    try (var updateStatement = connection.prepareStatement(updateSql)) {
+                        updateStatement.setTimestamp(1, Timestamp.valueOf(nextResetAt));
+                        updateStatement.setTimestamp(2, Timestamp.valueOf(nextResetAt));
+                        updateStatement.setString(3, ResetStatus.SCHEDULED.databaseValue());
+                        if (seed == null) {
+                            updateStatement.setNull(4, java.sql.Types.BIGINT);
+                        } else {
+                            updateStatement.setLong(4, seed);
+                        }
+                        updateStatement.setLong(5, existingId);
+                        updateStatement.executeUpdate();
+                    }
+                }
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to upsert resource world reset schedule", exception);
+            }
+        });
+    }
+
+    /**
+     * Finds the latest scheduled reset time for a world.
+     *
+     * @param worldName world name
+     * @return completion future with the latest next reset timestamp when present
+     */
+    public CompletableFuture<Optional<LocalDateTime>> findNextResetTime(String worldName) {
+        Objects.requireNonNull(worldName, "worldName");
+        String sql = """
+                SELECT next_reset_at
+                FROM %s
+                WHERE world_name = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """.formatted(this.tableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                statement.setString(1, worldName);
+                try (var resultSet = statement.executeQuery()) {
+                    if (!resultSet.next()) {
+                        return Optional.empty();
+                    }
+                    return Optional.of(resultSet.getTimestamp("next_reset_at").toLocalDateTime());
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to read next resource world reset time", exception);
+            }
+        });
+    }
+
     private ResourceWorldResetEntry mapEntry(java.sql.ResultSet resultSet) throws java.sql.SQLException {
         return new ResourceWorldResetEntry(
                 resultSet.getLong("id"),

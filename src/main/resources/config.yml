@@ -49,3 +49,22 @@ tnexus:
       - "STRUCTURE_VOID"
       - "JIGSAW"
   locale: "ja_JP"
+
+resource-world:
+  backup-path: "plugins/T-Nexus/backups"
+  backup-generations: 3
+  fallback-world: "lobby"
+  seed-obfuscation-key: 1234567890
+  worlds:
+    - name: "resource"
+      dimension: "NORMAL"
+      reset-interval-days: 90
+      reset-start-date: "2026-01-01T04:00:00"
+    - name: "resource_nether"
+      dimension: "NETHER"
+      reset-interval-days: 90
+      reset-start-date: "2026-02-01T04:00:00"
+    - name: "resource_end"
+      dimension: "THE_END"
+      reset-interval-days: 90
+      reset-start-date: "2026-03-01T04:00:00"

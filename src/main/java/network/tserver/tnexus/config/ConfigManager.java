@@ -2,7 +2,12 @@ package network.tserver.tnexus.config;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import network.tserver.tnexus.gui.PagerTexture;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -14,6 +19,7 @@ public final class ConfigManager {
 
     private static final String DATABASE_PATH = "tnexus.database";
     private static final String GUI_PATH = "tnexus.gui";
+    private static final String RESOURCE_WORLD_PATH = "resource-world";
 
     private final JavaPlugin plugin;
     private FileConfiguration configuration;
@@ -232,6 +238,55 @@ public final class ConfigManager {
     }
 
     /**
+     * Returns the resource world manager settings.
+     *
+     * @return resource world settings
+     */
+    public ResourceWorldSettings getResourceWorldSettings() {
+        ConfigurationSection section = getSection(RESOURCE_WORLD_PATH);
+        if (section == null) {
+            throw new IllegalStateException("Missing resource-world configuration section");
+        }
+
+        List<ResourceWorldDefinition> worlds = new ArrayList<>();
+        List<Map<?, ?>> worldMaps = section.getMapList("worlds");
+        for (Map<?, ?> worldMap : worldMaps) {
+            String name = requireString(worldMap, "name");
+            String dimensionName = requireString(worldMap, "dimension");
+            String resetStartDate = requireString(worldMap, "reset-start-date");
+            int resetIntervalDays = requireInt(worldMap, "reset-interval-days");
+            worlds.add(new ResourceWorldDefinition(
+                    name,
+                    World.Environment.valueOf(dimensionName),
+                    resetIntervalDays,
+                    LocalDateTime.parse(resetStartDate)));
+        }
+
+        return new ResourceWorldSettings(
+                section.getString("backup-path", "plugins/T-Nexus/backups"),
+                section.getInt("backup-generations", 3),
+                section.getString("fallback-world", "lobby"),
+                section.getLong("seed-obfuscation-key", 1234567890L),
+                List.copyOf(worlds));
+    }
+
+    private String requireString(Map<?, ?> values, String key) {
+        Object value = values.get(key);
+        if (value instanceof String stringValue && !stringValue.isBlank()) {
+            return stringValue;
+        }
+        throw new IllegalStateException("Missing resource-world.worlds." + key + " configuration value");
+    }
+
+    private int requireInt(Map<?, ?> values, String key) {
+        Object value = values.get(key);
+        if (value instanceof Number numberValue) {
+            return numberValue.intValue();
+        }
+        throw new IllegalStateException("Missing resource-world.worlds." + key + " configuration value");
+    }
+
+    /**
      * Immutable database configuration values.
      *
      * @param host database host
@@ -292,5 +347,37 @@ public final class ConfigManager {
      * @param next next-page head textures
      */
     public record PagerSettings(PagerTexture previous, PagerTexture next) {
+    }
+
+    /**
+     * Immutable resource world configuration values.
+     *
+     * @param backupPath backup directory path
+     * @param backupGenerations number of backups to retain
+     * @param fallbackWorld fallback world name
+     * @param seedObfuscationKey seed obfuscation key
+     * @param worlds configured resource worlds
+     */
+    public record ResourceWorldSettings(
+            String backupPath,
+            int backupGenerations,
+            String fallbackWorld,
+            long seedObfuscationKey,
+            List<ResourceWorldDefinition> worlds) {
+    }
+
+    /**
+     * Immutable resource world definition.
+     *
+     * @param name world name
+     * @param dimension world environment
+     * @param resetIntervalDays reset interval in days
+     * @param resetStartDate reset schedule anchor
+     */
+    public record ResourceWorldDefinition(
+            String name,
+            World.Environment dimension,
+            int resetIntervalDays,
+            LocalDateTime resetStartDate) {
     }
 }
