@@ -474,7 +474,7 @@ public final class PlayerStatsViewerManager {
             entries.add(new StatsEntry(
                     "BLOCK:" + materialName,
                     StatsCategory.BLOCKS,
-                    resolveMaterial(materialName, Material.STONE),
+                    resolveDisplayMaterial(materialName, Material.STONE),
                     this.plugin.getMessageConfig().getMessage(
                             "stats.dynamic.block.name",
                             prettifyKey(materialName)),
@@ -766,6 +766,14 @@ public final class PlayerStatsViewerManager {
     private Material resolveMaterial(String materialName, Material fallback) {
         Material material = Material.matchMaterial(materialName);
         return material == null ? fallback : material;
+    }
+
+    private Material resolveDisplayMaterial(String materialName, Material fallback) {
+        Material material = Material.matchMaterial(materialName);
+        if (material == null) {
+            return fallback;
+        }
+        return material.isItem() ? material : fallback;
     }
 
     private Material resolveCombatMaterial(String entityKey) {

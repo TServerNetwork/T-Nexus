@@ -232,6 +232,28 @@ class PlayerStatsViewerManagerTest {
         assertEquals("8", entry.valueText());
     }
 
+    @Test
+    void shouldFallbackWhenBlockStatsContainNonItemMaterial() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        insertHistoricalBlockStat(plugin, target.getUniqueId(), Material.WATER.name(), 2, 0, LocalDate.now());
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("BLOCK:WATER");
+        assertNotNull(entry);
+        assertEquals(Material.STONE, entry.material());
+    }
+
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {
         PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
         repository.ensurePlayerExists(target.getUniqueId(), Instant.parse("2026-06-01T00:00:00Z")).get(5, TimeUnit.SECONDS);
