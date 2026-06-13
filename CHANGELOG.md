@@ -1,3 +1,10 @@
+## [0.37.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.37.0...v0.37.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* **world:** harden resource world seed handling ([#104](https://github.com/TServerNetwork/T-Nexus/issues/104)) ([bfab901](https://github.com/TServerNetwork/T-Nexus/commit/bfab90126adb3249281eafb0156fa86d5944e430))
+
 # [0.37.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.36.0...v0.37.0) (2026-06-13)
 
 
