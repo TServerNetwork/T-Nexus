@@ -1,3 +1,10 @@
+# [0.37.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.36.0...v0.37.0) (2026-06-13)
+
+
+### Features
+
+* **world:** implement resource world reset flow ([#103](https://github.com/TServerNetwork/T-Nexus/issues/103)) ([225f237](https://github.com/TServerNetwork/T-Nexus/commit/225f23789e39277e1208c58ff990aedcb4ad3024))
+
 # [0.36.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.35.0...v0.36.0) (2026-06-13)
 
 
