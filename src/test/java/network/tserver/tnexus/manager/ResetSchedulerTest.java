@@ -1,0 +1,142 @@
+package network.tserver.tnexus.manager;
+
+import com.onarandombox.MultiverseCore.api.MVWorldManager;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.TestPluginSupport;
+import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.mockbukkit.mockbukkit.MockBukkit;
+import org.mockbukkit.mockbukkit.ServerMock;
+import org.mockbukkit.mockbukkit.entity.PlayerMock;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class ResetSchedulerTest {
+
+    private static final ZoneId TOKYO = ZoneId.of("Asia/Tokyo");
+
+    private ServerMock server;
+
+    @AfterEach
+    void tearDown() {
+        MockBukkit.unmock();
+    }
+
+    @Test
+    void shouldScheduleOnlyFutureCountdownPoints() throws Exception {
+        TNexus plugin = loadPlugin();
+        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
+                "name", "resource",
+                "dimension", "NORMAL",
+                "reset-interval-days", 1,
+                "reset-start-date", "2026-06-14T09:00:12")));
+        Clock clock = Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO);
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createWorldManagerProxy(),
+                clock);
+        manager.onEnable().get(5, TimeUnit.SECONDS);
+
+        ResetScheduler scheduler = new ResetScheduler(plugin, manager, clock);
+        scheduler.scheduleAll().get(5, TimeUnit.SECONDS);
+
+        PlayerMock player = (PlayerMock) this.server.getPlayerExact("Player0");
+        this.server.getScheduler().performTicks(239);
+
+        int countdownMessages = drainMessages(player);
+        assertEquals(10, countdownMessages);
+        assertTrue(scheduler.getScheduledTaskCount("resource") >= 1);
+    }
+
+    @Test
+    void shouldRescheduleNextResetAfterExecutionCompletes() throws Exception {
+        TNexus plugin = loadPlugin();
+        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
+                "name", "resource",
+                "dimension", "NORMAL",
+                "reset-interval-days", 1,
+                "reset-start-date", "2026-06-14T09:00:01")));
+        Clock clock = Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO);
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                repository,
+                createWorldManagerProxy(),
+                clock);
+        manager.onEnable().get(5, TimeUnit.SECONDS);
+
+        ResetScheduler scheduler = new ResetScheduler(plugin, manager, clock);
+        scheduler.scheduleAll().get(5, TimeUnit.SECONDS);
+        this.server.getScheduler().performTicks(25);
+        waitFor(() -> {
+            this.server.getScheduler().performOneTick();
+            return scheduler.getScheduledTaskCount("resource") > 1;
+        });
+
+        LocalDateTime nextReset = repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow();
+        assertEquals(LocalDateTime.of(2026, 6, 15, 9, 0, 1), nextReset);
+        assertTrue(scheduler.getScheduledTaskCount("resource") > 1);
+    }
+
+    private TNexus loadPlugin() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        this.server.addPlayer();
+        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+    }
+
+    private int drainMessages(PlayerMock player) {
+        int messages = 0;
+        while (player.nextMessage() != null) {
+            messages++;
+        }
+        return messages;
+    }
+
+    private void waitFor(java.util.function.BooleanSupplier condition) throws Exception {
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(10L);
+        }
+        throw new AssertionError("Condition was not met before timeout");
+    }
+
+    private MVWorldManager createWorldManagerProxy() {
+        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+            case "unloadWorld", "loadWorld", "regenWorld" -> true;
+            case "getMVWorlds", "getUnloadedWorlds", "getPotentialWorlds" -> java.util.List.of();
+            default -> defaultValue(method.getReturnType());
+        };
+        return (MVWorldManager) Proxy.newProxyInstance(
+                MVWorldManager.class.getClassLoader(),
+                new Class<?>[]{MVWorldManager.class},
+                handler);
+    }
+
+    private Object defaultValue(Class<?> returnType) {
+        if (returnType == boolean.class) {
+            return false;
+        }
+        if (returnType == int.class) {
+            return 0;
+        }
+        if (returnType == long.class) {
+            return 0L;
+        }
+        return null;
+    }
+}

@@ -7,7 +7,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,9 +20,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
+import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -81,9 +85,60 @@ class ResourceWorldManagerTest {
         assertEquals("resource|12345", calls.get("regenWorld").get());
     }
 
+    @Test
+    void shouldExecuteResetAndPersistNextSchedule() throws Exception {
+        TNexus plugin = loadPlugin();
+        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
+                "name", "resource",
+                "dimension", "NORMAL",
+                "reset-interval-days", 1,
+                "reset-start-date", "2026-06-14T09:00:10")));
+        Map<String, AtomicReference<String>> calls = new ConcurrentHashMap<>();
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                repository,
+                createTrackingWorldManager(calls),
+                Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), ZoneId.of("Asia/Tokyo")));
+
+        manager.onEnable().get(5, TimeUnit.SECONDS);
+        LocalDateTime currentReset = manager.getNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow();
+        CompletableFuture<LocalDateTime> resetFuture = manager.executeReset("resource");
+        waitFor(resetFuture);
+        LocalDateTime nextReset = resetFuture.get(5, TimeUnit.SECONDS);
+
+        assertEquals(LocalDateTime.of(2026, 6, 15, 9, 0, 10), nextReset);
+        assertEquals(nextReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
+        assertEquals("resource", calls.get("unloadWorld").get());
+        assertEquals("resource", calls.get("loadWorld").get());
+        assertNotNull(calls.get("regenWorld").get());
+        assertFalse(manager.isResetting("resource"));
+
+        PlayerMock player = (PlayerMock) this.server.getPlayerExact("Player0");
+        String startMessage = player.nextMessage();
+        String completeMessage = player.nextMessage();
+        assertNotNull(startMessage);
+        assertNotNull(completeMessage);
+        assertTrue(startMessage.contains("resource"));
+        assertTrue(completeMessage.contains("resource"));
+        assertTrue(repository.findByWorldNameAndNextResetAt("resource", currentReset).get(5, TimeUnit.SECONDS).isPresent());
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        this.server.addPlayer();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+    }
+
+    private void waitFor(CompletableFuture<?> future) throws Exception {
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (!future.isDone() && System.currentTimeMillis() < deadline) {
+            this.server.getScheduler().performOneTick();
+            Thread.sleep(10L);
+        }
+        if (!future.isDone()) {
+            throw new AssertionError("Future did not complete before timeout");
+        }
     }
 
     private MVWorldManager createTrackingWorldManager(Map<String, AtomicReference<String>> calls) {
