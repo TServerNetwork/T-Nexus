@@ -128,7 +128,7 @@ class ResourceWorldResetRepositoryTest {
 
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
-        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2DatabaseOnlyTNexus.class);
     }
 
     private void assertStatus(

@@ -454,3 +454,8 @@ stats:
         self-highlight: "&aあなたの順位です。"
 resource-world:
   initialize-failed: "&cFailed to initialize resource world schedules."
+  countdown: "&e[資源ワールド] &f{0} &eが &c{1} &e後にリセットされます。"
+  reset-start: "&c[資源ワールド] &f{0} &cのリセットを開始します。"
+  reset-complete: "&a[資源ワールド] &f{0} &aのリセットが完了しました。"
+  reset-failed: "&4[資源ワールド] &f{0} &4のリセットに失敗しました。管理者に連絡してください。"
+  tp-blocked: "&c現在 {0} はリセット中です。しばらくお待ちください。"

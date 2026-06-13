@@ -28,6 +28,7 @@ import network.tserver.tnexus.manager.PlayerStatsRankingManager;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager;
 import network.tserver.tnexus.manager.PluginHookManager;
 import network.tserver.tnexus.manager.ResourceWorldManager;
+import network.tserver.tnexus.manager.ResetScheduler;
 import network.tserver.tnexus.manager.ServerStatsManager;
 import network.tserver.tnexus.manager.SignShopManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
@@ -85,6 +86,7 @@ public class TNexus extends JavaPlugin {
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
     private ResourceWorldManager resourceWorldManager;
+    private ResetScheduler resetScheduler;
 
     @Override
     public void onEnable() {
@@ -159,6 +161,9 @@ public class TNexus extends JavaPlugin {
         if (this.messageConfig != null) {
             logMessage(this.messageConfig.getMessage("general.plugin-disabled"));
         }
+        if (this.resetScheduler != null) {
+            this.resetScheduler.cancelAll();
+        }
         this.databaseManager = null;
         this.messageConfig = null;
         this.configManager = null;
@@ -188,6 +193,7 @@ public class TNexus extends JavaPlugin {
         this.signShopManager = null;
         this.signShopListener = null;
         this.resourceWorldManager = null;
+        this.resetScheduler = null;
     }
 
     /**
@@ -457,7 +463,8 @@ public class TNexus extends JavaPlugin {
                 this,
                 new ResourceWorldResetRepository(this.databaseManager),
                 mvWorldManager);
-        this.resourceWorldManager.onEnable().exceptionally(exception -> {
+        this.resetScheduler = new ResetScheduler(this, this.resourceWorldManager);
+        this.resourceWorldManager.onEnable().thenCompose(ignored -> this.resetScheduler.scheduleAll()).exceptionally(exception -> {
             getLogger().log(
                     Level.SEVERE,
                     ChatColor.stripColor(this.messageConfig.getMessage("resource-world.initialize-failed")),
