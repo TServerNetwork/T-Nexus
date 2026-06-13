@@ -452,3 +452,5 @@ stats:
         play-time: "&7プレイ時間: &f{0}"
         period: "&7期間: &f{0}"
         self-highlight: "&aあなたの順位です。"
+resource-world:
+  initialize-failed: "&cFailed to initialize resource world schedules."

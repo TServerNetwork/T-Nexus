@@ -38,6 +38,10 @@ class ConfigManagerTest {
         assertEquals("REPLACE_PREVIOUS_ENABLED_TEXTURE",
                 configManager.getGuiSettings().pagerSettings().previous().enabledTexture());
         assertEquals(50, configManager.getGuiSettings().currentLocationSlot());
+        assertEquals("plugins/T-Nexus/backups", configManager.getResourceWorldSettings().backupPath());
+        assertEquals(3, configManager.getResourceWorldSettings().worlds().size());
+        assertEquals("resource_end", configManager.getResourceWorldSettings().worlds().get(2).name());
+        assertEquals("THE_END", configManager.getResourceWorldSettings().worlds().get(2).dimension().name());
         assertTrue(plugin.getConfig().getStringList("tnexus.shop.banned-materials")
                 .contains(configManager.getString("tnexus.shop.link-tool.material")));
         assertEquals(13, configManager.getInt("tnexus.shop.sign-display.item-name-max-length"));

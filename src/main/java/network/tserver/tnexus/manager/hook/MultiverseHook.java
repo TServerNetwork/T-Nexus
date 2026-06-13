@@ -1,13 +1,14 @@
 package network.tserver.tnexus.manager.hook;
 
+import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import org.bukkit.plugin.Plugin;
 
 /**
  * Required hook for Multiverse-Core.
  */
-public final class MultiverseHook implements PluginHook<Plugin> {
+public final class MultiverseHook implements PluginHook<MVWorldManager> {
 
-    private Plugin plugin;
+    private MVWorldManager worldManager;
 
     @Override
     public String getPluginName() {
@@ -20,8 +21,8 @@ public final class MultiverseHook implements PluginHook<Plugin> {
     }
 
     @Override
-    public Plugin getApi() {
-        return this.plugin;
+    public MVWorldManager getApi() {
+        return this.worldManager;
     }
 
     @Override
@@ -29,7 +30,15 @@ public final class MultiverseHook implements PluginHook<Plugin> {
         if (plugin == null || !getPluginName().equals(plugin.getName())) {
             return false;
         }
-        this.plugin = plugin;
-        return true;
+        try {
+            Object api = plugin.getClass().getMethod("getMVWorldManager").invoke(plugin);
+            if (!(api instanceof MVWorldManager multiverseWorldManager)) {
+                return false;
+            }
+            this.worldManager = multiverseWorldManager;
+            return true;
+        } catch (ReflectiveOperationException exception) {
+            return false;
+        }
     }
 }

@@ -1,5 +1,6 @@
 package network.tserver.tnexus;
 
+import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.util.logging.Logger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +15,7 @@ import network.tserver.tnexus.database.repository.PayQueueRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsRankingRepository;
 import network.tserver.tnexus.database.repository.PlayerStatsViewRepository;
+import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
 import network.tserver.tnexus.database.repository.ServerStatsRepository;
 import network.tserver.tnexus.database.repository.TransactionRepository;
 import network.tserver.tnexus.gui.AnvilGuiManager;
@@ -25,6 +27,7 @@ import network.tserver.tnexus.manager.PlayerStatsManager;
 import network.tserver.tnexus.manager.PlayerStatsRankingManager;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager;
 import network.tserver.tnexus.manager.PluginHookManager;
+import network.tserver.tnexus.manager.ResourceWorldManager;
 import network.tserver.tnexus.manager.ServerStatsManager;
 import network.tserver.tnexus.manager.SignShopManager;
 import network.tserver.tnexus.manager.hook.FaweHook;
@@ -81,6 +84,7 @@ public class TNexus extends JavaPlugin {
     private AutoCloseable worldEditStatsListener;
     private SignShopManager signShopManager;
     private SignShopListener signShopListener;
+    private ResourceWorldManager resourceWorldManager;
 
     @Override
     public void onEnable() {
@@ -133,6 +137,7 @@ public class TNexus extends JavaPlugin {
         this.worldEditStatsListener = createWorldEditStatsListener();
         this.signShopManager = new SignShopManager(this);
         this.signShopListener = new SignShopListener(this, this.signShopManager);
+        initializeResourceWorldManager();
         this.signShopManager.initialize();
         registerCommands();
         logMessage(this.messageConfig.getMessage("general.plugin-enabled"));
@@ -182,6 +187,7 @@ public class TNexus extends JavaPlugin {
         this.worldEditStatsListener = null;
         this.signShopManager = null;
         this.signShopListener = null;
+        this.resourceWorldManager = null;
     }
 
     /**
@@ -320,6 +326,15 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Returns the resource world manager instance.
+     *
+     * @return resource world manager
+     */
+    public ResourceWorldManager getResourceWorldManager() {
+        return this.resourceWorldManager;
+    }
+
+    /**
      * Creates the plugin hook manager used during startup.
      *
      * @return plugin hook manager
@@ -427,6 +442,28 @@ public class TNexus extends JavaPlugin {
             getLogger().log(Level.WARNING, "Failed to initialize WorldEdit stats listener.", exception);
             return null;
         }
+    }
+
+    /**
+     * Initializes the resource world manager after database and hook startup.
+     */
+    protected void initializeResourceWorldManager() {
+        MVWorldManager mvWorldManager = this.pluginHookManager.getApi(MVWorldManager.class);
+        if (mvWorldManager == null) {
+            throw new IllegalStateException("Multiverse world manager is not available");
+        }
+
+        this.resourceWorldManager = new ResourceWorldManager(
+                this,
+                new ResourceWorldResetRepository(this.databaseManager),
+                mvWorldManager);
+        this.resourceWorldManager.onEnable().exceptionally(exception -> {
+            getLogger().log(
+                    Level.SEVERE,
+                    ChatColor.stripColor(this.messageConfig.getMessage("resource-world.initialize-failed")),
+                    exception);
+            return null;
+        });
     }
 
     /**

@@ -105,6 +105,27 @@ class ResourceWorldResetRepositoryTest {
         assertEquals("FAWE rollback failed", failedEntry.errorMessage());
     }
 
+    @Test
+    void shouldUpsertLatestNextResetTimeByWorld() throws Exception {
+        TNexus plugin = loadPlugin();
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        LocalDateTime firstReset = LocalDateTime.of(2026, 7, 1, 4, 0);
+        LocalDateTime updatedReset = firstReset.plusDays(90);
+
+        repository.upsertScheduledReset("resource", firstReset, 13579L).get(5, TimeUnit.SECONDS);
+        assertEquals(firstReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
+
+        repository.upsertScheduledReset("resource", updatedReset, 24680L).get(5, TimeUnit.SECONDS);
+        assertEquals(updatedReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
+
+        Optional<ResourceWorldResetRepository.ResourceWorldResetEntry> entry = repository
+                .findByWorldNameAndNextResetAt("resource", updatedReset)
+                .get(5, TimeUnit.SECONDS);
+        assertTrue(entry.isPresent());
+        assertEquals(ResourceWorldResetRepository.ResetStatus.SCHEDULED, entry.get().status());
+        assertEquals(24680L, entry.get().seed());
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
