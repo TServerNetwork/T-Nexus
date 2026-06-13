@@ -1,3 +1,10 @@
+# [0.35.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.34.0...v0.35.0) (2026-06-13)
+
+
+### Features
+
+* **world:** add resource world manager foundation ([#101](https://github.com/TServerNetwork/T-Nexus/issues/101)) ([10a5b9f](https://github.com/TServerNetwork/T-Nexus/commit/10a5b9fbda58159468aa893ed92b16ae0fc1ed70))
+
 # [0.34.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.33.0...v0.34.0) (2026-06-13)
 
 
