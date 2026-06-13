@@ -240,6 +240,17 @@ public final class TestPluginSupport {
         }
     }
 
+    /**
+     * H2-backed test plugin variant without resource-world startup side effects.
+     */
+    public static class H2DatabaseOnlyTNexus extends H2TestTNexus {
+
+        @Override
+        protected void initializeResourceWorldManager() {
+            // Repository tests can opt out of startup schedule writes.
+        }
+    }
+
     private static final class ReadyDatabaseManager extends DatabaseManager {
 
         private ReadyDatabaseManager(TNexus plugin, ConfigManager configManager) {
