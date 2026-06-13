@@ -1,3 +1,10 @@
+# [0.36.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.35.0...v0.36.0) (2026-06-13)
+
+
+### Features
+
+* **world:** add resource world countdown scheduler ([#102](https://github.com/TServerNetwork/T-Nexus/issues/102)) ([75b9c2d](https://github.com/TServerNetwork/T-Nexus/commit/75b9c2d2f1919fa1ff422e8e697c4b40512aa875))
+
 # [0.35.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.34.0...v0.35.0) (2026-06-13)
 
 
