@@ -2,8 +2,9 @@ package network.tserver.tnexus.manager;
 
 import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import java.nio.file.Files;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
@@ -11,24 +12,36 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 import java.util.logging.Level;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
 import org.bukkit.Bukkit;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
 
 /**
  * Manages resource world configuration, reset state, and Multiverse operations.
  */
 public final class ResourceWorldManager {
 
+    private static final int FLATTEN_RADIUS = 32;
+    private static final int WORLD_LOAD_WAIT_TICKS = 200;
+    private static final String ADMIN_PERMISSION = "tnexus.admin";
+
     private final TNexus plugin;
     private final ConfigManager.ResourceWorldSettings settings;
     private final ResourceWorldResetRepository repository;
     private final MVWorldManager worldManager;
     private final Clock clock;
+    private final ResourceWorldFileManager fileManager;
+    private final ResourceWorldEditService worldEditService;
+    private final LongSupplier randomSeedSupplier;
     private final Map<String, ConfigManager.ResourceWorldDefinition> worldDefinitions;
     private final Set<String> resettingWorlds;
+    private final Map<String, Long> activeResetEntryIds;
 
     /**
      * Creates a new resource world manager.
@@ -57,13 +70,35 @@ public final class ResourceWorldManager {
             ResourceWorldResetRepository repository,
             MVWorldManager worldManager,
             Clock clock) {
+        this(
+                plugin,
+                repository,
+                worldManager,
+                clock,
+                new ResourceWorldFileManager(plugin),
+                new FaweResourceWorldEditService(plugin),
+                () -> Math.abs(java.util.concurrent.ThreadLocalRandom.current().nextLong()));
+    }
+
+    ResourceWorldManager(
+            TNexus plugin,
+            ResourceWorldResetRepository repository,
+            MVWorldManager worldManager,
+            Clock clock,
+            ResourceWorldFileManager fileManager,
+            ResourceWorldEditService worldEditService,
+            LongSupplier randomSeedSupplier) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.settings = this.plugin.getConfigManager().getResourceWorldSettings();
         this.repository = Objects.requireNonNull(repository, "repository");
         this.worldManager = Objects.requireNonNull(worldManager, "worldManager");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.fileManager = Objects.requireNonNull(fileManager, "fileManager");
+        this.worldEditService = Objects.requireNonNull(worldEditService, "worldEditService");
+        this.randomSeedSupplier = Objects.requireNonNull(randomSeedSupplier, "randomSeedSupplier");
         this.worldDefinitions = new ConcurrentHashMap<>();
         this.resettingWorlds = ConcurrentHashMap.newKeySet();
+        this.activeResetEntryIds = new ConcurrentHashMap<>();
     }
 
     /**
@@ -84,6 +119,29 @@ public final class ResourceWorldManager {
                 })
                 .toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(futures);
+    }
+
+    /**
+     * Persists in-progress resets synchronously during plugin shutdown.
+     */
+    public void onDisable() {
+        for (Map.Entry<String, Long> entry : this.activeResetEntryIds.entrySet()) {
+            try {
+                this.repository
+                        .updateStatus(
+                                entry.getValue(),
+                                ResourceWorldResetRepository.ResetStatus.FAILED,
+                                "Plugin disabled during reset")
+                        .join();
+            } catch (RuntimeException exception) {
+                this.plugin.getLogger().log(
+                        Level.SEVERE,
+                        "Failed to persist shutdown status for resource world " + entry.getKey(),
+                        exception);
+            }
+        }
+        this.activeResetEntryIds.clear();
+        this.resettingWorlds.clear();
     }
 
     /**
@@ -112,6 +170,7 @@ public final class ResourceWorldManager {
      */
     public void clearResetting(String worldName) {
         this.resettingWorlds.remove(worldName);
+        this.activeResetEntryIds.remove(worldName);
     }
 
     /**
@@ -144,13 +203,16 @@ public final class ResourceWorldManager {
                 .thenCompose(nextReset -> {
                     LocalDateTime scheduledResetTime = nextReset
                             .orElseGet(() -> calculateNextResetTime(worldDefinition, LocalDateTime.now(this.clock)));
+                    LocalDateTime nextScheduledReset = scheduledResetTime.plusDays(worldDefinition.resetIntervalDays());
                     return this.repository.findByWorldNameAndNextResetAt(worldName, scheduledResetTime)
-                            .thenCompose(currentEntry -> markResetInProgress(worldName, currentEntry)
-                                    .thenCompose(ignored -> executeResetOnMainThread(
-                                            worldName,
-                                            worldDefinition,
-                                            currentEntry,
-                                            scheduledResetTime)));
+                            .thenCompose(currentEntry -> markResetInProgress(
+                                    worldName,
+                                    scheduledResetTime,
+                                    nextScheduledReset,
+                                    currentEntry))
+                            .thenCompose(context -> executeResetFlow(context, worldDefinition))
+                            .handle((result, throwable) -> handleResetResult(worldName, result, throwable))
+                            .thenCompose(future -> future);
                 });
     }
 
@@ -204,20 +266,6 @@ public final class ResourceWorldManager {
         return Optional.ofNullable(this.worldDefinitions.get(worldName));
     }
 
-    private void performReset(ConfigManager.ResourceWorldDefinition worldDefinition) {
-        String worldName = worldDefinition.name();
-        String seed = String.valueOf(obfuscateSeed(worldDefinition));
-        if (!unloadWorld(worldName)) {
-            throw new IllegalStateException("Failed to unload world " + worldName);
-        }
-        if (!regenerateWorld(worldName, seed)) {
-            throw new IllegalStateException("Failed to regenerate world " + worldName);
-        }
-        if (!loadWorld(worldName)) {
-            throw new IllegalStateException("Failed to load world " + worldName);
-        }
-    }
-
     LocalDateTime calculateNextResetTime(
             ConfigManager.ResourceWorldDefinition worldDefinition,
             LocalDateTime currentTime) {
@@ -231,117 +279,268 @@ public final class ResourceWorldManager {
     String formatCountdown(long offsetSeconds) {
         Duration duration = Duration.ofSeconds(offsetSeconds);
         if (duration.toHours() >= 1 && duration.toHoursPart() == 0 && duration.toMinutesPart() == 0 && duration.toSecondsPart() == 0) {
-            return duration.toHours() + "時間";
+            return duration.toHours() + "h";
         }
         if (duration.toMinutes() >= 1 && duration.toSecondsPart() == 0) {
-            return duration.toMinutes() + "分";
+            return duration.toMinutes() + "m";
         }
-        return offsetSeconds + "秒";
+        return offsetSeconds + "s";
     }
 
-    private CompletableFuture<Void> markResetInProgress(
+    private CompletableFuture<ResetContext> markResetInProgress(
             String worldName,
+            LocalDateTime scheduledResetTime,
+            LocalDateTime nextScheduledReset,
             Optional<ResourceWorldResetRepository.ResourceWorldResetEntry> currentEntry) {
         return runOnMainThread(() -> broadcast("resource-world.reset-start", worldName))
                 .thenCompose(ignored -> currentEntry
-                        .map(entry -> this.repository.updateStatus(
-                                        entry.id(),
-                                        ResourceWorldResetRepository.ResetStatus.IN_PROGRESS,
-                                        null)
-                                .thenAccept(updated -> {
-                                    if (!updated) {
-                                        throw new IllegalStateException("Failed to mark reset as in progress for " + worldName);
-                                    }
-                                }))
-                        .orElseGet(() -> CompletableFuture.completedFuture(null)));
+                        .map(entry -> CompletableFuture.completedFuture(entry.id()))
+                        .orElseGet(() -> this.repository.insert(
+                                ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
+                                        worldName,
+                                        scheduledResetTime,
+                                        scheduledResetTime,
+                                        null))))
+                .thenCompose(entryId -> this.repository
+                        .updateStatus(entryId, ResourceWorldResetRepository.ResetStatus.IN_PROGRESS, null)
+                        .thenApply(updated -> {
+                            if (!updated) {
+                                throw new IllegalStateException("Failed to mark reset as in progress for " + worldName);
+                            }
+                            this.activeResetEntryIds.put(worldName, entryId);
+                            return new ResetContext(worldName, entryId, scheduledResetTime, nextScheduledReset);
+                        }));
     }
 
-    private CompletableFuture<LocalDateTime> executeResetOnMainThread(
+    private CompletableFuture<LocalDateTime> executeResetFlow(
+            ResetContext context,
+            ConfigManager.ResourceWorldDefinition worldDefinition) {
+        return runOnMainThread(() -> teleportPlayersToFallback(context.worldName()))
+                .thenCompose(ignored -> runAsync(() -> this.fileManager.backupWorld(context.worldName())))
+                .thenCompose(ignored -> runOnMainThread(() -> unloadForReset(context.worldName())))
+                .thenCompose(ignored -> runAsync(() -> this.fileManager.randomizeStructureSeeds(context.worldName())))
+                .thenCompose(seed -> runAsync(() -> this.fileManager.deleteWorldFolder(context.worldName()))
+                        .thenCompose(ignored -> runOnMainThread(() -> regenerateAndLoadWorld(context.worldName(), seed)))
+                        .thenCompose(ignored -> waitForWorldLoad(context.worldName()))
+                        .thenCompose(world -> runOnMainThread(() -> determineFlattenSurface(world))
+                                .thenCompose(surfaceY -> runAsync(() -> this.worldEditService.flattenArea(
+                                                world,
+                                                FLATTEN_RADIUS,
+                                                surfaceY))
+                                        .thenCompose(flattened -> runOnMainThread(() -> world.getHighestBlockYAt(0, 0)))
+                                        .thenCompose(postFlattenSurfaceY -> maybePasteSpawnSchematic(
+                                                context.worldName(),
+                                                world,
+                                                postFlattenSurfaceY))
+                                        .thenCompose(pasteIgnored -> persistResetSuccess(context, seed))
+                                        .thenCompose(nextReset -> runOnMainThread(() -> {
+                                            clearResetting(context.worldName());
+                                            broadcast("resource-world.reset-complete", context.worldName());
+                                        }).thenApply(ignoredAgain -> nextReset)))));
+    }
+
+    private CompletableFuture<LocalDateTime> handleResetResult(
             String worldName,
-            ConfigManager.ResourceWorldDefinition worldDefinition,
-            Optional<ResourceWorldResetRepository.ResourceWorldResetEntry> currentEntry,
-            LocalDateTime scheduledResetTime) {
-        CompletableFuture<LocalDateTime> result = new CompletableFuture<>();
-        Bukkit.getScheduler().runTask(this.plugin, () -> {
-            try {
-                performReset(worldDefinition);
-            } catch (RuntimeException exception) {
-                handleResetFailure(worldName, currentEntry, exception).whenComplete((failedResult, throwable) -> {
-                    if (throwable != null) {
-                        result.completeExceptionally(throwable);
-                        return;
+            LocalDateTime result,
+            Throwable throwable) {
+        if (throwable == null) {
+            return CompletableFuture.completedFuture(result);
+        }
+
+        Long entryId = this.activeResetEntryIds.get(worldName);
+        ResetContext context = new ResetContext(
+                worldName,
+                entryId == null ? -1L : entryId,
+                LocalDateTime.now(this.clock),
+                LocalDateTime.now(this.clock));
+        return handleResetFailure(context, unwrap(throwable));
+    }
+
+    private CompletableFuture<LocalDateTime> handleResetFailure(ResetContext context, Throwable rootCause) {
+        CompletableFuture<String> recoveryFuture = attemptRestore(context.worldName())
+                .handle((ignored, recoveryThrowable) -> buildFailureMessage(rootCause, recoveryThrowable));
+
+        return recoveryFuture
+                .thenCompose(errorMessage -> persistResetFailure(context, errorMessage)
+                        .handle((ignored, persistenceThrowable) -> {
+                            if (persistenceThrowable != null) {
+                                this.plugin.getLogger().log(
+                                        Level.SEVERE,
+                                        "Failed to persist resource world reset failure for " + context.worldName(),
+                                        persistenceThrowable);
+                            }
+                            return errorMessage;
+                        }))
+                .thenCompose(errorMessage -> runOnMainThread(() -> {
+                    clearResetting(context.worldName());
+                    this.plugin.getLogger().log(
+                            Level.SEVERE,
+                            "Failed to reset resource world " + context.worldName(),
+                            rootCause);
+                    notifyAdmins(errorMessage, context.worldName());
+                    broadcast("resource-world.reset-failed", context.worldName());
+                }).thenCompose(ignored -> CompletableFuture.failedFuture(
+                        new IllegalStateException("Failed to reset resource world " + context.worldName(), rootCause))));
+    }
+
+    private CompletableFuture<Void> attemptRestore(String worldName) {
+        return runOnMainThread(() -> {
+            World loadedWorld = Bukkit.getWorld(worldName);
+            if (loadedWorld != null && !unloadWorld(worldName)) {
+                throw new IllegalStateException("Failed to unload world before restore: " + worldName);
+            }
+        }).thenCompose(ignored -> runAsync(() -> {
+            if (!this.fileManager.hasLatestBackup(worldName)) {
+                throw new IllegalStateException("No backup is available for restore");
+            }
+            this.fileManager.restoreLatestBackup(worldName);
+        })).thenCompose(ignored -> runOnMainThread(() -> {
+            if (!loadWorld(worldName)) {
+                throw new IllegalStateException("Failed to load restored world " + worldName);
+            }
+        })).thenCompose(ignored -> waitForWorldLoad(worldName).thenAccept(restoredWorld -> {
+        }));
+    }
+
+    private CompletableFuture<LocalDateTime> persistResetSuccess(ResetContext context, long seed) {
+        return this.repository.updateStatus(
+                        context.currentEntryId(),
+                        ResourceWorldResetRepository.ResetStatus.COMPLETED,
+                        null)
+                .thenAccept(updated -> {
+                    if (!updated) {
+                        throw new IllegalStateException("Failed to mark reset as completed for " + context.worldName());
                     }
-                    result.complete(failedResult);
+                })
+                .thenCompose(ignored -> this.repository.insert(
+                        ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
+                                context.worldName(),
+                                context.nextScheduledReset(),
+                                context.nextScheduledReset(),
+                                seed)))
+                .thenApply(ignored -> context.nextScheduledReset());
+    }
+
+    private CompletableFuture<Void> persistResetFailure(ResetContext context, String errorMessage) {
+        if (context.currentEntryId() < 0L) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        return this.repository.updateStatus(
+                        context.currentEntryId(),
+                        ResourceWorldResetRepository.ResetStatus.FAILED,
+                        errorMessage)
+                .thenAccept(updated -> {
+                    if (!updated) {
+                        throw new IllegalStateException("Failed to mark reset as failed for " + context.worldName());
+                    }
                 });
+    }
+
+    private CompletableFuture<Void> maybePasteSpawnSchematic(String worldName, World world, int surfaceY) {
+        return runAsync(() -> {
+            var schematicPath = this.fileManager.getSpawnSchematicPath(worldName);
+            if (!Files.isRegularFile(schematicPath)) {
                 return;
             }
-
-            LocalDateTime nextResetTime = scheduledResetTime.plusDays(worldDefinition.resetIntervalDays());
-            Long seed = obfuscateSeed(worldDefinition);
-            CompletableFuture<Void> persistenceFuture = currentEntry
-                    .map(entry -> this.repository.updateStatus(
-                                    entry.id(),
-                                    ResourceWorldResetRepository.ResetStatus.COMPLETED,
-                                    null)
-                            .thenAccept(updated -> {
-                                if (!updated) {
-                                    throw new IllegalStateException("Failed to mark reset as completed for " + worldName);
-                                }
-                            }))
-                    .orElseGet(() -> CompletableFuture.completedFuture(null));
-
-            persistenceFuture
-                    .thenCompose(ignored -> this.repository.insert(
-                            ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
-                                    worldName,
-                                    scheduledResetTime,
-                                    nextResetTime,
-                                    seed)))
-                    .thenApply(ignored -> nextResetTime)
-                    .whenComplete((nextScheduledReset, throwable) -> Bukkit.getScheduler().runTask(this.plugin, () -> {
-                        this.resettingWorlds.remove(worldName);
-                        if (throwable == null) {
-                            broadcast("resource-world.reset-complete", worldName);
-                            result.complete(nextScheduledReset);
-                            return;
-                        }
-                        this.plugin.getLogger().log(
-                                Level.SEVERE,
-                                "Failed to persist resource world reset state for " + worldName,
-                                throwable);
-                        broadcast("resource-world.reset-failed", worldName);
-                        result.completeExceptionally(throwable);
-                    }));
+            this.worldEditService.pasteSchematic(world, schematicPath, 0, surfaceY, 0);
         });
-        return result;
     }
 
-    private CompletableFuture<LocalDateTime> handleResetFailure(
-            String worldName,
-            Optional<ResourceWorldResetRepository.ResourceWorldResetEntry> currentEntry,
-            RuntimeException exception) {
-        CompletableFuture<Void> persistenceFuture = currentEntry
-                .map(entry -> this.repository.updateStatus(
-                                entry.id(),
-                                ResourceWorldResetRepository.ResetStatus.FAILED,
-                                exception.getMessage())
-                        .thenAccept(ignored -> {
-                        }))
-                .orElseGet(() -> CompletableFuture.completedFuture(null));
-        CompletableFuture<LocalDateTime> failure = new CompletableFuture<>();
-        persistenceFuture.whenComplete((ignored, persistenceThrowable) -> Bukkit.getScheduler().runTask(this.plugin, () -> {
-            this.resettingWorlds.remove(worldName);
-            this.plugin.getLogger().log(Level.SEVERE, "Failed to reset resource world " + worldName, exception);
-            if (persistenceThrowable != null) {
-                this.plugin.getLogger().log(
-                        Level.SEVERE,
-                        "Failed to persist resource world reset failure for " + worldName,
-                        persistenceThrowable);
+    private void teleportPlayersToFallback(String worldName) {
+        World targetWorld = Bukkit.getWorld(worldName);
+        if (targetWorld == null) {
+            return;
+        }
+
+        World fallbackWorld = Bukkit.getWorld(this.settings.fallbackWorld());
+        if (fallbackWorld == null) {
+            throw new IllegalStateException("Fallback world is not loaded: " + this.settings.fallbackWorld());
+        }
+
+        for (Player player : targetWorld.getPlayers()) {
+            player.teleport(fallbackWorld.getSpawnLocation());
+        }
+    }
+
+    private void unloadForReset(String worldName) {
+        World loadedWorld = Bukkit.getWorld(worldName);
+        if (loadedWorld == null) {
+            return;
+        }
+        if (!unloadWorld(worldName)) {
+            throw new IllegalStateException("Failed to unload world " + worldName);
+        }
+    }
+
+    private void regenerateAndLoadWorld(String worldName, long seed) {
+        if (!regenerateWorld(worldName, String.valueOf(seed))) {
+            throw new IllegalStateException("Failed to regenerate world " + worldName);
+        }
+        if (!loadWorld(worldName)) {
+            throw new IllegalStateException("Failed to load world " + worldName);
+        }
+    }
+
+    private int determineFlattenSurface(World world) {
+        int highest = world.getHighestBlockYAt(0, 0);
+        int min = world.getMinHeight() + 1;
+        int max = world.getMaxHeight() - 2;
+        return Math.max(min, Math.min(highest, max));
+    }
+
+    private CompletableFuture<World> waitForWorldLoad(String worldName) {
+        CompletableFuture<World> future = new CompletableFuture<>();
+        AtomicInteger attempts = new AtomicInteger();
+        waitForWorldLoad(worldName, attempts, future);
+        return future;
+    }
+
+    private void waitForWorldLoad(String worldName, AtomicInteger attempts, CompletableFuture<World> future) {
+        if (future.isDone()) {
+            return;
+        }
+
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            future.complete(world);
+            return;
+        }
+
+        if (attempts.incrementAndGet() >= WORLD_LOAD_WAIT_TICKS) {
+            future.completeExceptionally(new IllegalStateException("Timed out waiting for world to load: " + worldName));
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskLater(this.plugin, () -> waitForWorldLoad(worldName, attempts, future), 1L);
+    }
+
+    private void notifyAdmins(String errorMessage, String worldName) {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.hasPermission(ADMIN_PERMISSION)) {
+                this.plugin.getMessageConfig().sendMessage(
+                        player,
+                        "resource-world.reset-failed-admin",
+                        worldName,
+                        errorMessage);
             }
-            broadcast("resource-world.reset-failed", worldName);
-            failure.completeExceptionally(new IllegalStateException("Failed to reset resource world " + worldName, exception));
-        }));
-        return failure;
+        }
+    }
+
+    private String buildFailureMessage(Throwable rootCause, Throwable recoveryThrowable) {
+        StringBuilder builder = new StringBuilder(sanitizeMessage(rootCause));
+        if (recoveryThrowable != null) {
+            builder.append(" | restore=").append(sanitizeMessage(unwrap(recoveryThrowable)));
+        }
+        return builder.toString();
+    }
+
+    private String sanitizeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            return throwable.getClass().getSimpleName();
+        }
+        return message;
     }
 
     private void broadcast(String key, String worldName) {
@@ -363,6 +562,43 @@ public final class ResourceWorldManager {
         return future;
     }
 
+    private <T> CompletableFuture<T> runOnMainThread(java.util.function.Supplier<T> supplier) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        Bukkit.getScheduler().runTask(this.plugin, () -> {
+            try {
+                future.complete(supplier.get());
+            } catch (RuntimeException exception) {
+                future.completeExceptionally(exception);
+            }
+        });
+        return future;
+    }
+
+    private CompletableFuture<Void> runAsync(Runnable runnable) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> {
+            try {
+                runnable.run();
+                future.complete(null);
+            } catch (RuntimeException exception) {
+                future.completeExceptionally(exception);
+            }
+        });
+        return future;
+    }
+
+    private <T> CompletableFuture<T> runAsync(java.util.function.Supplier<T> supplier) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        Bukkit.getScheduler().runTaskAsynchronously(this.plugin, () -> {
+            try {
+                future.complete(supplier.get());
+            } catch (RuntimeException exception) {
+                future.completeExceptionally(exception);
+            }
+        });
+        return future;
+    }
+
     private Long obfuscateSeed(ConfigManager.ResourceWorldDefinition worldDefinition) {
         long baseSeed = worldDefinition.name().getBytes(StandardCharsets.UTF_8).length;
         long mixedSeed = baseSeed;
@@ -370,5 +606,22 @@ public final class ResourceWorldManager {
             mixedSeed = (mixedSeed * 31) + value;
         }
         return mixedSeed ^ this.settings.seedObfuscationKey();
+    }
+
+    private Throwable unwrap(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null
+                && (current instanceof java.util.concurrent.CompletionException
+                || current instanceof java.util.concurrent.ExecutionException)) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private record ResetContext(
+            String worldName,
+            long currentEntryId,
+            LocalDateTime scheduledResetTime,
+            LocalDateTime nextScheduledReset) {
     }
 }

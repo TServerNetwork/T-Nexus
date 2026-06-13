@@ -28,6 +28,7 @@ dependencies {
     testImplementation("com.github.MilkBowl:VaultAPI:1.7.1")
     testImplementation("net.luckperms:api:5.5")
     testImplementation("com.onarandombox.multiversecore:Multiverse-Core:4.3.1")
+    testImplementation("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.12.0")
     testImplementation("com.h2database:h2:2.4.240")
     testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")

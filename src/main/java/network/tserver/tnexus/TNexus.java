@@ -148,6 +148,12 @@ public class TNexus extends JavaPlugin {
     @Override
     public void onDisable() {
         flushPlayerSessions();
+        if (this.resetScheduler != null) {
+            this.resetScheduler.cancelAll();
+        }
+        if (this.resourceWorldManager != null) {
+            this.resourceWorldManager.onDisable();
+        }
         if (this.databaseManager != null) {
             this.databaseManager.shutdown();
         }
@@ -160,9 +166,6 @@ public class TNexus extends JavaPlugin {
         }
         if (this.messageConfig != null) {
             logMessage(this.messageConfig.getMessage("general.plugin-disabled"));
-        }
-        if (this.resetScheduler != null) {
-            this.resetScheduler.cancelAll();
         }
         this.databaseManager = null;
         this.messageConfig = null;

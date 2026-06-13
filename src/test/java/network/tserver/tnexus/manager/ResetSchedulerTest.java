@@ -3,6 +3,7 @@ package network.tserver.tnexus.manager;
 import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -13,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import org.bukkit.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
@@ -36,17 +38,9 @@ class ResetSchedulerTest {
     @Test
     void shouldScheduleOnlyFutureCountdownPoints() throws Exception {
         TNexus plugin = loadPlugin();
-        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
-                "name", "resource",
-                "dimension", "NORMAL",
-                "reset-interval-days", 1,
-                "reset-start-date", "2026-06-14T09:00:12")));
+        configureSingleWorld(plugin, "2026-06-14T09:00:12");
         Clock clock = Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO);
-        ResourceWorldManager manager = new ResourceWorldManager(
-                plugin,
-                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
-                createWorldManagerProxy(),
-                clock);
+        ResourceWorldManager manager = createManager(plugin, clock);
         manager.onEnable().get(5, TimeUnit.SECONDS);
 
         ResetScheduler scheduler = new ResetScheduler(plugin, manager, clock);
@@ -63,18 +57,10 @@ class ResetSchedulerTest {
     @Test
     void shouldRescheduleNextResetAfterExecutionCompletes() throws Exception {
         TNexus plugin = loadPlugin();
-        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
-                "name", "resource",
-                "dimension", "NORMAL",
-                "reset-interval-days", 1,
-                "reset-start-date", "2026-06-14T09:00:01")));
+        configureSingleWorld(plugin, "2026-06-14T09:00:01");
         Clock clock = Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO);
         ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
-        ResourceWorldManager manager = new ResourceWorldManager(
-                plugin,
-                repository,
-                createWorldManagerProxy(),
-                clock);
+        ResourceWorldManager manager = createManager(plugin, repository, clock);
         manager.onEnable().get(5, TimeUnit.SECONDS);
 
         ResetScheduler scheduler = new ResetScheduler(plugin, manager, clock);
@@ -92,8 +78,36 @@ class ResetSchedulerTest {
 
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        this.server.addSimpleWorld("lobby");
+        this.server.addSimpleWorld("resource");
         this.server.addPlayer();
-        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2DatabaseOnlyTNexus.class);
+    }
+
+    private void configureSingleWorld(TNexus plugin, String resetStartDate) {
+        plugin.getConfigManager().getConfiguration().set("resource-world.worlds", List.of(Map.of(
+                "name", "resource",
+                "dimension", "NORMAL",
+                "reset-interval-days", 1,
+                "reset-start-date", resetStartDate)));
+    }
+
+    private ResourceWorldManager createManager(TNexus plugin, Clock clock) {
+        return createManager(plugin, new ResourceWorldResetRepository(plugin.getDatabaseManager()), clock);
+    }
+
+    private ResourceWorldManager createManager(
+            TNexus plugin,
+            ResourceWorldResetRepository repository,
+            Clock clock) {
+        return new ResourceWorldManager(
+                plugin,
+                repository,
+                createWorldManagerProxy(),
+                clock,
+                new NoOpFileManager(plugin),
+                new NoOpEditService(),
+                () -> 555L);
     }
 
     private int drainMessages(PlayerMock player) {
@@ -138,5 +152,48 @@ class ResetSchedulerTest {
             return 0L;
         }
         return null;
+    }
+
+    private static final class NoOpFileManager extends ResourceWorldFileManager {
+        private NoOpFileManager(TNexus plugin) {
+            super(plugin);
+        }
+
+        @Override
+        public void backupWorld(String worldName) {
+        }
+
+        @Override
+        public void restoreLatestBackup(String worldName) {
+        }
+
+        @Override
+        public void deleteWorldFolder(String worldName) {
+        }
+
+        @Override
+        public boolean hasLatestBackup(String worldName) {
+            return true;
+        }
+
+        @Override
+        public long randomizeStructureSeeds(String worldName) {
+            return 111L;
+        }
+
+        @Override
+        public Path getSpawnSchematicPath(String worldName) {
+            return Path.of("missing.schem");
+        }
+    }
+
+    private static final class NoOpEditService implements ResourceWorldEditService {
+        @Override
+        public void flattenArea(World world, int radius, int surfaceY) {
+        }
+
+        @Override
+        public void pasteSchematic(World world, Path schematicPath, int x, int y, int z) {
+        }
     }
 }
