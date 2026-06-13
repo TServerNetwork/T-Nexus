@@ -261,6 +261,69 @@ public final class ResourceWorldResetRepository {
         });
     }
 
+    /**
+     * Finds the latest reset entry for a world.
+     *
+     * @param worldName world name
+     * @return completion future containing the latest entry when present
+     */
+    public CompletableFuture<Optional<ResourceWorldResetEntry>> findLatestEntry(String worldName) {
+        Objects.requireNonNull(worldName, "worldName");
+        String sql = """
+                SELECT id, world_name, reset_at, next_reset_at, status, seed, error_message, created_at
+                FROM %s
+                WHERE world_name = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """.formatted(this.tableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                statement.setString(1, worldName);
+                try (var resultSet = statement.executeQuery()) {
+                    if (!resultSet.next()) {
+                        return Optional.empty();
+                    }
+                    return Optional.of(mapEntry(resultSet));
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to read latest resource world reset", exception);
+            }
+        });
+    }
+
+    /**
+     * Finds the latest completed reset entry for a world.
+     *
+     * @param worldName world name
+     * @return completion future containing the latest completed entry when present
+     */
+    public CompletableFuture<Optional<ResourceWorldResetEntry>> findLatestCompletedEntry(String worldName) {
+        Objects.requireNonNull(worldName, "worldName");
+        String sql = """
+                SELECT id, world_name, reset_at, next_reset_at, status, seed, error_message, created_at
+                FROM %s
+                WHERE world_name = ? AND status = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """.formatted(this.tableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                statement.setString(1, worldName);
+                statement.setString(2, ResetStatus.COMPLETED.databaseValue());
+                try (var resultSet = statement.executeQuery()) {
+                    if (!resultSet.next()) {
+                        return Optional.empty();
+                    }
+                    return Optional.of(mapEntry(resultSet));
+                }
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to read latest completed resource world reset", exception);
+            }
+        });
+    }
+
     private ResourceWorldResetEntry mapEntry(java.sql.ResultSet resultSet) throws java.sql.SQLException {
         return new ResourceWorldResetEntry(
                 resultSet.getLong("id"),

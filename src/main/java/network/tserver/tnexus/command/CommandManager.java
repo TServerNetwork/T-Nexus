@@ -53,6 +53,7 @@ public final class CommandManager {
     private static final String SHOP_COMMAND_NAME = "shop";
     private static final String SHOPS_COMMAND_NAME = "shops";
     private static final String HISTORY_COMMAND_NAME = "history";
+    private static final String RESOURCE_COMMAND_NAME = "resource";
     private static final String STATS_COMMAND_NAME = "stats";
     private static final String SERVER_STATS_COMMAND_NAME = "server-stats";
     private static final String STATS_RANKING_ARGUMENT = "ranking";
@@ -70,6 +71,7 @@ public final class CommandManager {
 
     private final TNexus plugin;
     private final BaseCommand rootCommand;
+    private final @Nullable ResourceWorldCommand resourceWorldCommand;
     private final Map<String, BaseCommand> subcommands;
 
     /**
@@ -80,6 +82,9 @@ public final class CommandManager {
     public CommandManager(TNexus plugin) {
         this.plugin = plugin;
         this.rootCommand = new MenuCommand(plugin);
+        this.resourceWorldCommand = plugin.getResourceWorldManager() == null
+                ? null
+                : new ResourceWorldCommand(plugin);
         this.subcommands = new LinkedHashMap<>();
         registerSubcommand(new HelpCommand(plugin));
         registerSubcommand(new ReloadCommand(plugin));
@@ -174,6 +179,20 @@ public final class CommandManager {
                 return CommandManager.this.onHistoryTabComplete(commandSourceStack.getSender(), args);
             }
         });
+
+        if (this.resourceWorldCommand != null) {
+            commands.register(RESOURCE_COMMAND_NAME, "Show resource world information", List.of(), new BasicCommand() {
+                @Override
+                public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                    CommandManager.this.onResourceCommand(commandSourceStack.getSender(), args);
+                }
+
+                @Override
+                public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                    return CommandManager.this.onResourceTabComplete(commandSourceStack.getSender(), args);
+                }
+            });
+        }
 
         commands.register(STATS_COMMAND_NAME, "Open player stats", List.of(), new BasicCommand() {
             @Override
@@ -464,6 +483,21 @@ public final class CommandManager {
             return TabCompleterUtil.filterPlayers(args[0]);
         }
         return Collections.emptyList();
+    }
+
+    private void onResourceCommand(CommandSender sender, String[] args) {
+        if (this.resourceWorldCommand == null) {
+            this.plugin.getMessageConfig().sendMessage(sender, "general.unknown-command");
+            return;
+        }
+        this.resourceWorldCommand.execute(sender, args);
+    }
+
+    private Collection<String> onResourceTabComplete(CommandSender sender, String[] args) {
+        if (this.resourceWorldCommand == null) {
+            return Collections.emptyList();
+        }
+        return this.resourceWorldCommand.tabComplete(sender, args);
     }
 
     private void onStatsCommand(CommandSender sender, String[] args) {

@@ -147,10 +147,13 @@ class ResourceWorldManagerTest {
         assertFalse(manager.isResetting("resource"));
 
         String startMessage = player.nextMessage();
+        String teleportMessage = player.nextMessage();
         String completeMessage = player.nextMessage();
         assertNotNull(startMessage);
+        assertNotNull(teleportMessage);
         assertNotNull(completeMessage);
         assertTrue(startMessage.contains("resource"));
+        assertTrue(teleportMessage.contains("テレポート"));
         assertTrue(completeMessage.contains("resource"));
         ResourceWorldResetRepository.ResourceWorldResetEntry completedEntry = repository
                 .findByWorldNameAndNextResetAt("resource", currentReset)

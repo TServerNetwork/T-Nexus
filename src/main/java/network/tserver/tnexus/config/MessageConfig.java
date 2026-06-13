@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.command.CommandSender;
@@ -87,6 +88,28 @@ public final class MessageConfig {
     }
 
     /**
+     * Resolves a translated message, replacing named placeholders.
+     *
+     * @param key message key
+     * @param placeholders placeholder values keyed by placeholder name
+     * @return translated message or the key when missing
+     */
+    public String getMessage(String key, Map<String, ?> placeholders) {
+        String value = this.messages.getString(key);
+        if (value == null) {
+            return key;
+        }
+
+        String formatted = value;
+        for (Map.Entry<String, ?> entry : placeholders.entrySet()) {
+            formatted = formatted.replace(
+                    "{" + entry.getKey() + "}",
+                    String.valueOf(entry.getValue()));
+        }
+        return ChatColor.translateAlternateColorCodes('&', formatted);
+    }
+
+    /**
      * Sends a prefixed translated message to a player.
      *
      * @param player target player
@@ -105,6 +128,17 @@ public final class MessageConfig {
      * @param placeholders placeholder values
      */
     public void sendMessage(CommandSender sender, String key, Object... placeholders) {
+        sender.sendMessage(getPrefix() + getMessage(key, placeholders));
+    }
+
+    /**
+     * Sends a prefixed translated message to any command sender using named placeholders.
+     *
+     * @param sender target sender
+     * @param key message key
+     * @param placeholders placeholder values
+     */
+    public void sendMessage(CommandSender sender, String key, Map<String, ?> placeholders) {
         sender.sendMessage(getPrefix() + getMessage(key, placeholders));
     }
 

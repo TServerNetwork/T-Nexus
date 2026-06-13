@@ -47,6 +47,9 @@ commands:
   history:
     description: Open audit history
     usage: "/<command> [player]"
+  resource:
+    description: Show resource world information
+    usage: "/<command> [info <world>|status]"
   stats:
     description: Open player stats
     usage: "/<command> [player|ranking]"

@@ -171,4 +171,44 @@ class ResourceWorldResetRepositoryTest {
                 .orElseThrow();
         assertEquals(expectedStatus, entry.status());
     }
+
+    @Test
+    void shouldFindLatestEntriesByWorldAndCompletionStatus() throws Exception {
+        TNexus plugin = loadPlugin();
+        ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
+        LocalDateTime firstReset = LocalDateTime.of(2026, 6, 14, 4, 0);
+        LocalDateTime secondReset = firstReset.plusDays(7);
+        LocalDateTime thirdReset = secondReset.plusDays(7);
+
+        long firstId = repository.insert(ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
+                        "resource",
+                        firstReset,
+                        secondReset,
+                        null))
+                .get(5, TimeUnit.SECONDS);
+        repository.updateStatus(firstId, ResourceWorldResetRepository.ResetStatus.COMPLETED, null)
+                .get(5, TimeUnit.SECONDS);
+
+        long latestId = repository.insert(ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
+                        "resource",
+                        secondReset,
+                        thirdReset,
+                        null))
+                .get(5, TimeUnit.SECONDS);
+        repository.updateStatus(latestId, ResourceWorldResetRepository.ResetStatus.FAILED, "boom")
+                .get(5, TimeUnit.SECONDS);
+
+        ResourceWorldResetRepository.ResourceWorldResetEntry latestEntry = repository.findLatestEntry("resource")
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+        ResourceWorldResetRepository.ResourceWorldResetEntry latestCompleted = repository
+                .findLatestCompletedEntry("resource")
+                .get(5, TimeUnit.SECONDS)
+                .orElseThrow();
+
+        assertEquals(latestId, latestEntry.id());
+        assertEquals(ResourceWorldResetRepository.ResetStatus.FAILED, latestEntry.status());
+        assertEquals(firstId, latestCompleted.id());
+        assertEquals(ResourceWorldResetRepository.ResetStatus.COMPLETED, latestCompleted.status());
+    }
 }
