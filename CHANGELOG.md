@@ -1,3 +1,10 @@
+# [0.38.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.37.1...v0.38.0) (2026-06-13)
+
+
+### Features
+
+* **command:** add resource world info command ([#105](https://github.com/TServerNetwork/T-Nexus/issues/105)) ([013f355](https://github.com/TServerNetwork/T-Nexus/commit/013f35577aa95d91e227215ea49bcfdb778d611b))
+
 ## [0.37.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.37.0...v0.37.1) (2026-06-13)
 
 
