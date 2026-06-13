@@ -61,6 +61,9 @@ public final class TestPluginSupport {
               history:
                 description: test history command
                 usage: "/history [player]"
+              resource:
+                description: test resource command
+                usage: "/resource [info <world>|status]"
               stats:
                 description: test stats command
                 usage: "/stats [player|ranking]"

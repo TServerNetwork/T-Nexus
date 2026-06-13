@@ -6,6 +6,9 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -15,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
 import java.util.logging.Level;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
@@ -30,6 +34,7 @@ public final class ResourceWorldManager {
     private static final int FLATTEN_RADIUS = 32;
     private static final int WORLD_LOAD_WAIT_TICKS = 200;
     private static final String ADMIN_PERMISSION = "tnexus.admin";
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
 
     private final TNexus plugin;
     private final ConfigManager.ResourceWorldSettings settings;
@@ -184,6 +189,28 @@ public final class ResourceWorldManager {
     }
 
     /**
+     * Returns the latest persisted reset entry for the given world.
+     *
+     * @param worldName world name
+     * @return future containing the latest entry when present
+     */
+    public CompletableFuture<Optional<ResourceWorldResetRepository.ResourceWorldResetEntry>> getLatestResetEntry(
+            String worldName) {
+        return this.repository.findLatestEntry(worldName);
+    }
+
+    /**
+     * Returns the most recent completed reset time for the given world.
+     *
+     * @param worldName world name
+     * @return future containing the latest completed reset timestamp when present
+     */
+    public CompletableFuture<Optional<LocalDateTime>> getLastCompletedResetTime(String worldName) {
+        return this.repository.findLatestCompletedEntry(worldName)
+                .thenApply(entry -> entry.map(ResourceWorldResetRepository.ResourceWorldResetEntry::resetAt));
+    }
+
+    /**
      * Executes a resource-world reset and persists the next schedule.
      *
      * @param worldName world name
@@ -277,6 +304,35 @@ public final class ResourceWorldManager {
     }
 
     /**
+     * Returns the configured display name for a resource world.
+     *
+     * @param worldName world name
+     * @return localized display name
+     */
+    public String getDisplayName(String worldName) {
+        ConfigManager.ResourceWorldDefinition worldDefinition = this.worldDefinitions.get(worldName);
+        if (worldDefinition == null) {
+            return worldName;
+        }
+        return getDimensionDisplayName(worldDefinition.dimension());
+    }
+
+    /**
+     * Returns the localized display name for a dimension.
+     *
+     * @param environment dimension environment
+     * @return localized display name
+     */
+    public String getDimensionDisplayName(World.Environment environment) {
+        return switch (environment) {
+            case NORMAL -> "通常世界";
+            case NETHER -> "ネザー";
+            case THE_END -> "エンド";
+            default -> environment.name();
+        };
+    }
+
+    /**
      * Returns whether admins should see the real world seed.
      *
      * @return {@code true} when admin bypass is enabled
@@ -305,7 +361,7 @@ public final class ResourceWorldManager {
         return nextResetTime;
     }
 
-    String formatCountdown(long offsetSeconds) {
+    public String formatCountdown(long offsetSeconds) {
         Duration duration = Duration.ofSeconds(offsetSeconds);
         if (duration.toHours() >= 1 && duration.toHoursPart() == 0 && duration.toMinutesPart() == 0 && duration.toSecondsPart() == 0) {
             return duration.toHours() + "h";
@@ -321,7 +377,7 @@ public final class ResourceWorldManager {
             LocalDateTime scheduledResetTime,
             LocalDateTime nextScheduledReset,
             Optional<ResourceWorldResetRepository.ResourceWorldResetEntry> currentEntry) {
-        return runOnMainThread(() -> broadcast("resource-world.reset-start", worldName))
+        return runOnMainThread(() -> broadcast("resource.notification.start.broadcast", worldName))
                 .thenCompose(ignored -> currentEntry
                         .map(entry -> CompletableFuture.completedFuture(entry.id()))
                         .orElseGet(() -> this.repository.insert(
@@ -364,7 +420,10 @@ public final class ResourceWorldManager {
                                         .thenCompose(pasteIgnored -> persistResetSuccess(context, seed))
                                         .thenCompose(nextReset -> runOnMainThread(() -> {
                                             clearResetting(context.worldName());
-                                            broadcast("resource-world.reset-complete", context.worldName());
+                                            broadcast(
+                                                    "resource.notification.complete.broadcast",
+                                                    context.worldName(),
+                                                    Map.of("next_reset", DATE_TIME_FORMATTER.format(nextReset)));
                                         }).thenApply(ignoredAgain -> nextReset)))));
     }
 
@@ -407,7 +466,7 @@ public final class ResourceWorldManager {
                             "Failed to reset resource world " + context.worldName(),
                             rootCause);
                     notifyAdmins(errorMessage, context.worldName());
-                    broadcast("resource-world.reset-failed", context.worldName());
+                    broadcast("resource.notification.failed.broadcast", context.worldName());
                 }).thenCompose(ignored -> CompletableFuture.failedFuture(
                         new IllegalStateException("Failed to reset resource world " + context.worldName(), rootCause))));
     }
@@ -487,7 +546,13 @@ public final class ResourceWorldManager {
             throw new IllegalStateException("Fallback world is not loaded: " + this.settings.fallbackWorld());
         }
 
-        for (Player player : targetWorld.getPlayers()) {
+        for (Player player : List.copyOf(targetWorld.getPlayers())) {
+            sendResourceMessage(
+                    player,
+                    "resource.notification.start.teleport",
+                    Map.of());
+            player.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(
+                    this.plugin.getMessageConfig().getMessage("resource.notification.start.teleport_actionbar")));
             player.teleport(fallbackWorld.getSpawnLocation());
         }
     }
@@ -547,11 +612,13 @@ public final class ResourceWorldManager {
     private void notifyAdmins(String errorMessage, String worldName) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.hasPermission(ADMIN_PERMISSION)) {
-                this.plugin.getMessageConfig().sendMessage(
+                sendResourceMessage(
                         player,
-                        "resource-world.reset-failed-admin",
-                        worldName,
-                        errorMessage);
+                        "resource.notification.failed.admin",
+                        Map.of(
+                                "display_name", getDisplayName(worldName),
+                                "world", worldName,
+                                "error_reason", errorMessage));
             }
         }
     }
@@ -573,9 +640,26 @@ public final class ResourceWorldManager {
     }
 
     private void broadcast(String key, String worldName) {
-        String message = this.plugin.getMessageConfig().getMessage("prefix")
-                + this.plugin.getMessageConfig().getMessage(key, worldName);
+        broadcast(key, worldName, Map.of());
+    }
+
+    private void broadcast(String key, String worldName, Map<String, ?> extraPlaceholders) {
+        String message = this.plugin.getMessageConfig().getMessage("resource.prefix")
+                + this.plugin.getMessageConfig().getMessage(key, createWorldPlaceholders(worldName, extraPlaceholders));
         Bukkit.broadcastMessage(message);
+    }
+
+    private void sendResourceMessage(Player player, String key, Map<String, ?> placeholders) {
+        player.sendMessage(this.plugin.getMessageConfig().getMessage("resource.prefix")
+                + this.plugin.getMessageConfig().getMessage(key, placeholders));
+    }
+
+    private Map<String, Object> createWorldPlaceholders(String worldName, Map<String, ?> extraPlaceholders) {
+        Map<String, Object> placeholders = new HashMap<>();
+        placeholders.put("display_name", getDisplayName(worldName));
+        placeholders.put("world", worldName);
+        placeholders.putAll(extraPlaceholders);
+        return placeholders;
     }
 
     private CompletableFuture<Void> runOnMainThread(Runnable runnable) {

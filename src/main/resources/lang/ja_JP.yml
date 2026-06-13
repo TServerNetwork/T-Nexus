@@ -452,6 +452,56 @@ stats:
         play-time: "&7プレイ時間: &f{0}"
         period: "&7期間: &f{0}"
         self-highlight: "&aあなたの順位です。"
+resource:
+  prefix: "&8[&6T-Nexus&8] "
+  command:
+    list:
+      header: "&8&m───────────────────────────────────────────────────"
+      title: "&6&l資源ワールド リセット情報"
+      entry: "&e> &f{display_name} &7({world})"
+      entry_time: "  &7次回: &f{next_reset} &7({time_display}&7)"
+      entry_resetting: "  &7次回: --/--/-- --:-- &7(&cリセット中&7)"
+      footer: "&8&m───────────────────────────────────────────────────"
+    info:
+      header: "&8&m───────────────────────────────────────────────────"
+      title: "&6&l資源ワールド詳細: &f{display_name}"
+      dimension: "&7・ディメンション: &f{dimension} ({world})"
+      status_active: "&7・ステータス: &a通常稼働中"
+      status_resetting: "&7・ステータス: &cリセット中"
+      period: "&7・リセット周期: &f{period}日ごと"
+      last_reset: "&7・前回リセット: &f{date}"
+      last_reset_never: "&7・前回リセット: &f未実施"
+      next_reset: "&7・次回リセット: &f{date} &7({time_display}&7)"
+      footer: "&8&m───────────────────────────────────────────────────"
+    admin_status:
+      header: "&8&m───────────────────────────────────────────────────"
+      title: "&6&l資源ワールド 管理ステータス"
+      entry: "&7・{display_name} ({world}): {status_color}{status_name} &7(進捗: &e{progress}&7)"
+      hint: "&eヒント: 手動リセットを実行するには以下を使用します"
+      command: "&e  /resource reset <world>"
+      footer: "&8&m───────────────────────────────────────────────────"
+  notification:
+    countdown:
+      gentle: "&7資源ワールド &f{display_name} ({world}) &7は &f{time}後 &7にリセットされる予定です。({next_reset})"
+      attention: "&e[注意] &7資源ワールド &f{display_name} ({world}) &7のリセットまで残り &e{time} &7です。建築物やチェストの回収を行ってください。"
+      warning: "&e[警告] &c資源ワールド &f{display_name} ({world}) &cのリセットまで残り &e{time} &cです！取り残されたアイテムは消失します。"
+      warning_actionbar: "&c[!] {display_name} リセットまで残り &e{time} &c[!]"
+      strong_warning: "&c&l[警告] 資源ワールド &f&l{display_name} ({world}) &c&lのリセットまで残り &4&l{time} &c&lです！至急退避してください！"
+      strong_warning_actionbar: "&c&k!!&4&l 警告: {display_name} リセットまで残り {time} &c&k!!"
+      countdown: "&c&l[カウントダウン] {display_name} リセットまで残り &4&l{time}"
+      countdown_actionbar: "&4&l[!!] {display_name} リセットまで残り {time} [!!]"
+      final: "&c&l[リセット秒読み] {display_name} &7- &4&l{time}"
+      final_actionbar: "&4&l- {time} -"
+    start:
+      broadcast: "&c資源ワールド &f{display_name} ({world}) &cのリセットを開始しました。一時的に立ち入りが制限されます。"
+      teleport: "&c資源ワールドのリセットが開始されたため、ロビーへテレポートしました。"
+      teleport_actionbar: "&cリセット開始のためテレポートしました"
+    complete:
+      broadcast: "&a資源ワールド &f{display_name} ({world}) &aのリセットが完了しました！新しい資源をお楽しみください。次回リセット: &f{next_reset}"
+    failed:
+      broadcast: "&c資源ワールド &f{display_name} ({world}) &cのリセット処理でエラーが発生しました。現在復旧作業を行っています。しばらくお待ちください。"
+      admin: "&4[システムエラー] &c資源ワールド &f{display_name} &cのリセットに失敗しました。原因: &e{error_reason}"
+    tp_blocked: "&c資源ワールド &f{display_name} ({world}) &cは現在リセット処理中です。完了するまでお待ちください。"
 resource-world:
   initialize-failed: "&cFailed to initialize resource world schedules."
   seed-value: "Seed: [{0}]"

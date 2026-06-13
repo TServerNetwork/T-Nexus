@@ -2,6 +2,7 @@ package network.tserver.tnexus.config;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -70,5 +71,24 @@ class MessageConfigTest {
         String message = player.nextMessage();
         assertEquals("§8[§6T-Nexus§8] §a設定ファイルとメッセージを再読み込みしました。", message);
         assertTrue(message.startsWith("§8[§6T-Nexus§8] "));
+    }
+    @Test
+    void shouldReplaceNamedPlaceholders() throws IOException {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
+        MessageConfig messageConfig = plugin.getMessageConfig();
+
+        File localeFile = plugin.getDataFolder().toPath().resolve("lang").resolve("ja_JP.yml").toFile();
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(localeFile);
+        configuration.set("resource.command.list.entry", "&e> &f{display_name} &7({world})");
+        configuration.save(localeFile);
+
+        messageConfig.reload();
+
+        String message = messageConfig.getMessage(
+                "resource.command.list.entry",
+                Map.of("display_name", "通常世界", "world", "resource"));
+        assertTrue(message.contains("通常世界"));
+        assertTrue(message.contains("(resource)"));
     }
 }

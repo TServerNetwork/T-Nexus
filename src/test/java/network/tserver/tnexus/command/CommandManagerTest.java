@@ -699,6 +699,67 @@ class CommandManagerTest {
         repository.incrementProjectileCount(target.getUniqueId(), "ARROW").get(5, TimeUnit.SECONDS);
     }
 
+    @Test
+    void shouldShowResourceWorldListAndInfo() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("Explorer");
+
+        waitUntil(() -> {
+            try {
+                return plugin.getResourceWorldManager()
+                        .getNextResetTime("resource")
+                        .get(5, TimeUnit.SECONDS)
+                        .isPresent();
+            } catch (Exception exception) {
+                return false;
+            }
+        });
+
+        assertTrue(this.server.dispatchCommand(player, "resource"));
+        List<String> listMessages = waitForMessages(player, 9);
+        assertTrue(listMessages.get(1).contains("資源ワールド"));
+        assertTrue(listMessages.stream().anyMatch(message -> message.contains("(resource)")));
+        assertTrue(listMessages.stream().anyMatch(message -> message.contains("(resource_nether)")));
+        assertTrue(listMessages.stream().anyMatch(message -> message.contains("(resource_end)")));
+
+        assertTrue(this.server.dispatchCommand(player, "resource info resource"));
+        List<String> infoMessages = waitForMessages(player, 8);
+        assertTrue(infoMessages.get(1).contains("資源ワールド詳細"));
+        assertTrue(infoMessages.stream().anyMatch(message -> message.contains("resource")));
+        assertTrue(infoMessages.stream().anyMatch(message -> message.contains("未実施")));
+    }
+
+    @Test
+    void shouldShowAdminResourceStatusAndTabCompletions() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.admin", true);
+
+        waitUntil(() -> {
+            try {
+                return plugin.getResourceWorldManager()
+                        .getNextResetTime("resource")
+                        .get(5, TimeUnit.SECONDS)
+                        .isPresent();
+            } catch (Exception exception) {
+                return false;
+            }
+        });
+
+        assertTrue(this.server.dispatchCommand(admin, "resource status"));
+        List<String> statusMessages = waitForMessages(admin, 8);
+        assertTrue(statusMessages.get(1).contains("管理ステータス"));
+        assertTrue(statusMessages.stream().anyMatch(message -> message.contains("scheduled")));
+        assertIterableEquals(
+                List.of("info", "status"),
+                invokeTabCompletion(plugin, "onResourceTabComplete", admin, new String[]{""}));
+        assertIterableEquals(
+                List.of("resource", "resource_nether", "resource_end"),
+                invokeTabCompletion(plugin, "onResourceTabComplete", admin, new String[]{"info", "resource"}));
+    }
+
     private static final class TestCommand extends Command {
 
         private TestCommand() {
@@ -734,6 +795,16 @@ class CommandManagerTest {
             Thread.sleep(25L);
         }
         return player.nextMessage();
+    }
+
+    private List<String> waitForMessages(PlayerMock player, int count) throws Exception {
+        List<String> messages = new java.util.ArrayList<>();
+        while (messages.size() < count) {
+            String message = waitForNextMessage(player);
+            assertNotNull(message);
+            messages.add(message);
+        }
+        return messages;
     }
 
     private ClickEvent findFirstClickEvent(Component component) {
