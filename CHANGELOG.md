@@ -1,3 +1,12 @@
+# [0.33.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.32.1...v0.33.0) (2026-06-13)
+
+
+### Features
+
+* **cmd:** add console-only stats reset command ([#98](https://github.com/TServerNetwork/T-Nexus/issues/98)) ([dcc18aa](https://github.com/TServerNetwork/T-Nexus/commit/dcc18aaea8e538fa90af4bec421dfa929850ec92))
+* **stats:** add per-item sub-GUI for item pickup/drop stats ([#98](https://github.com/TServerNetwork/T-Nexus/issues/98)) ([d97ca80](https://github.com/TServerNetwork/T-Nexus/commit/d97ca80fa849406c25895fe023e93cca9e6d7f0a))
+* **stats:** move projectile stats to activity category ([#98](https://github.com/TServerNetwork/T-Nexus/issues/98)) ([37eaa95](https://github.com/TServerNetwork/T-Nexus/commit/37eaa9524e2da9a6b20834993d4690f980da6482))
+
 ## [0.32.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.32.0...v0.32.1) (2026-06-11)
 
 
