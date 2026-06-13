@@ -191,6 +191,7 @@ class PlayerStatsViewerManagerTest {
 
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PLAYER_DAMAGE"));
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_ENVIRONMENT"));
         assertNotNull(snapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL"));
         assertNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
 
@@ -205,6 +206,37 @@ class PlayerStatsViewerManagerTest {
         assertTrue(playerEntries.stream().anyMatch(entry ->
                 entry.key().equals("COMBAT_PLAYER:" + rival.getUniqueId())
                         && rival.getUniqueId().equals(entry.playerHeadId())));
+    }
+
+    @Test
+    void shouldExposeEnvironmentalCombatDetails() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
+        repository.addEntityDamageStats(Map.of(
+                        target.getUniqueId(),
+                        Map.of(
+                                "FALL", new EntityDamageDelta(0.0D, 8.0D),
+                                "FIRE", new EntityDamageDelta(0.0D, 3.0D))))
+                .get(5, TimeUnit.SECONDS);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_ENVIRONMENT"));
+        List<PlayerStatsViewerManager.StatsEntry> environmentEntries = snapshot.getSortedCombatDetailEntries(
+                PlayerStatsViewerManager.CombatDetailType.ENVIRONMENT,
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+        assertTrue(environmentEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_ENVIRONMENT:FALL")));
+        assertTrue(environmentEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_ENVIRONMENT:FIRE")));
     }
 
     @Test

@@ -261,9 +261,12 @@ public final class PlayerStatsViewerManager {
      * @return localized label
      */
     public String getCombatDetailLabel(CombatDetailType detailType) {
-        return this.plugin.getMessageConfig().getMessage(
-                "stats.dynamic.combat.name",
-                prettifyKey(detailType.name()));
+        return switch (detailType) {
+            case MOB_DAMAGE -> this.plugin.getMessageConfig().getMessage("stats.labels.combat.mob-damage");
+            case PLAYER_DAMAGE -> this.plugin.getMessageConfig().getMessage("stats.labels.combat.player-damage");
+            case ENVIRONMENT -> this.plugin.getMessageConfig().getMessage("stats.labels.combat.environment");
+            case PROJECTILES -> this.plugin.getMessageConfig().getMessage("stats.labels.activity.projectile-total");
+        };
     }
 
     /**
@@ -296,6 +299,7 @@ public final class PlayerStatsViewerManager {
         return switch (entryKey) {
             case "COMBAT_SUMMARY_MOB_DAMAGE" -> CombatDetailType.MOB_DAMAGE;
             case "COMBAT_SUMMARY_PLAYER_DAMAGE" -> CombatDetailType.PLAYER_DAMAGE;
+            case "COMBAT_SUMMARY_ENVIRONMENT" -> CombatDetailType.ENVIRONMENT;
             default -> null;
         };
     }
@@ -498,18 +502,23 @@ public final class PlayerStatsViewerManager {
             Map<String, Integer> killStats) {
         Map<String, CombatAggregate> mobAggregates = new LinkedHashMap<>();
         Map<String, CombatAggregate> playerAggregates = new LinkedHashMap<>();
-        mergeCombatAggregates(mobAggregates, playerAggregates, entityDamageStats, killStats);
+        Map<String, CombatAggregate> environmentAggregates = new LinkedHashMap<>();
+        mergeCombatAggregates(mobAggregates, playerAggregates, environmentAggregates, entityDamageStats, killStats);
 
-        List<StatsEntry> mobEntries = createCombatDetailEntries(mobAggregates, false);
-        List<StatsEntry> playerEntries = createCombatDetailEntries(playerAggregates, true);
+        List<StatsEntry> mobEntries = createCombatDetailEntries(mobAggregates, CombatDetailType.MOB_DAMAGE);
+        List<StatsEntry> playerEntries = createCombatDetailEntries(playerAggregates, CombatDetailType.PLAYER_DAMAGE);
+        List<StatsEntry> environmentEntries = createCombatDetailEntries(
+                environmentAggregates,
+                CombatDetailType.ENVIRONMENT);
 
         combatDetailEntries.put(CombatDetailType.MOB_DAMAGE, mobEntries);
         combatDetailEntries.put(CombatDetailType.PLAYER_DAMAGE, playerEntries);
+        combatDetailEntries.put(CombatDetailType.ENVIRONMENT, environmentEntries);
 
         summaryEntries.add(createCombatSummaryEntry(
                 "COMBAT_SUMMARY_MOB_DAMAGE",
                 Material.ZOMBIE_HEAD,
-                prettifyKey(CombatDetailType.MOB_DAMAGE.name()),
+                getCombatDetailLabel(CombatDetailType.MOB_DAMAGE),
                 mobEntries,
                 sumCombatKills(mobAggregates),
                 sumCombatDealt(mobAggregates),
@@ -517,20 +526,33 @@ public final class PlayerStatsViewerManager {
         summaryEntries.add(createCombatSummaryEntry(
                 "COMBAT_SUMMARY_PLAYER_DAMAGE",
                 Material.IRON_SWORD,
-                prettifyKey(CombatDetailType.PLAYER_DAMAGE.name()),
+                getCombatDetailLabel(CombatDetailType.PLAYER_DAMAGE),
                 playerEntries,
                 sumCombatKills(playerAggregates),
                 sumCombatDealt(playerAggregates),
                 sumCombatTaken(playerAggregates)));
+        summaryEntries.add(createCombatSummaryEntry(
+                "COMBAT_SUMMARY_ENVIRONMENT",
+                Material.CAMPFIRE,
+                getCombatDetailLabel(CombatDetailType.ENVIRONMENT),
+                environmentEntries,
+                sumCombatKills(environmentAggregates),
+                sumCombatDealt(environmentAggregates),
+                sumCombatTaken(environmentAggregates)));
     }
 
     private void mergeCombatAggregates(
             Map<String, CombatAggregate> mobAggregates,
             Map<String, CombatAggregate> playerAggregates,
+            Map<String, CombatAggregate> environmentAggregates,
             Map<String, EntityDamageDelta> entityDamageStats,
             Map<String, Integer> killStats) {
         for (Map.Entry<String, EntityDamageDelta> entry : entityDamageStats.entrySet()) {
-            Map<String, CombatAggregate> targetMap = isUuid(entry.getKey()) ? playerAggregates : mobAggregates;
+            Map<String, CombatAggregate> targetMap = resolveCombatAggregateTarget(
+                    entry.getKey(),
+                    mobAggregates,
+                    playerAggregates,
+                    environmentAggregates);
             targetMap.put(
                     entry.getKey(),
                     new CombatAggregate(
@@ -540,24 +562,45 @@ public final class PlayerStatsViewerManager {
                             entry.getValue().damageTaken()));
         }
         for (Map.Entry<String, Integer> entry : killStats.entrySet()) {
-            Map<String, CombatAggregate> targetMap = isUuid(entry.getKey()) ? playerAggregates : mobAggregates;
+            Map<String, CombatAggregate> targetMap = resolveCombatAggregateTarget(
+                    entry.getKey(),
+                    mobAggregates,
+                    playerAggregates,
+                    environmentAggregates);
             targetMap.computeIfAbsent(entry.getKey(), key -> new CombatAggregate(key, 0, 0.0D, 0.0D))
                     .setKillCount(entry.getValue());
         }
     }
 
-    private List<StatsEntry> createCombatDetailEntries(Map<String, CombatAggregate> aggregates, boolean playerEntries) {
+    private Map<String, CombatAggregate> resolveCombatAggregateTarget(
+            String key,
+            Map<String, CombatAggregate> mobAggregates,
+            Map<String, CombatAggregate> playerAggregates,
+            Map<String, CombatAggregate> environmentAggregates) {
+        if (isUuid(key)) {
+            return playerAggregates;
+        }
+        if (isEnvironmentCauseKey(key)) {
+            return environmentAggregates;
+        }
+        return mobAggregates;
+    }
+
+    private List<StatsEntry> createCombatDetailEntries(
+            Map<String, CombatAggregate> aggregates,
+            CombatDetailType detailType) {
         List<StatsEntry> entries = new ArrayList<>();
+        boolean playerEntries = detailType == CombatDetailType.PLAYER_DAMAGE;
         for (CombatAggregate aggregate : aggregates.values()) {
             double sortValue = aggregate.killCount + aggregate.damageDealt + aggregate.damageTaken;
             UUID playerHeadId = playerEntries ? UUID.fromString(aggregate.key) : null;
             entries.add(new StatsEntry(
-                    (playerEntries ? "COMBAT_PLAYER:" : "COMBAT_MOB:") + aggregate.key,
+                    resolveCombatEntryPrefix(detailType) + aggregate.key,
                     StatsCategory.COMBAT,
-                    playerEntries ? Material.PLAYER_HEAD : resolveCombatMaterial(aggregate.key),
+                    resolveCombatEntryMaterial(detailType, aggregate.key),
                     this.plugin.getMessageConfig().getMessage(
                             "stats.dynamic.combat.name",
-                            resolveEntityName(aggregate.key)),
+                            resolveCombatEntryName(detailType, aggregate.key)),
                     formatWholeNumber(aggregate.killCount),
                     List.of(
                             this.plugin.getMessageConfig().getMessage(
@@ -573,6 +616,32 @@ public final class PlayerStatsViewerManager {
                     playerHeadId));
         }
         return List.copyOf(entries);
+    }
+
+    private String resolveCombatEntryPrefix(CombatDetailType detailType) {
+        return switch (detailType) {
+            case MOB_DAMAGE -> "COMBAT_MOB:";
+            case PLAYER_DAMAGE -> "COMBAT_PLAYER:";
+            case ENVIRONMENT -> "COMBAT_ENVIRONMENT:";
+            case PROJECTILES -> "COMBAT_PROJECTILE:";
+        };
+    }
+
+    private Material resolveCombatEntryMaterial(CombatDetailType detailType, String key) {
+        return switch (detailType) {
+            case MOB_DAMAGE -> resolveCombatMaterial(key);
+            case PLAYER_DAMAGE -> Material.PLAYER_HEAD;
+            case ENVIRONMENT -> resolveEnvironmentMaterial(key);
+            case PROJECTILES -> resolveProjectileMaterial(key);
+        };
+    }
+
+    private String resolveCombatEntryName(CombatDetailType detailType, String key) {
+        return switch (detailType) {
+            case MOB_DAMAGE, PLAYER_DAMAGE -> resolveEntityName(key);
+            case ENVIRONMENT -> resolveEnvironmentName(key);
+            case PROJECTILES -> prettifyKey(key);
+        };
     }
 
     private StatsEntry createCombatSummaryEntry(
@@ -788,6 +857,18 @@ public final class PlayerStatsViewerManager {
         };
     }
 
+    private Material resolveEnvironmentMaterial(String causeKey) {
+        return switch (causeKey) {
+            case "FALL" -> Material.FEATHER;
+            case "LAVA" -> Material.LAVA_BUCKET;
+            case "FIRE" -> Material.FIRE_CHARGE;
+            case "DROWNING" -> Material.WATER_BUCKET;
+            case "VOID" -> Material.OBSIDIAN;
+            case "STARVATION" -> Material.ROTTEN_FLESH;
+            default -> Material.BARRIER;
+        };
+    }
+
     private Material resolveProjectileMaterial(String entityType) {
         return switch (entityType) {
             case "ARROW", "SPECTRAL_ARROW", "TIPPED_ARROW" -> Material.ARROW;
@@ -807,6 +888,26 @@ public final class PlayerStatsViewerManager {
             return resolveTargetName(player);
         }
         return prettifyKey(entityKey);
+    }
+
+    private boolean isEnvironmentCauseKey(String key) {
+        return switch (key) {
+            case "FALL", "LAVA", "FIRE", "DROWNING", "VOID", "STARVATION", "OTHER" -> true;
+            default -> false;
+        };
+    }
+
+    private String resolveEnvironmentName(String causeKey) {
+        String labelKey = switch (causeKey) {
+            case "FALL" -> "stats.environment.fall";
+            case "LAVA" -> "stats.environment.lava";
+            case "FIRE" -> "stats.environment.fire";
+            case "DROWNING" -> "stats.environment.drowning";
+            case "VOID" -> "stats.environment.void";
+            case "STARVATION" -> "stats.environment.starvation";
+            default -> "stats.environment.other";
+        };
+        return this.plugin.getMessageConfig().getMessage(labelKey);
     }
 
     private boolean isUuid(String rawValue) {
@@ -950,6 +1051,7 @@ public final class PlayerStatsViewerManager {
     public enum CombatDetailType {
         MOB_DAMAGE(Material.ZOMBIE_HEAD),
         PLAYER_DAMAGE(Material.IRON_SWORD),
+        ENVIRONMENT(Material.CAMPFIRE),
         PROJECTILES(Material.BOW);
 
         private final Material icon;

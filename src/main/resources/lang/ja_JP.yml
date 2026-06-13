@@ -335,6 +335,10 @@ stats:
   values:
     unavailable: "不明"
   labels:
+    combat:
+      mob-damage: "&eMob Damage"
+      player-damage: "&ePlayer Damage"
+      environment: "&e環境要因"
     general:
       play-time: "&eプレイ時間"
       distance: "&e移動距離"
@@ -378,6 +382,14 @@ stats:
       kills: "&7討伐数: &f{0}"
       damage-dealt: "&7与ダメージ量: &f{0}"
       damage-taken: "&7被ダメージ量: &f{0}"
+  environment:
+    fall: "落下"
+    lava: "マグマ"
+    fire: "炎・燃焼"
+    drowning: "溺死"
+    void: "虚空"
+    starvation: "飢餓"
+    other: "その他"
   gui:
     main:
       title: "&6&l{0} の統計情報"
