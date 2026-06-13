@@ -1,3 +1,10 @@
+# [0.34.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.33.0...v0.34.0) (2026-06-13)
+
+
+### Features
+
+* **db:** add resource world reset migration ([#100](https://github.com/TServerNetwork/T-Nexus/issues/100)) ([d27172c](https://github.com/TServerNetwork/T-Nexus/commit/d27172c35301f154572c336ab48d49d7135aa2c8))
+
 # [0.33.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.32.1...v0.33.0) (2026-06-13)
 
 
