@@ -1,3 +1,10 @@
+## [0.41.5](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.4...v0.41.5) (2026-06-14)
+
+
+### Bug Fixes
+
+* **resource:** avoid unloading world before multiverse regeneration ([847266e](https://github.com/TServerNetwork/T-Nexus/commit/847266e53635fd1915e0aca41313e5b46427ada6))
+
 ## [0.41.4](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.3...v0.41.4) (2026-06-14)
 
 
