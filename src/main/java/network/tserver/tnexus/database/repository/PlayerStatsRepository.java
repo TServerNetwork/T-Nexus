@@ -114,6 +114,33 @@ public final class PlayerStatsRepository {
     }
 
     /**
+     * Adds the given AFK duration to the stored total AFK time.
+     *
+     * @param playerId player id
+     * @param afkTimeSeconds AFK duration in seconds
+     * @return completion future
+     */
+    public CompletableFuture<Void> addAfkTime(UUID playerId, long afkTimeSeconds) {
+        Objects.requireNonNull(playerId, "playerId");
+        String sql = """
+                INSERT INTO %s (player_uuid, afk_time)
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE afk_time = afk_time + VALUES(afk_time)
+                """.formatted(this.tableName);
+        return this.databaseManager.queryAsync(() -> {
+            try (var connection = this.databaseManager.getConnection();
+                 var statement = connection.prepareStatement(sql)) {
+                statement.setString(1, playerId.toString());
+                statement.setLong(2, afkTimeSeconds);
+                statement.executeUpdate();
+                return null;
+            } catch (Exception exception) {
+                throw new IllegalStateException("Failed to update player AFK time", exception);
+            }
+        });
+    }
+
+    /**
      * Records a completed player session in both aggregate and historical tables.
      *
      * @param playerId player id
@@ -127,7 +154,26 @@ public final class PlayerStatsRepository {
             Instant sessionStart,
             Instant sessionEnd,
             long playTimeSeconds) {
-        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, false);
+        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, 0L, false);
+    }
+
+    /**
+     * Records a completed player session in both aggregate and historical tables.
+     *
+     * @param playerId player id
+     * @param sessionStart session start time
+     * @param sessionEnd session end time
+     * @param playTimeSeconds session duration in seconds
+     * @param afkTimeSeconds session AFK duration in seconds
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordPlaySession(
+            UUID playerId,
+            Instant sessionStart,
+            Instant sessionEnd,
+            long playTimeSeconds,
+            long afkTimeSeconds) {
+        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, afkTimeSeconds, false);
     }
 
     /**
@@ -144,7 +190,26 @@ public final class PlayerStatsRepository {
             Instant sessionStart,
             Instant sessionEnd,
             long playTimeSeconds) {
-        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, true);
+        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, 0L, true);
+    }
+
+    /**
+     * Records a completed player session synchronously, intended for plugin shutdown.
+     *
+     * @param playerId player id
+     * @param sessionStart session start time
+     * @param sessionEnd session end time
+     * @param playTimeSeconds session duration in seconds
+     * @param afkTimeSeconds session AFK duration in seconds
+     * @return completion future
+     */
+    public CompletableFuture<Void> recordPlaySessionSync(
+            UUID playerId,
+            Instant sessionStart,
+            Instant sessionEnd,
+            long playTimeSeconds,
+            long afkTimeSeconds) {
+        return recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds, afkTimeSeconds, true);
     }
 
     private CompletableFuture<Void> recordPlaySession(
@@ -152,18 +217,20 @@ public final class PlayerStatsRepository {
             Instant sessionStart,
             Instant sessionEnd,
             long playTimeSeconds,
+            long afkTimeSeconds,
             boolean synchronous) {
         Objects.requireNonNull(playerId, "playerId");
         Objects.requireNonNull(sessionStart, "sessionStart");
         Objects.requireNonNull(sessionEnd, "sessionEnd");
         String totalSql = """
-                INSERT INTO %s (player_uuid, play_time)
-                VALUES (?, ?)
+                INSERT INTO %s (player_uuid, play_time, afk_time)
+                VALUES (?, ?, ?)
                 ON DUPLICATE KEY UPDATE play_time = play_time + VALUES(play_time)
+                , afk_time = afk_time + VALUES(afk_time)
                 """.formatted(this.tableName);
         String historySql = """
-                INSERT INTO %s (player_uuid, session_start, session_end, duration_seconds)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO %s (player_uuid, session_start, session_end, duration_seconds, afk_duration_seconds)
+                VALUES (?, ?, ?, ?, ?)
                 """.formatted(this.playSessionsTableName);
         return submitQuery(synchronous, () -> {
             try (var connection = this.databaseManager.getConnection()) {
@@ -172,12 +239,14 @@ public final class PlayerStatsRepository {
                      var historyStatement = connection.prepareStatement(historySql)) {
                     totalStatement.setString(1, playerId.toString());
                     totalStatement.setLong(2, playTimeSeconds);
+                    totalStatement.setLong(3, afkTimeSeconds);
                     totalStatement.executeUpdate();
 
                     historyStatement.setString(1, playerId.toString());
                     historyStatement.setTimestamp(2, Timestamp.from(sessionStart));
                     historyStatement.setTimestamp(3, Timestamp.from(sessionEnd));
                     historyStatement.setLong(4, playTimeSeconds);
+                    historyStatement.setLong(5, afkTimeSeconds);
                     historyStatement.executeUpdate();
 
                     connection.commit();
@@ -926,6 +995,7 @@ public final class PlayerStatsRepository {
         return switch (resetTarget.type()) {
             case PLAY_TIME -> {
                 updateAggregateColumn(connection, "play_time", playerId, 0);
+                updateAggregateColumn(connection, "afk_time", playerId, 0);
                 deleteByPlayer(connection, this.playSessionsTableName, playerId);
                 yield true;
             }
@@ -1056,6 +1126,7 @@ public final class PlayerStatsRepository {
                 ? """
                 UPDATE %s
                 SET play_time = 0,
+                    afk_time = 0,
                     deaths = 0,
                     respawns = 0,
                     distance = 0,
@@ -1069,6 +1140,7 @@ public final class PlayerStatsRepository {
                 : """
                 UPDATE %s
                 SET play_time = 0,
+                    afk_time = 0,
                     deaths = 0,
                     respawns = 0,
                     distance = 0,

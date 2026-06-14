@@ -60,6 +60,8 @@ class PlayerStatsViewerManagerTest {
         assertFalse(snapshot.getEntries(PlayerStatsViewerManager.StatsCategory.COMBAT).isEmpty());
         assertFalse(snapshot.getEntries(PlayerStatsViewerManager.StatsCategory.ACTIVITY).isEmpty());
         assertNotNull(snapshot.getEntry("GENERAL_PLAY_TIME"));
+        assertNotNull(snapshot.getEntry("GENERAL_ACTIVE_PLAY_TIME"));
+        assertNotNull(snapshot.getEntry("GENERAL_AFK_TIME"));
         assertNotNull(snapshot.getEntry("BLOCK:STONE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("ACTIVITY_CRAFT_TOTAL"));
@@ -341,6 +343,7 @@ class PlayerStatsViewerManagerTest {
         PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
         repository.ensurePlayerExists(target.getUniqueId(), Instant.parse("2026-06-01T00:00:00Z")).get(5, TimeUnit.SECONDS);
         repository.addPlayTime(target.getUniqueId(), 7200L).get(5, TimeUnit.SECONDS);
+        repository.addAfkTime(target.getUniqueId(), 1800L).get(5, TimeUnit.SECONDS);
         repository.incrementDeaths(target.getUniqueId()).get(5, TimeUnit.SECONDS);
         repository.incrementRespawns(target.getUniqueId()).get(5, TimeUnit.SECONDS);
         repository.incrementChatCount(target.getUniqueId()).get(5, TimeUnit.SECONDS);

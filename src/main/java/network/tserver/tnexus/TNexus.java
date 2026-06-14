@@ -36,6 +36,7 @@ import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
+import network.tserver.tnexus.listener.PlayerActivityListener;
 import network.tserver.tnexus.listener.PlayerBlockStatsListener;
 import network.tserver.tnexus.listener.PlayerCraftStatsListener;
 import network.tserver.tnexus.listener.PlayerDeathStatsListener;
@@ -74,6 +75,7 @@ public class TNexus extends JavaPlugin {
     private ServerStatsManager serverStatsManager;
     private PaymentNotificationListener paymentNotificationListener;
     private PlayerSessionListener playerSessionListener;
+    private PlayerActivityListener playerActivityListener;
     private PlayerDeathStatsListener playerDeathStatsListener;
     private PlayerEntityDamageStatsListener playerEntityDamageStatsListener;
     private PlayerMovementStatsListener playerMovementStatsListener;
@@ -130,6 +132,7 @@ public class TNexus extends JavaPlugin {
         this.serverStatsManager = createServerStatsManager();
         this.paymentNotificationListener = new PaymentNotificationListener(this);
         this.playerSessionListener = new PlayerSessionListener(this);
+        this.playerActivityListener = new PlayerActivityListener(this);
         this.playerDeathStatsListener = new PlayerDeathStatsListener(this);
         this.playerEntityDamageStatsListener = new PlayerEntityDamageStatsListener(this);
         this.playerMovementStatsListener = new PlayerMovementStatsListener(this);
@@ -190,6 +193,7 @@ public class TNexus extends JavaPlugin {
         this.serverStatsManager = null;
         this.paymentNotificationListener = null;
         this.playerSessionListener = null;
+        this.playerActivityListener = null;
         this.playerDeathStatsListener = null;
         this.playerEntityDamageStatsListener = null;
         this.playerMovementStatsListener = null;

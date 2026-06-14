@@ -22,6 +22,8 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlayerStatsManagerTest {
 
@@ -71,6 +73,70 @@ class PlayerStatsManagerTest {
 
         assertEquals(120L, readPlayTime(plugin, first));
         assertEquals(120L, readPlayTime(plugin, second));
+    }
+
+    @Test
+    void shouldPersistAfkTimeSeparatelyFromPlayTime() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("AfkPlayer");
+        MutableClock clock = new MutableClock(Instant.parse("2026-06-07T01:00:00Z"));
+        PlayerStatsManager manager = createManager(plugin, clock);
+
+        manager.recordSessionStart(player).get(5, TimeUnit.SECONDS);
+        clock.setInstant(Instant.parse("2026-06-07T01:06:00Z"));
+        assertTrue(manager.isPlayerAfk(player.getUniqueId()));
+
+        manager.recordActivity(player, ActivityType.CHAT, "still here", null);
+        assertFalse(manager.isPlayerAfk(player.getUniqueId()));
+
+        clock.setInstant(Instant.parse("2026-06-07T01:07:00Z"));
+        manager.recordSessionEnd(player).get(5, TimeUnit.SECONDS);
+
+        assertEquals(420L, readPlayTime(plugin, player));
+        assertEquals(60L, readAfkTime(plugin, player));
+    }
+
+    @Test
+    void shouldKeepPositionAndSingleRotationBelowAfkThreshold() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("RotationPlayer");
+        MutableClock clock = new MutableClock(Instant.parse("2026-06-07T01:30:00Z"));
+        PlayerStatsManager manager = createManager(plugin, clock);
+
+        manager.recordSessionStart(player).get(5, TimeUnit.SECONDS);
+        clock.setInstant(Instant.parse("2026-06-07T01:36:00Z"));
+
+        manager.recordActivity(player, ActivityType.POSITION, null, "0,0,0");
+        assertTrue(manager.isPlayerAfk(player.getUniqueId()));
+
+        manager.recordActivity(player, ActivityType.ROTATION, null, "10,0");
+        assertTrue(manager.isPlayerAfk(player.getUniqueId()));
+        assertEquals(10, manager.getActivityScore(player.getUniqueId()));
+        assertEquals(Instant.parse("2026-06-07T01:30:00Z"), manager.getLastActiveAt(player.getUniqueId()));
+    }
+
+    @Test
+    void shouldAllowSwappableActivityPolicy() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock player = this.server.addPlayer("PolicyPlayer");
+        MutableClock clock = new MutableClock(Instant.parse("2026-06-07T02:00:00Z"));
+        PlayerStatsManager manager = new PlayerStatsManager(
+                plugin,
+                new PlayerStatsRepository(plugin.getDatabaseManager()),
+                clock,
+                (ignoredPlayer, type, context) -> type == ActivityType.CHAT ? 50 : 0,
+                plugin.getConfigManager().getAfkSettings(),
+                PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
+                false);
+
+        manager.recordSessionStart(player).get(5, TimeUnit.SECONDS);
+        clock.setInstant(Instant.parse("2026-06-07T02:06:00Z"));
+        manager.recordActivity(player, ActivityType.CHAT, "first", null);
+        assertTrue(manager.isPlayerAfk(player.getUniqueId()));
+
+        manager.recordActivity(player, ActivityType.CHAT, "second", null);
+        assertFalse(manager.isPlayerAfk(player.getUniqueId()));
+        assertEquals(Instant.parse("2026-06-07T02:06:00Z"), manager.getLastActiveAt(player.getUniqueId()));
     }
 
     @Test
@@ -293,25 +359,8 @@ class PlayerStatsManagerTest {
                 plugin,
                 new PlayerStatsRepository(plugin.getDatabaseManager()),
                 clock,
-                new ConcurrentHashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new HashMap<>(),
-                new ConcurrentHashMap<>(),
-                new ConcurrentHashMap<>(),
+                new DefaultActivityPolicy(),
+                plugin.getConfigManager().getAfkSettings(),
                 PlayerStatsManager.DEFAULT_DISTANCE_FLUSH_INTERVAL_TICKS,
                 false);
     }
@@ -324,6 +373,18 @@ class PlayerStatsManagerTest {
             try (var resultSet = statement.executeQuery()) {
                 resultSet.next();
                 return resultSet.getLong("play_time");
+            }
+        }
+    }
+
+    private long readAfkTime(TNexus plugin, PlayerMock player) throws Exception {
+        try (var connection = plugin.getDatabaseManager().getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT afk_time FROM tnexus_player_stats WHERE player_uuid = ?")) {
+            statement.setString(1, player.getUniqueId().toString());
+            try (var resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getLong("afk_time");
             }
         }
     }

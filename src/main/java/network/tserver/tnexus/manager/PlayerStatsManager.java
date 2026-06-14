@@ -3,8 +3,10 @@ package network.tserver.tnexus.manager;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,11 +41,18 @@ public class PlayerStatsManager {
     static final double MAX_TRACKED_DISTANCE_PER_EVENT = 32.0D;
     static final Duration WORLD_EDIT_SUPPRESSION_WINDOW = Duration.ofSeconds(1L);
     static final Duration PROCESSING_ATTRIBUTION_WINDOW = Duration.ofMinutes(10L);
+    static final int DEFAULT_ACTIVITY_HISTORY_LIMIT = 8;
 
     private final TNexus plugin;
     private final PlayerStatsRepository playerStatsRepository;
     private final Clock clock;
+    private final ActivityPolicy activityPolicy;
+    private final int activityScoreThreshold;
+    private final int activityScoreMax;
+    private final int activityScoreDecayPerSecond;
+    private final Duration afkTimeout;
     private final Map<UUID, Instant> sessionStartTimes;
+    private final Map<UUID, ActivitySession> activitySessions;
     private final Object distanceLock;
     private final Map<UUID, Double> pendingTotalDistances;
     private final Map<UUID, EnumMap<TravelType, Double>> pendingTravelDistances;
@@ -84,6 +93,9 @@ public class PlayerStatsManager {
                 plugin,
                 playerStatsRepository,
                 Clock.systemUTC(),
+                new DefaultActivityPolicy(),
+                plugin.getConfigManager().getAfkSettings(),
+                new ConcurrentHashMap<>(),
                 new ConcurrentHashMap<>(),
                 new HashMap<>(),
                 new HashMap<>(),
@@ -111,7 +123,48 @@ public class PlayerStatsManager {
             TNexus plugin,
             PlayerStatsRepository playerStatsRepository,
             Clock clock,
+            ActivityPolicy activityPolicy,
+            network.tserver.tnexus.config.ConfigManager.AfkSettings afkSettings,
+            long distanceFlushIntervalTicks,
+            boolean scheduleDistanceFlushTask) {
+        this(
+                plugin,
+                playerStatsRepository,
+                clock,
+                activityPolicy,
+                afkSettings,
+                new ConcurrentHashMap<>(),
+                new ConcurrentHashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new HashMap<>(),
+                new ConcurrentHashMap<>(),
+                new ConcurrentHashMap<>(),
+                distanceFlushIntervalTicks,
+                scheduleDistanceFlushTask);
+    }
+
+    PlayerStatsManager(
+            TNexus plugin,
+            PlayerStatsRepository playerStatsRepository,
+            Clock clock,
+            ActivityPolicy activityPolicy,
+            network.tserver.tnexus.config.ConfigManager.AfkSettings afkSettings,
             Map<UUID, Instant> sessionStartTimes,
+            Map<UUID, ActivitySession> activitySessions,
             Map<UUID, Double> pendingTotalDistances,
             Map<UUID, EnumMap<TravelType, Double>> pendingTravelDistances,
             Map<UUID, Integer> pendingBlocksPlaced,
@@ -135,7 +188,14 @@ public class PlayerStatsManager {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerStatsRepository = Objects.requireNonNull(playerStatsRepository, "playerStatsRepository");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.activityPolicy = Objects.requireNonNull(activityPolicy, "activityPolicy");
+        Objects.requireNonNull(afkSettings, "afkSettings");
+        this.activityScoreThreshold = Math.max(1, afkSettings.scoreThreshold());
+        this.activityScoreMax = Math.max(this.activityScoreThreshold, afkSettings.scoreMax());
+        this.activityScoreDecayPerSecond = Math.max(0, afkSettings.decayPerSecond());
+        this.afkTimeout = Duration.ofSeconds(Math.max(1, afkSettings.timeoutSeconds()));
         this.sessionStartTimes = Objects.requireNonNull(sessionStartTimes, "sessionStartTimes");
+        this.activitySessions = Objects.requireNonNull(activitySessions, "activitySessions");
         this.distanceLock = new Object();
         this.pendingTotalDistances = Objects.requireNonNull(pendingTotalDistances, "pendingTotalDistances");
         this.pendingTravelDistances = Objects.requireNonNull(pendingTravelDistances, "pendingTravelDistances");
@@ -185,7 +245,9 @@ public class PlayerStatsManager {
     public CompletableFuture<Void> recordSessionStart(Player player) {
         Objects.requireNonNull(player, "player");
         Instant sessionStart = this.clock.instant();
-        this.sessionStartTimes.put(player.getUniqueId(), sessionStart);
+        UUID playerId = player.getUniqueId();
+        this.sessionStartTimes.put(playerId, sessionStart);
+        this.activitySessions.put(playerId, new ActivitySession(sessionStart));
         return this.playerStatsRepository.ensurePlayerExists(player.getUniqueId(), sessionStart);
     }
 
@@ -198,6 +260,48 @@ public class PlayerStatsManager {
     public CompletableFuture<Void> recordSessionEnd(Player player) {
         Objects.requireNonNull(player, "player");
         return persistSession(player.getUniqueId(), this.clock.instant(), false);
+    }
+
+    /**
+     * Records an activity signal for AFK detection.
+     *
+     * @param player acting player
+     * @param type activity type
+     */
+    public void recordActivity(Player player, ActivityType type) {
+        recordActivity(player, type, null, null);
+    }
+
+    /**
+     * Records an activity signal for AFK detection.
+     *
+     * @param player acting player
+     * @param type activity type
+     * @param content optional textual content
+     * @param payload optional typed payload
+     */
+    public void recordActivity(Player player, ActivityType type, String content, Object payload) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(type, "type");
+        ActivitySession session = this.activitySessions.get(player.getUniqueId());
+        if (session == null) {
+            return;
+        }
+
+        Instant now = this.clock.instant();
+        ActivityContext context = new ActivityContext(now, content, payload);
+        synchronized (session.lock()) {
+            refreshAfkState(session, now);
+            int currentScore = applyActivityScoreDecay(session, now);
+            int delta = this.activityPolicy.calculateScore(player, type, context);
+            int nextScore = Math.max(0, Math.min(this.activityScoreMax, currentScore + delta));
+            session.activityScore = nextScore;
+            session.lastScoreUpdatedAt = now;
+            session.addRecentActivity(type, context);
+            if (currentScore < this.activityScoreThreshold && nextScore >= this.activityScoreThreshold) {
+                markPlayerActive(session, now);
+            }
+        }
     }
 
     /**
@@ -950,6 +1054,42 @@ public class PlayerStatsManager {
         return Map.copyOf(this.sessionStartTimes);
     }
 
+    boolean isPlayerAfk(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        ActivitySession session = this.activitySessions.get(playerId);
+        if (session == null) {
+            return false;
+        }
+        synchronized (session.lock()) {
+            refreshAfkState(session, this.clock.instant());
+            return session.afk;
+        }
+    }
+
+    Instant getLastActiveAt(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        ActivitySession session = this.activitySessions.get(playerId);
+        if (session == null) {
+            return null;
+        }
+        synchronized (session.lock()) {
+            refreshAfkState(session, this.clock.instant());
+            return session.lastActiveAt;
+        }
+    }
+
+    int getActivityScore(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        ActivitySession session = this.activitySessions.get(playerId);
+        if (session == null) {
+            return 0;
+        }
+        synchronized (session.lock()) {
+            refreshAfkState(session, this.clock.instant());
+            return applyActivityScoreDecay(session, this.clock.instant());
+        }
+    }
+
     private void clearAllPendingStats(UUID playerId) {
         clearPendingDistanceStats(playerId);
         clearPendingBlockStats(playerId, null);
@@ -994,8 +1134,15 @@ public class PlayerStatsManager {
     }
 
     private void resetActiveSession(UUID playerId) {
+        Instant resetTime = this.clock.instant();
         if (this.sessionStartTimes.containsKey(playerId)) {
-            this.sessionStartTimes.put(playerId, this.clock.instant());
+            this.sessionStartTimes.put(playerId, resetTime);
+        }
+        ActivitySession session = this.activitySessions.get(playerId);
+        if (session != null) {
+            synchronized (session.lock()) {
+                session.reset(resetTime);
+            }
         }
     }
 
@@ -1003,6 +1150,11 @@ public class PlayerStatsManager {
         Instant resetTime = this.clock.instant();
         for (UUID playerId : this.sessionStartTimes.keySet()) {
             this.sessionStartTimes.put(playerId, resetTime);
+        }
+        for (ActivitySession session : this.activitySessions.values()) {
+            synchronized (session.lock()) {
+                session.reset(resetTime);
+            }
         }
     }
 
@@ -1178,17 +1330,75 @@ public class PlayerStatsManager {
 
     private CompletableFuture<Void> persistSession(UUID playerId, Instant sessionEnd, boolean synchronous) {
         Instant sessionStart = this.sessionStartTimes.remove(playerId);
+        ActivitySession activitySession = this.activitySessions.remove(playerId);
         if (sessionStart == null) {
             return CompletableFuture.completedFuture(null);
         }
 
         long playTimeSeconds = Math.max(0L, Duration.between(sessionStart, sessionEnd).getSeconds());
+        long afkTimeSeconds = calculateAfkTimeSeconds(activitySession, sessionEnd);
         if (playTimeSeconds <= 0L) {
             return CompletableFuture.completedFuture(null);
         }
         return synchronous
-                ? this.playerStatsRepository.recordPlaySessionSync(playerId, sessionStart, sessionEnd, playTimeSeconds)
-                : this.playerStatsRepository.recordPlaySession(playerId, sessionStart, sessionEnd, playTimeSeconds);
+                ? this.playerStatsRepository.recordPlaySessionSync(
+                        playerId,
+                        sessionStart,
+                        sessionEnd,
+                        playTimeSeconds,
+                        afkTimeSeconds)
+                : this.playerStatsRepository.recordPlaySession(
+                        playerId,
+                        sessionStart,
+                        sessionEnd,
+                        playTimeSeconds,
+                        afkTimeSeconds);
+    }
+
+    private long calculateAfkTimeSeconds(ActivitySession session, Instant sessionEnd) {
+        if (session == null) {
+            return 0L;
+        }
+        synchronized (session.lock()) {
+            refreshAfkState(session, sessionEnd);
+            long afkTimeSeconds = session.accumulatedAfkSeconds;
+            if (session.afk && session.afkStartedAt != null && sessionEnd.isAfter(session.afkStartedAt)) {
+                afkTimeSeconds += Duration.between(session.afkStartedAt, sessionEnd).getSeconds();
+            }
+            return Math.max(0L, afkTimeSeconds);
+        }
+    }
+
+    private int applyActivityScoreDecay(ActivitySession session, Instant now) {
+        long elapsedSeconds = Math.max(0L, Duration.between(session.lastScoreUpdatedAt, now).getSeconds());
+        if (elapsedSeconds <= 0L) {
+            return session.activityScore;
+        }
+        int decayAmount = Math.toIntExact(
+                Math.min(Integer.MAX_VALUE, elapsedSeconds * (long) this.activityScoreDecayPerSecond));
+        session.activityScore = Math.max(0, session.activityScore - decayAmount);
+        session.lastScoreUpdatedAt = now;
+        return session.activityScore;
+    }
+
+    private void refreshAfkState(ActivitySession session, Instant now) {
+        if (session.afk) {
+            return;
+        }
+        if (Duration.between(session.lastActiveAt, now).compareTo(this.afkTimeout) < 0) {
+            return;
+        }
+        session.afk = true;
+        session.afkStartedAt = session.lastActiveAt.plus(this.afkTimeout);
+    }
+
+    private void markPlayerActive(ActivitySession session, Instant now) {
+        if (session.afk && session.afkStartedAt != null && now.isAfter(session.afkStartedAt)) {
+            session.accumulatedAfkSeconds += Duration.between(session.afkStartedAt, now).getSeconds();
+        }
+        session.afk = false;
+        session.afkStartedAt = null;
+        session.lastActiveAt = now;
     }
 
     private void flushPendingStatsSafely() {
@@ -1530,6 +1740,52 @@ public class PlayerStatsManager {
     }
 
     private record ProcessingAttribution(UUID playerId, Instant expiresAt) {
+    }
+
+    private static final class ActivitySession {
+
+        private final Object lock;
+        private final Deque<ActivityRecord> recentActivities;
+        private Instant lastActiveAt;
+        private Instant lastScoreUpdatedAt;
+        private int activityScore;
+        private boolean afk;
+        private Instant afkStartedAt;
+        private long accumulatedAfkSeconds;
+
+        private ActivitySession(Instant sessionStart) {
+            this.lock = new Object();
+            this.recentActivities = new ArrayDeque<>();
+            reset(sessionStart);
+        }
+
+        private Object lock() {
+            return this.lock;
+        }
+
+        private void addRecentActivity(ActivityType type, ActivityContext context) {
+            this.recentActivities.addLast(new ActivityRecord(type, context.timestamp(), context.content(), context.payload()));
+            while (this.recentActivities.size() > DEFAULT_ACTIVITY_HISTORY_LIMIT) {
+                this.recentActivities.removeFirst();
+            }
+        }
+
+        private void reset(Instant resetTime) {
+            this.lastActiveAt = resetTime;
+            this.lastScoreUpdatedAt = resetTime;
+            this.activityScore = 0;
+            this.afk = false;
+            this.afkStartedAt = null;
+            this.accumulatedAfkSeconds = 0L;
+            this.recentActivities.clear();
+        }
+    }
+
+    private record ActivityRecord(
+            ActivityType type,
+            Instant timestamp,
+            String content,
+            Object payload) {
     }
 
     /**

@@ -13,6 +13,12 @@ tnexus:
     currency-name: "コイン"
     currency-symbol: "¥"
     starting-balance: 1000.0
+  afk:
+    score:
+      threshold: 100
+      max: 100
+      decay-per-second: 2
+    timeout-seconds: 300
   gui:
     main-menu-title: "&6&lT-Nexus メニュー"
     items-per-page: 45

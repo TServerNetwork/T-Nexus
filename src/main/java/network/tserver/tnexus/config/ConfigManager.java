@@ -19,6 +19,7 @@ public final class ConfigManager {
 
     private static final String DATABASE_PATH = "tnexus.database";
     private static final String GUI_PATH = "tnexus.gui";
+    private static final String AFK_PATH = "tnexus.afk";
     private static final String RESOURCE_WORLD_PATH = "resource-world";
 
     private final JavaPlugin plugin;
@@ -225,6 +226,29 @@ public final class ConfigManager {
         );
     }
 
+    /**
+     * Returns AFK detection settings.
+     *
+     * @return AFK settings
+     */
+    public AfkSettings getAfkSettings() {
+        ConfigurationSection section = getSection(AFK_PATH);
+        if (section == null) {
+            throw new IllegalStateException("Missing tnexus.afk configuration section");
+        }
+
+        ConfigurationSection scoreSection = section.getConfigurationSection("score");
+        if (scoreSection == null) {
+            throw new IllegalStateException("Missing tnexus.afk.score configuration section");
+        }
+
+        return new AfkSettings(
+                scoreSection.getInt("threshold", 100),
+                scoreSection.getInt("max", 100),
+                scoreSection.getInt("decay-per-second", 2),
+                section.getInt("timeout-seconds", 300));
+    }
+
     private PagerTexture getPagerTexture(ConfigurationSection section, String key) {
         ConfigurationSection pagerSection = section.getConfigurationSection(key);
         if (pagerSection == null) {
@@ -348,6 +372,21 @@ public final class ConfigManager {
      * @param next next-page head textures
      */
     public record PagerSettings(PagerTexture previous, PagerTexture next) {
+    }
+
+    /**
+     * Immutable AFK detection configuration values.
+     *
+     * @param scoreThreshold activity score threshold required to refresh last-active time
+     * @param scoreMax maximum score cap
+     * @param decayPerSecond per-second score decay
+     * @param timeoutSeconds AFK timeout from last active timestamp
+     */
+    public record AfkSettings(
+            int scoreThreshold,
+            int scoreMax,
+            int decayPerSecond,
+            int timeoutSeconds) {
     }
 
     /**
