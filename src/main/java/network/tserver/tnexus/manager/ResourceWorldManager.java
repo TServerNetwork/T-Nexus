@@ -1,6 +1,5 @@
 package network.tserver.tnexus.manager;
 
-import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.nio.file.Files;
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -39,7 +38,7 @@ public final class ResourceWorldManager {
     private final TNexus plugin;
     private final ConfigManager.ResourceWorldSettings settings;
     private final ResourceWorldResetRepository repository;
-    private final MVWorldManager worldManager;
+    private final MultiverseWorldService worldManager;
     private final Clock clock;
     private final ResourceWorldFileManager fileManager;
     private final ResourceWorldEditService worldEditService;
@@ -58,7 +57,7 @@ public final class ResourceWorldManager {
     public ResourceWorldManager(
             TNexus plugin,
             ResourceWorldResetRepository repository,
-            MVWorldManager worldManager) {
+            MultiverseWorldService worldManager) {
         this(plugin, repository, worldManager, Clock.systemDefaultZone());
     }
 
@@ -73,7 +72,7 @@ public final class ResourceWorldManager {
     public ResourceWorldManager(
             TNexus plugin,
             ResourceWorldResetRepository repository,
-            MVWorldManager worldManager,
+            MultiverseWorldService worldManager,
             Clock clock) {
         this(
                 plugin,
@@ -88,7 +87,7 @@ public final class ResourceWorldManager {
     ResourceWorldManager(
             TNexus plugin,
             ResourceWorldResetRepository repository,
-            MVWorldManager worldManager,
+            MultiverseWorldService worldManager,
             Clock clock,
             ResourceWorldFileManager fileManager,
             ResourceWorldEditService worldEditService,
@@ -261,7 +260,7 @@ public final class ResourceWorldManager {
      * @return {@code true} when regeneration succeeded
      */
     public boolean regenerateWorld(String worldName, String seed) {
-        return this.worldManager.regenWorld(worldName, true, true, seed);
+        return this.worldManager.regenerateWorld(worldName, seed);
     }
 
     /**

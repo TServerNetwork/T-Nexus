@@ -1,9 +1,9 @@
 package network.tserver.tnexus.listener;
 
-import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import network.tserver.tnexus.manager.MultiverseWorldService;
 import network.tserver.tnexus.manager.ResourceWorldManager;
 import org.bukkit.World;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
@@ -98,7 +98,7 @@ class ResourceWorldSeedCommandListenerTest {
                     "dimension", "NORMAL",
                     "reset-interval-days", 1,
                     "reset-start-date", "2026-06-14T09:00:10")));
-            MVWorldManager mvWorldManager = getPluginHookManager().getApi(MVWorldManager.class);
+            MultiverseWorldService mvWorldManager = getPluginHookManager().getApi(MultiverseWorldService.class);
             this.testResourceWorldManager = new ResourceWorldManager(
                     this,
                     new ResourceWorldResetRepository(getDatabaseManager()),

@@ -1,8 +1,5 @@
 package network.tserver.tnexus.manager;
 
-import com.onarandombox.MultiverseCore.api.MVWorldManager;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -14,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import network.tserver.tnexus.manager.MultiverseWorldService;
 import org.bukkit.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -129,29 +127,23 @@ class ResetSchedulerTest {
         throw new AssertionError("Condition was not met before timeout");
     }
 
-    private MVWorldManager createWorldManagerProxy() {
-        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
-            case "unloadWorld", "loadWorld", "regenWorld" -> true;
-            case "getMVWorlds", "getUnloadedWorlds", "getPotentialWorlds" -> java.util.List.of();
-            default -> defaultValue(method.getReturnType());
-        };
-        return (MVWorldManager) Proxy.newProxyInstance(
-                MVWorldManager.class.getClassLoader(),
-                new Class<?>[]{MVWorldManager.class},
-                handler);
-    }
+    private MultiverseWorldService createWorldManagerProxy() {
+        return new MultiverseWorldService() {
+            @Override
+            public boolean unloadWorld(String worldName) {
+                return true;
+            }
 
-    private Object defaultValue(Class<?> returnType) {
-        if (returnType == boolean.class) {
-            return false;
-        }
-        if (returnType == int.class) {
-            return 0;
-        }
-        if (returnType == long.class) {
-            return 0L;
-        }
-        return null;
+            @Override
+            public boolean regenerateWorld(String worldName, String seed) {
+                return true;
+            }
+
+            @Override
+            public boolean loadWorld(String worldName) {
+                return true;
+            }
+        };
     }
 
     private static final class NoOpFileManager extends ResourceWorldFileManager {

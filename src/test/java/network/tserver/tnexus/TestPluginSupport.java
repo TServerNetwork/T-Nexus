@@ -1,6 +1,5 @@
 package network.tserver.tnexus;
 
-import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.io.StringReader;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -74,7 +73,7 @@ public final class TestPluginSupport {
 
     private static final String MULTIVERSE_PLUGIN_YAML = """
             name: Multiverse-Core
-            version: 4.3.1
+            version: 5.6.2
             main: %s
             api-version: '26.1.2'
             """;
@@ -267,19 +266,19 @@ public final class TestPluginSupport {
     }
 
     /**
-     * Minimal Multiverse-Core test double exposing MVWorldManager.
+     * Minimal Multiverse-Core 5.x test double exposing getApi().getWorldManager().
      */
     public static class TestMultiverseCorePlugin extends JavaPlugin {
 
-        private final MVWorldManager worldManager = createMultiverseWorldManagerProxy();
+        private final FakeMultiverseCoreApi api = new FakeMultiverseCoreApi();
 
         /**
-         * Returns the test MV world manager proxy.
+         * Returns the test Multiverse API proxy.
          *
-         * @return MV world manager proxy
+         * @return Multiverse API proxy
          */
-        public MVWorldManager getMVWorldManager() {
-            return this.worldManager;
+        public FakeMultiverseCoreApi getApi() {
+            return this.api;
         }
     }
 
@@ -419,16 +418,64 @@ public final class TestPluginSupport {
         return (T) plugin;
     }
 
-    private static MVWorldManager createMultiverseWorldManagerProxy() {
-        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
-            case "regenWorld", "loadWorld", "unloadWorld", "deleteWorld", "addWorld", "cloneWorld",
-                    "saveWorldsConfig", "removeWorldFromConfig", "isMVWorld", "hasUnloadedWorld" -> true;
-            case "getUnloadedWorlds", "getPotentialWorlds", "getMVWorlds" -> java.util.List.of();
-            default -> defaultValue(method.getReturnType());
-        };
-        return (MVWorldManager) Proxy.newProxyInstance(
-                MVWorldManager.class.getClassLoader(),
-                new Class<?>[]{MVWorldManager.class},
-                handler);
+    public static final class FakeMultiverseCoreApi {
+
+        /**
+         * Returns the fake WorldManager object for tests.
+         *
+         * @return test WorldManager object
+         */
+        public Object getWorldManager() {
+            return new FakeWorldManager();
+        }
+    }
+
+    public static final class FakeWorldManager {
+
+        public FakeOption getLoadedWorld(String worldName) {
+            return new FakeOption(new Object());
+        }
+
+        public FakeOption getWorld(String worldName) {
+            return new FakeOption(new Object());
+        }
+
+        public FakeAttempt unloadWorld(Object options) {
+            return new FakeAttempt(true);
+        }
+
+        public FakeAttempt regenWorld(Object options) {
+            return new FakeAttempt(true);
+        }
+
+        public FakeAttempt loadWorld(Object options) {
+            return new FakeAttempt(true);
+        }
+    }
+
+    public static final class FakeOption {
+
+        private final Object value;
+
+        private FakeOption(Object value) {
+            this.value = value;
+        }
+
+        public Object getOrNull() {
+            return this.value;
+        }
+    }
+
+    public static final class FakeAttempt {
+
+        private final boolean success;
+
+        private FakeAttempt(boolean success) {
+            this.success = success;
+        }
+
+        public boolean isSuccess() {
+            return this.success;
+        }
     }
 }
