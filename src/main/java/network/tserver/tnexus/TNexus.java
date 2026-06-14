@@ -4,6 +4,7 @@ import java.util.logging.Logger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import network.tserver.tnexus.command.CommandManager;
@@ -358,6 +359,55 @@ public class TNexus extends JavaPlugin {
     }
 
     /**
+     * Reloads configuration-backed services, including the database pool and resource-world manager.
+     *
+     * @return completion future containing {@code true} when reload succeeds
+     */
+    public CompletableFuture<Boolean> reloadPlugin() {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        suspendResourceWorldServices();
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                if (this.databaseManager == null) {
+                    future.complete(false);
+                    return;
+                }
+                if (!this.databaseManager.drainAsyncTasks(10L, TimeUnit.SECONDS)) {
+                    getLogger().warning("Timed out while draining async database tasks for reload.");
+                    restoreResourceWorldServices();
+                    future.complete(false);
+                    return;
+                }
+
+                this.databaseManager.shutdown();
+                runSync(() -> {
+                    this.configManager.reload();
+                    this.messageConfig.reload();
+                }).get(10L, TimeUnit.SECONDS);
+
+                if (!this.databaseManager.initialize()) {
+                    future.complete(false);
+                    return;
+                }
+
+                runSync(this::initializeResourceWorldManager).get(10L, TimeUnit.SECONDS);
+                future.complete(true);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                getLogger().log(Level.SEVERE, "Interrupted while reloading T-Nexus.", exception);
+                future.complete(false);
+            } catch (ExecutionException | TimeoutException exception) {
+                getLogger().log(Level.SEVERE, "Failed to reload T-Nexus.", exception);
+                future.complete(false);
+            } catch (RuntimeException exception) {
+                getLogger().log(Level.SEVERE, "Failed to reload T-Nexus.", exception);
+                future.complete(false);
+            }
+        });
+        return future;
+    }
+
+    /**
      * Creates the plugin hook manager used during startup.
      *
      * @return plugin hook manager
@@ -471,6 +521,12 @@ public class TNexus extends JavaPlugin {
      * Initializes the resource world manager after database and hook startup.
      */
     protected void initializeResourceWorldManager() {
+        if (this.resetScheduler != null) {
+            this.resetScheduler.cancelAll();
+            this.resetScheduler = null;
+        }
+        this.resourceWorldManager = null;
+
         MultiverseWorldService multiverseWorldService = this.pluginHookManager.getApi(MultiverseWorldService.class);
         if (multiverseWorldService == null) {
             throw new IllegalStateException("Multiverse world service is not available");
@@ -532,5 +588,41 @@ public class TNexus extends JavaPlugin {
         } catch (ExecutionException | TimeoutException exception) {
             getLogger().log(Level.SEVERE, "Failed to flush player stats during shutdown.", exception);
         }
+    }
+
+    private void suspendResourceWorldServices() {
+        if (this.resetScheduler != null) {
+            this.resetScheduler.cancelAll();
+        }
+        if (this.resourceWorldManager != null) {
+            this.resourceWorldManager.onDisable();
+        }
+    }
+
+    private void restoreResourceWorldServices() {
+        if (this.pluginHookManager == null) {
+            return;
+        }
+        try {
+            runSync(this::initializeResourceWorldManager).get(10L, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            getLogger().log(Level.SEVERE, "Interrupted while restoring resource world services.", exception);
+        } catch (ExecutionException | TimeoutException exception) {
+            getLogger().log(Level.SEVERE, "Failed to restore resource world services.", exception);
+        }
+    }
+
+    private CompletableFuture<Void> runSync(Runnable runnable) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        getServer().getScheduler().runTask(this, () -> {
+            try {
+                runnable.run();
+                future.complete(null);
+            } catch (RuntimeException exception) {
+                future.completeExceptionally(exception);
+            }
+        });
+        return future;
     }
 }

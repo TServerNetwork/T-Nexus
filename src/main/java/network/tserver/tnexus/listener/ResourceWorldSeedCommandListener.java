@@ -16,7 +16,6 @@ public final class ResourceWorldSeedCommandListener implements Listener {
     private static final String ADMIN_PERMISSION = "tnexus.admin";
 
     private final TNexus plugin;
-    private final ResourceWorldManager resourceWorldManager;
 
     /**
      * Creates and registers the resource-world seed command listener.
@@ -25,7 +24,6 @@ public final class ResourceWorldSeedCommandListener implements Listener {
      */
     public ResourceWorldSeedCommandListener(TNexus plugin) {
         this.plugin = plugin;
-        this.resourceWorldManager = plugin.getResourceWorldManager();
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -36,12 +34,13 @@ public final class ResourceWorldSeedCommandListener implements Listener {
         }
 
         World world = event.getPlayer().getWorld();
-        if (!this.resourceWorldManager.isResourceWorld(world.getName())) {
+        ResourceWorldManager resourceWorldManager = getResourceWorldManager();
+        if (!resourceWorldManager.isResourceWorld(world.getName())) {
             return;
         }
 
         event.setCancelled(true);
-        long displayedSeed = shouldShowRealSeed(event) ? world.getSeed() : this.resourceWorldManager.obfuscateSeed(world.getSeed());
+        long displayedSeed = shouldShowRealSeed(event) ? world.getSeed() : resourceWorldManager.obfuscateSeed(world.getSeed());
         event.getPlayer().sendMessage(this.plugin.getMessageConfig().getMessage("resource-world.seed-value", displayedSeed));
     }
 
@@ -52,7 +51,11 @@ public final class ResourceWorldSeedCommandListener implements Listener {
     }
 
     private boolean shouldShowRealSeed(PlayerCommandPreprocessEvent event) {
-        return this.resourceWorldManager.shouldShowRealSeedToAdmin()
+        return getResourceWorldManager().shouldShowRealSeedToAdmin()
                 && (event.getPlayer().isOp() || event.getPlayer().hasPermission(ADMIN_PERMISSION));
+    }
+
+    private ResourceWorldManager getResourceWorldManager() {
+        return this.plugin.getResourceWorldManager();
     }
 }

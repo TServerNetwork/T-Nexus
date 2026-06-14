@@ -2,6 +2,7 @@ package network.tserver.tnexus.command.subcommand;
 
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.command.BaseCommand;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 
 /**
@@ -37,9 +38,13 @@ public final class ReloadCommand extends BaseCommand {
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
-        getPlugin().getConfigManager().reload();
-        getPlugin().getMessageConfig().reload();
-        getPlugin().getMessageConfig().sendMessage(sender, "general.reload-success");
+        getPlugin().reloadPlugin().whenComplete((reloaded, throwable) -> Bukkit.getScheduler().runTask(getPlugin(), () -> {
+            if (throwable != null || !Boolean.TRUE.equals(reloaded)) {
+                getPlugin().getMessageConfig().sendMessage(sender, "general.reload-failed");
+                return;
+            }
+            getPlugin().getMessageConfig().sendMessage(sender, "general.reload-success");
+        }));
         return true;
     }
 }

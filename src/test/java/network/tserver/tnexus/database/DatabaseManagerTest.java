@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import org.bukkit.Bukkit;
@@ -170,6 +171,29 @@ class DatabaseManagerTest {
 
         assertFalse(this.databaseManager.isInitialized());
         assertThrows(SQLException.class, () -> this.databaseManager.getConnection());
+    }
+
+    @Test
+    void shouldDrainInFlightAsyncQueriesBeforeReload() throws Exception {
+        TNexus plugin = loadPlugin();
+        this.databaseManager = createH2DatabaseManager(plugin, "database_drain");
+        assertTrue(this.databaseManager.initialize());
+
+        AtomicBoolean queryFinished = new AtomicBoolean(false);
+        var queryFuture = this.databaseManager.queryAsync(() -> {
+            try {
+                Thread.sleep(150L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            }
+            queryFinished.set(true);
+            return 1;
+        });
+
+        assertTrue(this.databaseManager.drainAsyncTasks(5L, TimeUnit.SECONDS));
+        assertTrue(queryFinished.get());
+        assertEquals(1, queryFuture.get(5L, TimeUnit.SECONDS));
     }
 
     @Test

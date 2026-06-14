@@ -29,7 +29,6 @@ public final class ResourceWorldCommand {
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
 
     private final TNexus plugin;
-    private final ResourceWorldManager manager;
 
     /**
      * Creates a new resource-world command handler.
@@ -38,7 +37,7 @@ public final class ResourceWorldCommand {
      */
     public ResourceWorldCommand(TNexus plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.manager = Objects.requireNonNull(plugin.getResourceWorldManager(), "resourceWorldManager");
+        Objects.requireNonNull(plugin.getResourceWorldManager(), "resourceWorldManager");
     }
 
     /**
@@ -106,7 +105,7 @@ public final class ResourceWorldCommand {
     }
 
     private void showList(CommandSender sender) {
-        List<ConfigManager.ResourceWorldDefinition> worlds = this.manager.getSettings().worlds();
+        List<ConfigManager.ResourceWorldDefinition> worlds = getManager().getSettings().worlds();
         CompletableFuture<?>[] futures = worlds.stream()
                 .map(world -> loadSnapshot(world.name(), world))
                 .toArray(CompletableFuture[]::new);
@@ -142,14 +141,14 @@ public final class ResourceWorldCommand {
     }
 
     private void showInfo(CommandSender sender, String worldName) {
-        ConfigManager.ResourceWorldDefinition definition = this.manager.getWorldDefinition(worldName).orElse(null);
+        ConfigManager.ResourceWorldDefinition definition = getManager().getWorldDefinition(worldName).orElse(null);
         if (definition == null) {
             this.plugin.getMessageConfig().sendMessage(sender, "general.unknown-command");
             return;
         }
 
         loadSnapshot(worldName, definition)
-                .thenCompose(snapshot -> this.manager.getLastCompletedResetTime(worldName)
+                .thenCompose(snapshot -> getManager().getLastCompletedResetTime(worldName)
                         .thenApply(lastCompleted -> new ResourceWorldInfoView(snapshot, lastCompleted.orElse(null), definition)))
                 .thenAccept(view -> runSync(() -> {
                     sendRaw(sender, this.plugin.getMessageConfig().getMessage("resource.command.info.header"));
@@ -196,7 +195,7 @@ public final class ResourceWorldCommand {
     }
 
     private void showAdminStatus(CommandSender sender) {
-        List<ConfigManager.ResourceWorldDefinition> worlds = this.manager.getSettings().worlds();
+        List<ConfigManager.ResourceWorldDefinition> worlds = getManager().getSettings().worlds();
         CompletableFuture<?>[] futures = worlds.stream()
                 .map(world -> loadSnapshot(world.name(), world))
                 .toArray(CompletableFuture[]::new);
@@ -230,11 +229,11 @@ public final class ResourceWorldCommand {
             String worldName,
             ConfigManager.ResourceWorldDefinition definition) {
         CompletableFuture<Optional<ResourceWorldResetRepository.ResourceWorldResetEntry>> latestEntryFuture =
-                this.manager.getLatestResetEntry(worldName);
-        CompletableFuture<Optional<LocalDateTime>> nextResetFuture = this.manager.getNextResetTime(worldName);
+                getManager().getLatestResetEntry(worldName);
+        CompletableFuture<Optional<LocalDateTime>> nextResetFuture = getManager().getNextResetTime(worldName);
         return latestEntryFuture.thenCombine(nextResetFuture, (latestEntry, nextReset) -> {
             ResourceWorldResetRepository.ResourceWorldResetEntry entry = latestEntry.orElse(null);
-            boolean resetting = this.manager.isResetting(worldName)
+            boolean resetting = getManager().isResetting(worldName)
                     || (entry != null && entry.status() == ResourceWorldResetRepository.ResetStatus.IN_PROGRESS);
             LocalDateTime fallbackNextReset = calculateNextReset(definition, LocalDateTime.now());
             LocalDateTime resolvedNextReset = nextReset.orElseGet(() -> {
@@ -249,8 +248,8 @@ public final class ResourceWorldCommand {
             String statusName = resolveStatusName(entry, resetting);
             return new ResourceWorldSnapshot(
                     worldName,
-                    this.manager.getDisplayName(worldName),
-                    this.manager.getDimensionDisplayName(definition.dimension()),
+                    getManager().getDisplayName(worldName),
+                    getManager().getDimensionDisplayName(definition.dimension()),
                     resetting,
                     resolvedNextReset,
                     progress,
@@ -293,7 +292,7 @@ public final class ResourceWorldCommand {
         }
         long secondsRemaining = Math.max(0L, Duration.between(LocalDateTime.now(), nextResetAt).getSeconds());
         String color = secondsRemaining < 86400L ? "&e" : "&a";
-        return color + "残り" + this.manager.formatCountdown(secondsRemaining);
+        return color + "残り" + getManager().formatCountdown(secondsRemaining);
     }
 
     private LocalDateTime calculateNextReset(
@@ -307,9 +306,13 @@ public final class ResourceWorldCommand {
     }
 
     private List<String> resourceWorldNames() {
-        return this.manager.getSettings().worlds().stream()
+        return getManager().getSettings().worlds().stream()
                 .map(ConfigManager.ResourceWorldDefinition::name)
                 .toList();
+    }
+
+    private ResourceWorldManager getManager() {
+        return Objects.requireNonNull(this.plugin.getResourceWorldManager(), "resourceWorldManager");
     }
 
     private String resolveWorldName(String candidate) {

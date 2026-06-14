@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -23,7 +24,10 @@ public class DatabaseManager {
     private final ConfigManager configManager;
     private final Logger logger;
     private final MigrationManager migrationManager;
+    private final Object asyncTaskMonitor;
     private HikariDataSource dataSource;
+    private int activeAsyncTaskCount;
+    private boolean acceptingAsyncTasks;
 
     /**
      * Creates a new database manager.
@@ -52,6 +56,8 @@ public class DatabaseManager {
         this.migrationManager = migrationManager == null
                 ? new MigrationManager(plugin, this::getConnection, configManager)
                 : migrationManager;
+        this.asyncTaskMonitor = new Object();
+        this.acceptingAsyncTasks = true;
     }
 
     /**
@@ -71,6 +77,9 @@ public class DatabaseManager {
                 // Force a real connection early so startup failures are logged immediately.
             }
             this.migrationManager.migrate();
+            synchronized (this.asyncTaskMonitor) {
+                this.acceptingAsyncTasks = true;
+            }
             return true;
         } catch (Exception exception) {
             this.logger.log(Level.SEVERE, "Failed to initialize the database connection pool.", exception);
@@ -83,6 +92,9 @@ public class DatabaseManager {
      * Closes the data source if it is active.
      */
     public synchronized void shutdown() {
+        synchronized (this.asyncTaskMonitor) {
+            this.acceptingAsyncTasks = false;
+        }
         if (this.dataSource != null) {
             this.dataSource.close();
             this.dataSource = null;
@@ -135,11 +147,20 @@ public class DatabaseManager {
      */
     public <T> CompletableFuture<T> queryAsync(Supplier<T> supplier) {
         CompletableFuture<T> future = new CompletableFuture<>();
+        synchronized (this.asyncTaskMonitor) {
+            if (!this.acceptingAsyncTasks) {
+                future.completeExceptionally(new IllegalStateException("Database async tasks are temporarily paused."));
+                return future;
+            }
+            this.activeAsyncTaskCount++;
+        }
         executeAsync(() -> {
             try {
                 future.complete(supplier.get());
             } catch (Exception exception) {
                 future.completeExceptionally(exception);
+            } finally {
+                finishAsyncTask();
             }
         });
         return future;
@@ -172,12 +193,51 @@ public class DatabaseManager {
     }
 
     /**
+     * Prevents new async database work and waits for active async tasks to finish.
+     *
+     * @param timeout maximum time to wait
+     * @param unit timeout unit
+     * @return {@code true} when all active async tasks completed before the timeout
+     */
+    public boolean drainAsyncTasks(long timeout, TimeUnit unit) {
+        long timeoutMillis = unit.toMillis(timeout);
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        synchronized (this.asyncTaskMonitor) {
+            this.acceptingAsyncTasks = false;
+            while (this.activeAsyncTaskCount > 0) {
+                long waitMillis = deadline - System.currentTimeMillis();
+                if (waitMillis <= 0L) {
+                    this.acceptingAsyncTasks = true;
+                    return false;
+                }
+                try {
+                    this.asyncTaskMonitor.wait(waitMillis);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    this.acceptingAsyncTasks = true;
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    /**
      * Returns the configured table prefix.
      *
      * @return table prefix
      */
     public String getTablePrefix() {
         return this.configManager.getDatabaseSettings().tablePrefix();
+    }
+
+    private void finishAsyncTask() {
+        synchronized (this.asyncTaskMonitor) {
+            this.activeAsyncTaskCount = Math.max(0, this.activeAsyncTaskCount - 1);
+            if (this.activeAsyncTaskCount == 0) {
+                this.asyncTaskMonitor.notifyAll();
+            }
+        }
     }
 
     private HikariConfig createHikariConfig(ConfigManager.DatabaseSettings settings) {
