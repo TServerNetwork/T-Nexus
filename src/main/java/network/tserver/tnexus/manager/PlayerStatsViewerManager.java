@@ -31,6 +31,7 @@ import network.tserver.tnexus.database.repository.PlayerStatsViewRepository.RawP
 import network.tserver.tnexus.database.repository.TransactionRepository.TransactionType;
 import network.tserver.tnexus.gui.player.PlayerStatsCategoryGui;
 import network.tserver.tnexus.gui.player.PlayerStatsCombatDetailGui;
+import network.tserver.tnexus.gui.player.PlayerStatsCraftDetailGui;
 import network.tserver.tnexus.gui.player.PlayerStatsItemDetailGui;
 import network.tserver.tnexus.gui.player.PlayerStatsMainGui;
 import network.tserver.tnexus.util.CurrencyFormatter;
@@ -202,6 +203,37 @@ public final class PlayerStatsViewerManager {
     }
 
     /**
+     * Opens the per-material craft detail GUI for the viewer and target.
+     *
+     * @param viewer viewing player
+     * @param target target player
+     * @param periodFilter active period filter
+     * @param sortOrder active sort order
+     */
+    public void openCraftDetailGui(
+            Player viewer,
+            OfflinePlayer target,
+            StatsPeriodFilter periodFilter,
+            StatsSortOrder sortOrder) {
+        Objects.requireNonNull(viewer, "viewer");
+        Objects.requireNonNull(target, "target");
+        loadSnapshot(viewer.getUniqueId(), target, periodFilter)
+                .whenComplete((snapshot, throwable) -> Bukkit.getScheduler().runTask(this.plugin, () -> {
+                    if (throwable != null) {
+                        this.plugin.getMessageConfig().sendMessage(viewer, "stats.command.load-failed");
+                        return;
+                    }
+                    new PlayerStatsCraftDetailGui(
+                            this.plugin,
+                            this,
+                            viewer,
+                            Objects.requireNonNull(snapshot, "snapshot"),
+                            periodFilter,
+                            sortOrder).open();
+                }));
+    }
+
+    /**
      * Loads a formatted snapshot for the target.
      *
      * @param viewerId viewer UUID used for favorites
@@ -311,6 +343,7 @@ public final class PlayerStatsViewerManager {
             double currentBalance) {
         EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory = new EnumMap<>(StatsCategory.class);
         EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries = new EnumMap<>(CombatDetailType.class);
+        List<StatsEntry> craftDetailEntries = new ArrayList<>();
         List<StatsEntry> itemDetailEntries = new ArrayList<>();
         for (StatsCategory category : StatsCategory.values()) {
             entriesByCategory.put(category, new ArrayList<>());
@@ -328,6 +361,7 @@ public final class PlayerStatsViewerManager {
                 rawData.entityDamageStats(),
                 rawData.killStats());
         addActivityEntries(entriesByCategory.get(StatsCategory.ACTIVITY), rawData);
+        craftDetailEntries.addAll(createCraftDetailEntries(rawData.craftStats()));
         itemDetailEntries.addAll(createItemDetailEntries(rawData.itemStats()));
 
         return new PlayerStatsSnapshot(
@@ -337,6 +371,7 @@ public final class PlayerStatsViewerManager {
                 periodFilter,
                 entriesByCategory,
                 combatDetailEntries,
+                craftDetailEntries,
                 itemDetailEntries,
                 rawData.favorites());
     }
@@ -771,6 +806,24 @@ public final class PlayerStatsViewerManager {
         return List.copyOf(entries);
     }
 
+    private List<StatsEntry> createCraftDetailEntries(Map<String, Integer> craftStats) {
+        List<StatsEntry> entries = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : craftStats.entrySet()) {
+            entries.add(new StatsEntry(
+                    "CRAFT:" + entry.getKey(),
+                    StatsCategory.ACTIVITY,
+                    resolveDisplayMaterial(entry.getKey(), Material.CRAFTING_TABLE),
+                    this.plugin.getMessageConfig().getMessage("stats.dynamic.block.name", prettifyKey(entry.getKey())),
+                    formatWholeNumber(entry.getValue()),
+                    List.of(this.plugin.getMessageConfig().getMessage(
+                            "stats.dynamic.activity.crafted",
+                            formatWholeNumber(entry.getValue()))),
+                    entry.getValue(),
+                    null));
+        }
+        return List.copyOf(entries);
+    }
+
     private StatsEntry createFixedEntry(
             String key,
             StatsCategory category,
@@ -1173,6 +1226,7 @@ public final class PlayerStatsViewerManager {
         private final StatsPeriodFilter periodFilter;
         private final EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory;
         private final EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries;
+        private final List<StatsEntry> craftDetailEntries;
         private final List<StatsEntry> itemDetailEntries;
         private final Map<String, StatsEntry> entriesByKey;
         private final Map<Integer, String> favorites;
@@ -1184,6 +1238,7 @@ public final class PlayerStatsViewerManager {
                 StatsPeriodFilter periodFilter,
                 EnumMap<StatsCategory, List<StatsEntry>> entriesByCategory,
                 EnumMap<CombatDetailType, List<StatsEntry>> combatDetailEntries,
+                List<StatsEntry> craftDetailEntries,
                 List<StatsEntry> itemDetailEntries,
                 Map<Integer, String> favorites) {
             this.targetId = targetId;
@@ -1192,6 +1247,7 @@ public final class PlayerStatsViewerManager {
             this.periodFilter = periodFilter;
             this.entriesByCategory = new EnumMap<>(StatsCategory.class);
             this.combatDetailEntries = new EnumMap<>(CombatDetailType.class);
+            this.craftDetailEntries = List.copyOf(craftDetailEntries);
             this.itemDetailEntries = List.copyOf(itemDetailEntries);
             this.entriesByKey = new LinkedHashMap<>();
             for (StatsCategory category : StatsCategory.values()) {
@@ -1207,6 +1263,9 @@ public final class PlayerStatsViewerManager {
                 for (StatsEntry entry : entries) {
                     this.entriesByKey.put(entry.key(), entry);
                 }
+            }
+            for (StatsEntry entry : this.craftDetailEntries) {
+                this.entriesByKey.put(entry.key(), entry);
             }
             for (StatsEntry entry : this.itemDetailEntries) {
                 this.entriesByKey.put(entry.key(), entry);
@@ -1296,6 +1355,18 @@ public final class PlayerStatsViewerManager {
          */
         public List<StatsEntry> getSortedItemDetailEntries(StatsSortOrder sortOrder) {
             return this.itemDetailEntries.stream()
+                    .sorted(createComparator(sortOrder))
+                    .toList();
+        }
+
+        /**
+         * Returns the craft detail entries sorted by the requested sort order.
+         *
+         * @param sortOrder sort order
+         * @return sorted craft detail entries
+         */
+        public List<StatsEntry> getSortedCraftDetailEntries(StatsSortOrder sortOrder) {
+            return this.craftDetailEntries.stream()
                     .sorted(createComparator(sortOrder))
                     .toList();
         }

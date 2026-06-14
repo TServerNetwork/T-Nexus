@@ -269,6 +269,31 @@ class PlayerStatsViewerManagerTest {
     }
 
     @Test
+    void shouldExposePerMaterialCraftBreakdownEntries() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        List<PlayerStatsViewerManager.StatsEntry> craftEntries = snapshot.getSortedCraftDetailEntries(
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+
+        assertTrue(craftEntries.stream().anyMatch(entry -> entry.key().equals("CRAFT:CRAFTING_TABLE")));
+        PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("CRAFT:CRAFTING_TABLE");
+        assertNotNull(entry);
+        assertEquals("2", entry.valueText());
+    }
+
+    @Test
     void shouldFallbackWhenBlockStatsContainNonItemMaterial() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);

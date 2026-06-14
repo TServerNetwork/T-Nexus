@@ -359,6 +359,7 @@ stats:
       total-volume: "&e累計取引量"
     activity:
       craft-total: "&eクラフト回数"
+      craft-breakdown: "&eクラフト詳細"
       smelt-total: "&e精錬回数"
       brew-total: "&e醸造回数"
       enchant-total: "&eエンチャント回数"
@@ -383,6 +384,8 @@ stats:
       kills: "&7討伐数: &f{0}"
       damage-dealt: "&7与ダメージ量: &f{0}"
       damage-taken: "&7被ダメージ量: &f{0}"
+    activity:
+      crafted: "&7クラフト: &f{0}個"
   environment:
     fall: "落下"
     lava: "マグマ"
