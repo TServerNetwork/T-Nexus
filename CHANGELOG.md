@@ -1,3 +1,10 @@
+# [0.40.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.39.0...v0.40.0) (2026-06-14)
+
+
+### Features
+
+* **world:** block teleports during resource resets ([#106](https://github.com/TServerNetwork/T-Nexus/issues/106)) ([a623784](https://github.com/TServerNetwork/T-Nexus/commit/a623784ab7e9d29ae7a5396151a5a9d846ad34b5))
+
 # [0.39.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.38.0...v0.39.0) (2026-06-14)
 
 
