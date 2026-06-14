@@ -1,3 +1,10 @@
+## [0.41.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.0...v0.41.1) (2026-06-14)
+
+
+### Bug Fixes
+
+* **hook:** update MultiverseHook for Multiverse-Core 5.x API compatibility ([30f601c](https://github.com/TServerNetwork/T-Nexus/commit/30f601c4bb1452a1f79906820ace1bc12d3db395))
+
 # [0.41.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.40.0...v0.41.0) (2026-06-14)
 
 
