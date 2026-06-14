@@ -1,3 +1,10 @@
+## [0.41.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.1...v0.41.2) (2026-06-14)
+
+
+### Bug Fixes
+
+* **command:** reload database and resource services ([#119](https://github.com/TServerNetwork/T-Nexus/issues/119)) ([266505e](https://github.com/TServerNetwork/T-Nexus/commit/266505e65df1baaff7f5953ae224ce9d464bfaa1))
+
 ## [0.41.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.0...v0.41.1) (2026-06-14)
 
 
