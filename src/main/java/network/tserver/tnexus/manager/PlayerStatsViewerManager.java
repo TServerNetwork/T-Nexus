@@ -248,13 +248,24 @@ public final class PlayerStatsViewerManager {
         Objects.requireNonNull(viewerId, "viewerId");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(periodFilter, "periodFilter");
+        return this.plugin.getPlayerStatsManager()
+                .flushPendingStats()
+                .thenCompose(ignored -> loadPersistedSnapshot(viewerId, target, periodFilter));
+    }
+
+    private CompletableFuture<PlayerStatsSnapshot> loadPersistedSnapshot(
+            UUID viewerId,
+            OfflinePlayer target,
+            StatsPeriodFilter periodFilter) {
         LocalDate periodStartDate = resolvePeriodStartDate(periodFilter);
         Instant periodStartInstant = resolvePeriodStartInstant(periodStartDate);
         CompletableFuture<RawPlayerStatsData> statsFuture =
                 this.repository.loadSnapshot(viewerId, target.getUniqueId(), periodStartDate, periodStartInstant);
         CompletableFuture<Double> balanceFuture =
                 this.plugin.getEconomyManager().getBalance(target.getUniqueId());
-        return statsFuture.thenCombine(balanceFuture, (stats, balance) -> buildSnapshot(target, periodFilter, stats, balance));
+        return statsFuture.thenCombine(
+                balanceFuture,
+                (stats, balance) -> buildSnapshot(target, periodFilter, stats, balance));
     }
 
     /**

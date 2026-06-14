@@ -908,6 +908,23 @@ public class PlayerStatsManager {
     }
 
     /**
+     * Flushes all pending stats snapshots to the database.
+     *
+     * @return completion future
+     */
+    public CompletableFuture<Void> flushPendingStats() {
+        return CompletableFuture.allOf(
+                flushPendingDistanceStats(),
+                flushPendingBlockStats(),
+                flushPendingEntityDamageStats(),
+                flushPendingKillStats(),
+                flushPendingCraftStats(),
+                flushPendingProcessingStats(),
+                flushPendingFarmingStats(),
+                flushPendingItemStats());
+    }
+
+    /**
      * Flushes all in-memory statistics and stops the scheduled distance flush task.
      *
      * @param onlinePlayers currently online players
@@ -921,14 +938,7 @@ public class PlayerStatsManager {
         this.shutdownInProgress = true;
         return CompletableFuture.allOf(
                 flushOnlineSessions(onlinePlayers),
-                flushPendingDistanceStats(),
-                flushPendingBlockStats(),
-                flushPendingEntityDamageStats(),
-                flushPendingKillStats(),
-                flushPendingCraftStats(),
-                flushPendingProcessingStats(),
-                flushPendingFarmingStats(),
-                flushPendingItemStats());
+                flushPendingStats());
     }
 
     /**
@@ -1182,15 +1192,7 @@ public class PlayerStatsManager {
     }
 
     private void flushPendingStatsSafely() {
-        CompletableFuture.allOf(
-                        flushPendingDistanceStats(),
-                        flushPendingBlockStats(),
-                        flushPendingEntityDamageStats(),
-                        flushPendingKillStats(),
-                        flushPendingCraftStats(),
-                        flushPendingProcessingStats(),
-                        flushPendingFarmingStats(),
-                        flushPendingItemStats())
+        flushPendingStats()
                 .exceptionally(throwable -> {
             this.plugin.getLogger().log(
                     java.util.logging.Level.SEVERE,

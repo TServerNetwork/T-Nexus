@@ -315,6 +315,28 @@ class PlayerStatsViewerManagerTest {
         assertEquals(Material.STONE, entry.material());
     }
 
+    @Test
+    void shouldFlushPendingStatsBeforeLoadingSnapshot() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        plugin.getPlayerStatsManager().recordBlockPlacement(target, Material.DIAMOND_BLOCK);
+        plugin.getPlayerStatsManager().recordItemPickup(target, Material.EMERALD, 5);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        assertNotNull(snapshot.getEntry("BLOCK:DIAMOND_BLOCK"));
+        assertNotNull(snapshot.getEntry("ITEM:EMERALD"));
+    }
+
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {
         PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
         repository.ensurePlayerExists(target.getUniqueId(), Instant.parse("2026-06-01T00:00:00Z")).get(5, TimeUnit.SECONDS);
