@@ -1,5 +1,6 @@
 package network.tserver.tnexus.manager;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileVisitResult;
@@ -13,6 +14,8 @@ import java.util.Objects;
 import java.security.SecureRandom;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
@@ -135,7 +138,20 @@ public class ResourceWorldFileManager {
     }
 
     private Path getWorldFolder(String worldName) {
-        return this.plugin.getServer().getWorldContainer().toPath().resolve(worldName);
+        return resolveWorldFolder(worldName).toPath();
+    }
+
+    private File resolveWorldFolder(String worldName) {
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            throw new IllegalStateException("World not loaded: " + worldName);
+        }
+
+        File worldFolder = world.getWorldFolder();
+        if (!worldFolder.exists()) {
+            throw new IllegalStateException("World folder does not exist: " + worldFolder.getAbsolutePath());
+        }
+        return worldFolder;
     }
 
     @SuppressWarnings("unchecked")

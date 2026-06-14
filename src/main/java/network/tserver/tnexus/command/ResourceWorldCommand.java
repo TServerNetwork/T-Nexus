@@ -77,6 +77,22 @@ public final class ResourceWorldCommand {
                 }
                 showAdminStatus(sender);
             }
+            case "reset" -> {
+                if (!sender.hasPermission(ADMIN_PERMISSION)) {
+                    this.plugin.getMessageConfig().sendMessage(sender, "general.no-permission");
+                    return;
+                }
+                if (args.length != 2) {
+                    this.plugin.getMessageConfig().sendMessage(sender, "general.unknown-command");
+                    return;
+                }
+                String worldName = resolveWorldName(args[1]);
+                if (worldName == null) {
+                    this.plugin.getMessageConfig().sendMessage(sender, "general.unknown-command");
+                    return;
+                }
+                resetWorld(sender, worldName);
+            }
             default -> this.plugin.getMessageConfig().sendMessage(sender, "general.unknown-command");
         }
     }
@@ -94,11 +110,15 @@ public final class ResourceWorldCommand {
             root.addAll(TabCompleterUtil.filter(List.of("info"), args.length == 0 ? "" : args[0]));
             if (sender.hasPermission(ADMIN_PERMISSION)) {
                 root.addAll(TabCompleterUtil.filter(List.of("status"), args.length == 0 ? "" : args[0]));
+                root.addAll(TabCompleterUtil.filter(List.of("reset"), args.length == 0 ? "" : args[0]));
             }
             return root;
         }
 
         if ("info".equalsIgnoreCase(args[0]) && args.length == 2) {
+            return TabCompleterUtil.filter(resourceWorldNames(), args[1]);
+        }
+        if ("reset".equalsIgnoreCase(args[0]) && args.length == 2 && sender.hasPermission(ADMIN_PERMISSION)) {
             return TabCompleterUtil.filter(resourceWorldNames(), args[1]);
         }
         return List.of();
@@ -225,6 +245,20 @@ public final class ResourceWorldCommand {
                 });
     }
 
+    private void resetWorld(CommandSender sender, String worldName) {
+        getManager().executeReset(worldName)
+                .exceptionally(throwable -> {
+                    Throwable rootCause = unwrap(throwable);
+                    runSync(() -> this.plugin.getMessageConfig().sendMessage(
+                            sender,
+                            "resource-world.reset-failed-admin",
+                            worldName,
+                            rootCause.getMessage() == null ? rootCause.toString() : rootCause.getMessage()));
+                    logCommandFailure("Failed to execute /resource reset for " + worldName, rootCause);
+                    return null;
+                });
+    }
+
     private CompletableFuture<ResourceWorldSnapshot> loadSnapshot(
             String worldName,
             ConfigManager.ResourceWorldDefinition definition) {
@@ -341,6 +375,16 @@ public final class ResourceWorldCommand {
 
     private String normalize(String value) {
         return value.toLowerCase(Locale.ROOT);
+    }
+
+    private Throwable unwrap(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null
+                && (current instanceof java.util.concurrent.CompletionException
+                || current instanceof java.util.concurrent.ExecutionException)) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private record ResourceWorldSnapshot(

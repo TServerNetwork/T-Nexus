@@ -806,11 +806,27 @@ class CommandManagerTest {
         assertTrue(statusMessages.get(1).contains("管理ステータス"));
         assertTrue(statusMessages.stream().anyMatch(message -> message.contains("scheduled")));
         assertIterableEquals(
-                List.of("info", "status"),
+                List.of("info", "status", "reset"),
                 invokeTabCompletion(plugin, "onResourceTabComplete", admin, new String[]{""}));
         assertIterableEquals(
                 List.of("resource", "resource_nether", "resource_end"),
                 invokeTabCompletion(plugin, "onResourceTabComplete", admin, new String[]{"info", "resource"}));
+        assertIterableEquals(
+                List.of("resource", "resource_nether", "resource_end"),
+                invokeTabCompletion(plugin, "onResourceTabComplete", admin, new String[]{"reset", "resource"}));
+    }
+
+    @Test
+    void shouldDenyResourceResetWithoutAdminPermission() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock player = this.server.addPlayer("Explorer");
+
+        assertTrue(this.server.dispatchCommand(player, "resource reset resource"));
+        assertEquals(
+                plugin.getMessageConfig().getMessage("prefix")
+                        + plugin.getMessageConfig().getMessage("general.no-permission"),
+                player.nextMessage());
     }
 
     private static final class TestCommand extends Command {
