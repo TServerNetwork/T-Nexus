@@ -1,8 +1,5 @@
 package network.tserver.tnexus.manager;
 
-import com.onarandombox.MultiverseCore.api.MVWorldManager;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -282,45 +279,29 @@ class ResourceWorldManagerTest {
         }
     }
 
-    private MVWorldManager createTrackingWorldManager(TrackingWorldManagerState state) {
-        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
-            case "unloadWorld" -> {
-                state.unloadWorldCall.set((String) args[0]);
-                yield true;
+    private MultiverseWorldService createTrackingWorldManager(TrackingWorldManagerState state) {
+        return new MultiverseWorldService() {
+            @Override
+            public boolean unloadWorld(String worldName) {
+                state.unloadWorldCall.set(worldName);
+                return true;
             }
-            case "loadWorld" -> {
-                state.loadWorldCall.set((String) args[0]);
-                if (this.server.getWorld((String) args[0]) == null) {
-                    this.server.addSimpleWorld((String) args[0]);
-                }
-                yield true;
-            }
-            case "regenWorld" -> {
-                state.regenWorldCall.set(args[0] + "|" + args[3]);
-                yield state.regenShouldSucceed;
-            }
-            case "getMVWorlds", "getUnloadedWorlds", "getPotentialWorlds" -> java.util.List.of();
-            default -> defaultValue(method.getReturnType());
-        };
-        Object proxy = Proxy.newProxyInstance(
-                MVWorldManager.class.getClassLoader(),
-                new Class<?>[]{MVWorldManager.class},
-                handler);
-        assertSame(MVWorldManager.class, proxy.getClass().getInterfaces()[0]);
-        return (MVWorldManager) proxy;
-    }
 
-    private Object defaultValue(Class<?> returnType) {
-        if (returnType == boolean.class) {
-            return false;
-        }
-        if (returnType == int.class) {
-            return 0;
-        }
-        if (returnType == long.class) {
-            return 0L;
-        }
-        return null;
+            @Override
+            public boolean regenerateWorld(String worldName, String seed) {
+                state.regenWorldCall.set(worldName + "|" + seed);
+                return state.regenShouldSucceed;
+            }
+
+            @Override
+            public boolean loadWorld(String worldName) {
+                state.loadWorldCall.set(worldName);
+                if (server.getWorld(worldName) == null) {
+                    server.addSimpleWorld(worldName);
+                }
+                return true;
+            }
+        };
     }
 
     private static final class TrackingWorldManagerState {

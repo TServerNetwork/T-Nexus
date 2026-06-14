@@ -1,6 +1,5 @@
 package network.tserver.tnexus;
 
-import com.onarandombox.MultiverseCore.api.MVWorldManager;
 import java.util.logging.Logger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +21,7 @@ import network.tserver.tnexus.gui.AnvilGuiManager;
 import network.tserver.tnexus.gui.GuiManager;
 import network.tserver.tnexus.manager.AuditLogManager;
 import network.tserver.tnexus.manager.EconomyManager;
+import network.tserver.tnexus.manager.MultiverseWorldService;
 import network.tserver.tnexus.manager.PaymentManager;
 import network.tserver.tnexus.manager.PlayerStatsManager;
 import network.tserver.tnexus.manager.PlayerStatsRankingManager;
@@ -471,15 +471,15 @@ public class TNexus extends JavaPlugin {
      * Initializes the resource world manager after database and hook startup.
      */
     protected void initializeResourceWorldManager() {
-        MVWorldManager mvWorldManager = this.pluginHookManager.getApi(MVWorldManager.class);
-        if (mvWorldManager == null) {
-            throw new IllegalStateException("Multiverse world manager is not available");
+        MultiverseWorldService multiverseWorldService = this.pluginHookManager.getApi(MultiverseWorldService.class);
+        if (multiverseWorldService == null) {
+            throw new IllegalStateException("Multiverse world service is not available");
         }
 
         this.resourceWorldManager = new ResourceWorldManager(
                 this,
                 new ResourceWorldResetRepository(this.databaseManager),
-                mvWorldManager);
+                multiverseWorldService);
         this.resetScheduler = new ResetScheduler(this, this.resourceWorldManager);
         this.resourceWorldManager.onEnable().thenCompose(ignored -> this.resetScheduler.scheduleAll()).exceptionally(exception -> {
             getLogger().log(
