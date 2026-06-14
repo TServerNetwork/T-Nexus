@@ -1,3 +1,10 @@
+# [0.41.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.40.0...v0.41.0) (2026-06-14)
+
+
+### Features
+
+* **player:** implement AFK detection and active time stats ([#113](https://github.com/TServerNetwork/T-Nexus/issues/113)) ([61db448](https://github.com/TServerNetwork/T-Nexus/commit/61db448559e5eec59b7256464b4c5277e5b57b1f))
+
 # [0.40.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.39.0...v0.40.0) (2026-06-14)
 
 
