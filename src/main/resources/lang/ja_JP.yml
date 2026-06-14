@@ -525,5 +525,5 @@ resource-world:
   reset-start: "&c[資源ワールド] &f{0} &cのリセットを開始します。"
   reset-complete: "&a[資源ワールド] &f{0} &aのリセットが完了しました。"
   reset-failed: "&4[資源ワールド] &f{0} &4のリセットに失敗しました。管理者に連絡してください。"
-  tp-blocked: "&c現在 {0} はリセット中です。しばらくお待ちください。"
+  tp-blocked: "&c資源ワールド &f{display_name} ({world}) &cは現在リセット中です。完了するまでお待ちください。"
   reset-failed-admin: "&4[雉・ｺ舌Ρ繝ｼ繝ｫ繝云 &f{0} &4縺ｮ繝ｪ繧ｻ繝・ヨ繧ｨ繝ｩ繝ｼ: &f{1}"
