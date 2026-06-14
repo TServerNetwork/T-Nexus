@@ -68,10 +68,25 @@ public final class PlayerEntityDamageStatsListener implements Listener {
         if (!(event.getEntity() instanceof Player damagedPlayer)) {
             return;
         }
-        if (event.getCause() != EntityDamageEvent.DamageCause.FALL || event.getFinalDamage() <= 0.0D) {
+        if (event instanceof EntityDamageByEntityEvent || event.getFinalDamage() <= 0.0D) {
             return;
         }
-        this.playerStatsManager.recordDamageTaken(damagedPlayer, "FALL", event.getFinalDamage());
+        this.playerStatsManager.recordDamageTaken(
+                damagedPlayer,
+                resolveEnvironmentalCause(event.getCause()),
+                event.getFinalDamage());
+    }
+
+    private String resolveEnvironmentalCause(EntityDamageEvent.DamageCause cause) {
+        return switch (cause) {
+            case FALL -> "FALL";
+            case LAVA -> "LAVA";
+            case FIRE, FIRE_TICK -> "FIRE";
+            case DROWNING -> "DROWNING";
+            case VOID -> "VOID";
+            case STARVATION -> "STARVATION";
+            default -> "OTHER";
+        };
     }
 
     private DamageAttribution resolveAttribution(Entity damager) {

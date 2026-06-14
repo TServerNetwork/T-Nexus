@@ -5,10 +5,8 @@ import java.util.List;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.gui.BaseGui;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager;
-import network.tserver.tnexus.manager.PlayerStatsViewerManager.CombatDetailType;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.FavoriteToggleStatus;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.PlayerStatsSnapshot;
-import network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsCategory;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsEntry;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsPeriodFilter;
 import network.tserver.tnexus.manager.PlayerStatsViewerManager.StatsSortOrder;
@@ -18,16 +16,14 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.SkullMeta;
 
 /**
- * Category detail GUI for player stats entries.
+ * Detail GUI for per-material craft stats.
  */
-public final class PlayerStatsCategoryGui extends BaseGui {
+public final class PlayerStatsCraftDetailGui extends BaseGui {
 
     private static final int ROWS = 6;
-    private static final int CATEGORY_SLOT = 4;
+    private static final int DETAIL_SLOT = 4;
     private static final int FILTER_SLOT = 7;
     private static final int SORT_SLOT = 8;
     private static final int EMPTY_STATE_SLOT = 22;
@@ -36,27 +32,24 @@ public final class PlayerStatsCategoryGui extends BaseGui {
     private final Player viewer;
     private final OfflinePlayer target;
     private final PlayerStatsSnapshot snapshot;
-    private final StatsCategory category;
     private final StatsPeriodFilter periodFilter;
     private final StatsSortOrder sortOrder;
 
     /**
-     * Creates a new category GUI.
+     * Creates a new craft detail GUI.
      *
      * @param plugin plugin instance
      * @param statsViewerManager stats manager
      * @param viewer viewer
      * @param snapshot loaded snapshot
-     * @param category category
      * @param periodFilter active period filter
      * @param sortOrder active sort order
      */
-    public PlayerStatsCategoryGui(
+    public PlayerStatsCraftDetailGui(
             TNexus plugin,
             PlayerStatsViewerManager statsViewerManager,
             Player viewer,
             PlayerStatsSnapshot snapshot,
-            StatsCategory category,
             StatsPeriodFilter periodFilter,
             StatsSortOrder sortOrder) {
         super(
@@ -65,39 +58,43 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                 plugin.getMessageConfig().getMessage(
                         "stats.gui.category.title",
                         snapshot.targetName(),
-                        statsViewerManager.getCategoryLabel(category)),
+                        plugin.getMessageConfig().getMessage("stats.labels.activity.craft-breakdown")),
                 ROWS);
         this.statsViewerManager = statsViewerManager;
         this.viewer = viewer;
         this.target = Bukkit.getOfflinePlayer(snapshot.targetId());
         this.snapshot = snapshot;
-        this.category = category;
         this.periodFilter = periodFilter;
         this.sortOrder = sortOrder;
     }
 
     @Override
     protected void buildContent() {
-        setBackHandler(event -> this.statsViewerManager.openMainGui(
+        setBackHandler(event -> this.statsViewerManager.openCategoryGui(
                 this.viewer,
                 this.target,
+                PlayerStatsViewerManager.StatsCategory.ACTIVITY,
                 this.periodFilter,
                 this.sortOrder));
-        setItem(CATEGORY_SLOT, createCategoryIcon(), null);
-        setItem(FILTER_SLOT, createFilterItem(), event -> this.statsViewerManager.openCategoryGui(
+        setItem(
+                DETAIL_SLOT,
+                createItem(
+                        Material.CRAFTING_TABLE,
+                        getPlugin().getMessageConfig().getMessage("stats.labels.activity.craft-breakdown"),
+                        List.of(getPlugin().getMessageConfig().getMessage("stats.gui.category.icon.lore"))),
+                null);
+        setItem(FILTER_SLOT, createFilterItem(), event -> this.statsViewerManager.openCraftDetailGui(
                 this.viewer,
                 this.target,
-                this.category,
                 this.periodFilter.next(),
                 this.sortOrder));
-        setItem(SORT_SLOT, createSortItem(), event -> this.statsViewerManager.openCategoryGui(
+        setItem(SORT_SLOT, createSortItem(), event -> this.statsViewerManager.openCraftDetailGui(
                 this.viewer,
                 this.target,
-                this.category,
                 this.periodFilter,
                 this.sortOrder.next()));
 
-        List<StatsEntry> entries = this.snapshot.getSortedEntries(this.category, this.sortOrder);
+        List<StatsEntry> entries = this.snapshot.getSortedCraftDetailEntries(this.sortOrder);
         if (entries.isEmpty()) {
             setItem(
                     EMPTY_STATE_SLOT,
@@ -113,35 +110,6 @@ public final class PlayerStatsCategoryGui extends BaseGui {
             addPaginatedItem(createEntryItem(entry), event -> {
                 if (event.getClick() == ClickType.RIGHT) {
                     toggleFavorite(entry);
-                    return;
-                }
-                if (this.category == StatsCategory.COMBAT) {
-                    CombatDetailType detailType = this.statsViewerManager.resolveCombatDetailType(entry.key());
-                    if (detailType != null) {
-                        this.statsViewerManager.openCombatDetailGui(
-                                this.viewer,
-                                this.target,
-                                detailType,
-                                this.periodFilter,
-                                this.sortOrder);
-                    }
-                    return;
-                }
-                if (this.category == StatsCategory.ACTIVITY && "ACTIVITY_CRAFT_TOTAL".equals(entry.key())) {
-                    this.statsViewerManager.openCraftDetailGui(
-                            this.viewer,
-                            this.target,
-                            this.periodFilter,
-                            this.sortOrder);
-                    return;
-                }
-                if (this.category == StatsCategory.ACTIVITY
-                        && "ACTIVITY_ITEM_TOTAL".equals(entry.key())) {
-                    this.statsViewerManager.openItemDetailGui(
-                            this.viewer,
-                            this.target,
-                            this.periodFilter,
-                            this.sortOrder);
                 }
             });
         }
@@ -171,13 +139,6 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                 }));
     }
 
-    private org.bukkit.inventory.ItemStack createCategoryIcon() {
-        return createItem(
-                this.category.icon(),
-                this.statsViewerManager.getCategoryLabel(this.category),
-                List.of(getPlugin().getMessageConfig().getMessage("stats.gui.category.icon.lore")));
-    }
-
     private org.bukkit.inventory.ItemStack createFilterItem() {
         return createItem(
                 Material.CLOCK,
@@ -202,7 +163,7 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                         getPlugin().getMessageConfig().getMessage("stats.gui.main.sort.hint")));
     }
 
-    private ItemStack createEntryItem(StatsEntry entry) {
+    private org.bukkit.inventory.ItemStack createEntryItem(StatsEntry entry) {
         List<String> lore = new ArrayList<>();
         if (this.snapshot.getFavorites().containsValue(entry.key())) {
             lore.add(getPlugin().getMessageConfig().getMessage("stats.gui.entry.pinned"));
@@ -216,19 +177,6 @@ public final class PlayerStatsCategoryGui extends BaseGui {
                 this.statsViewerManager.getPeriodLabel(this.periodFilter)));
         lore.add(getPlugin().getMessageConfig().getMessage("stats.gui.entry.separator"));
         lore.add(getPlugin().getMessageConfig().getMessage("stats.gui.entry.favorite-hint"));
-        if (entry.material() == Material.PLAYER_HEAD && entry.playerHeadId() != null) {
-            ItemStack item = new ItemStack(Material.PLAYER_HEAD);
-            SkullMeta meta = (SkullMeta) item.getItemMeta();
-            if (meta == null) {
-                return item;
-            }
-            meta.setOwningPlayer(getPlugin().getServer().getOfflinePlayer(entry.playerHeadId()));
-            meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&', entry.displayName()));
-            meta.setLore(lore.stream().map(line ->
-                    org.bukkit.ChatColor.translateAlternateColorCodes('&', line)).toList());
-            item.setItemMeta(meta);
-            return item;
-        }
         return createItem(entry.material(), entry.displayName(), lore);
     }
 }

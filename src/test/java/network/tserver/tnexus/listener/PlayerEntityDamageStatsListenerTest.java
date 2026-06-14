@@ -143,6 +143,30 @@ class PlayerEntityDamageStatsListenerTest {
         assertEquals(6.5D, readEntityDamage(plugin, victim, "FALL", "damage_taken"));
     }
 
+    @Test
+    void shouldGroupEnvironmentalDamageCauses() throws Exception {
+        TNexus plugin = loadPlugin();
+        PlayerMock victim = this.server.addPlayer("EnvVictim");
+
+        this.server.getPluginManager().callEvent(new EntityDamageEvent(
+                victim,
+                EntityDamageEvent.DamageCause.FIRE_TICK,
+                2.5D));
+        this.server.getPluginManager().callEvent(new EntityDamageEvent(
+                victim,
+                EntityDamageEvent.DamageCause.LAVA,
+                4.0D));
+        this.server.getPluginManager().callEvent(new EntityDamageEvent(
+                victim,
+                EntityDamageEvent.DamageCause.LIGHTNING,
+                1.5D));
+        plugin.getPlayerStatsManager().flushPendingEntityDamageStats().join();
+
+        assertEquals(2.5D, readEntityDamage(plugin, victim, "FIRE", "damage_taken"));
+        assertEquals(4.0D, readEntityDamage(plugin, victim, "LAVA", "damage_taken"));
+        assertEquals(1.5D, readEntityDamage(plugin, victim, "OTHER", "damage_taken"));
+    }
+
     private TNexus loadPlugin() {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         return TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);

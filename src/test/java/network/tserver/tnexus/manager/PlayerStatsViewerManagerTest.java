@@ -63,6 +63,7 @@ class PlayerStatsViewerManagerTest {
         assertNotNull(snapshot.getEntry("BLOCK:STONE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("ACTIVITY_CRAFT_TOTAL"));
+        assertNotNull(snapshot.getEntry("ACTIVITY_ITEM_TOTAL"));
         assertNotNull(snapshot.getEntry("ITEM:DIAMOND"));
     }
 
@@ -191,6 +192,7 @@ class PlayerStatsViewerManagerTest {
 
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_MOB_DAMAGE"));
         assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_PLAYER_DAMAGE"));
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_ENVIRONMENT"));
         assertNotNull(snapshot.getEntry("ACTIVITY_PROJECTILE_TOTAL"));
         assertNull(snapshot.getEntry("COMBAT_SUMMARY_PROJECTILES"));
 
@@ -205,6 +207,37 @@ class PlayerStatsViewerManagerTest {
         assertTrue(playerEntries.stream().anyMatch(entry ->
                 entry.key().equals("COMBAT_PLAYER:" + rival.getUniqueId())
                         && rival.getUniqueId().equals(entry.playerHeadId())));
+    }
+
+    @Test
+    void shouldExposeEnvironmentalCombatDetails() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        PlayerStatsRepository repository = new PlayerStatsRepository(plugin.getDatabaseManager());
+        repository.addEntityDamageStats(Map.of(
+                        target.getUniqueId(),
+                        Map.of(
+                                "FALL", new EntityDamageDelta(0.0D, 8.0D),
+                                "FIRE", new EntityDamageDelta(0.0D, 3.0D))))
+                .get(5, TimeUnit.SECONDS);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        assertNotNull(snapshot.getEntry("COMBAT_SUMMARY_ENVIRONMENT"));
+        List<PlayerStatsViewerManager.StatsEntry> environmentEntries = snapshot.getSortedCombatDetailEntries(
+                PlayerStatsViewerManager.CombatDetailType.ENVIRONMENT,
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+        assertTrue(environmentEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_ENVIRONMENT:FALL")));
+        assertTrue(environmentEntries.stream().anyMatch(entry -> entry.key().equals("COMBAT_ENVIRONMENT:FIRE")));
     }
 
     @Test
@@ -227,9 +260,81 @@ class PlayerStatsViewerManagerTest {
                 PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
 
         assertTrue(itemEntries.stream().anyMatch(entry -> entry.key().equals("ITEM:DIAMOND")));
+        assertNull(snapshot.getEntry("ACTIVITY_PICKUP_TOTAL"));
+        assertNull(snapshot.getEntry("ACTIVITY_DROP_TOTAL"));
+        assertNotNull(snapshot.getEntry("ACTIVITY_ITEM_TOTAL"));
         PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("ITEM:DIAMOND");
         assertNotNull(entry);
         assertEquals("8", entry.valueText());
+    }
+
+    @Test
+    void shouldExposePerMaterialCraftBreakdownEntries() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        List<PlayerStatsViewerManager.StatsEntry> craftEntries = snapshot.getSortedCraftDetailEntries(
+                PlayerStatsViewerManager.StatsSortOrder.VALUE_DESC);
+
+        assertTrue(craftEntries.stream().anyMatch(entry -> entry.key().equals("CRAFT:CRAFTING_TABLE")));
+        PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("CRAFT:CRAFTING_TABLE");
+        assertNotNull(entry);
+        assertEquals("2", entry.valueText());
+    }
+
+    @Test
+    void shouldFallbackWhenBlockStatsContainNonItemMaterial() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        insertHistoricalBlockStat(plugin, target.getUniqueId(), Material.WATER.name(), 2, 0, LocalDate.now());
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        PlayerStatsViewerManager.StatsEntry entry = snapshot.getEntry("BLOCK:WATER");
+        assertNotNull(entry);
+        assertEquals(Material.STONE, entry.material());
+    }
+
+    @Test
+    void shouldFlushPendingStatsBeforeLoadingSnapshot() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock viewer = this.server.addPlayer("Viewer");
+        PlayerMock target = this.server.addPlayer("Target");
+
+        seedStats(plugin, target);
+        plugin.getPlayerStatsManager().recordBlockPlacement(target, Material.DIAMOND_BLOCK);
+        plugin.getPlayerStatsManager().recordItemPickup(target, Material.EMERALD, 5);
+
+        PlayerStatsViewerManager.PlayerStatsSnapshot snapshot = plugin.getPlayerStatsViewerManager()
+                .loadSnapshot(
+                        viewer.getUniqueId(),
+                        target,
+                        PlayerStatsViewerManager.StatsPeriodFilter.ALL_TIME)
+                .get(5, TimeUnit.SECONDS);
+
+        assertNotNull(snapshot.getEntry("BLOCK:DIAMOND_BLOCK"));
+        assertNotNull(snapshot.getEntry("ITEM:EMERALD"));
     }
 
     private void seedStats(TNexus plugin, PlayerMock target) throws Exception {

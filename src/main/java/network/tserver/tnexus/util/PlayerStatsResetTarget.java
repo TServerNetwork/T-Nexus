@@ -39,7 +39,7 @@ public record PlayerStatsResetTarget(Type type, @Nullable String qualifier, Stri
             case "ACTIVITY_HARVEST_TOTAL", "HARVEST" -> simple(Type.HARVEST_ALL);
             case "ACTIVITY_BREED_TOTAL", "BREED" -> simple(Type.BREED_ALL);
             case "ACTIVITY_FISH_TOTAL", "FISH" -> simple(Type.FISH_ALL);
-            case "ACTIVITY_PICKUP_TOTAL", "ACTIVITY_DROP_TOTAL", "ITEM" -> simple(Type.ITEM_ALL);
+            case "ACTIVITY_ITEM_TOTAL", "ACTIVITY_PICKUP_TOTAL", "ACTIVITY_DROP_TOTAL", "ITEM" -> simple(Type.ITEM_ALL);
             case "ACTIVITY_PROJECTILE_TOTAL", "PROJECTILE" -> simple(Type.PROJECTILE_ALL);
             default -> parseQualified(normalized);
         };
