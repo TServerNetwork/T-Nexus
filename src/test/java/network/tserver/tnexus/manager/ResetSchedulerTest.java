@@ -1,5 +1,6 @@
 package network.tserver.tnexus.manager;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -152,7 +153,12 @@ class ResetSchedulerTest {
         }
 
         @Override
-        public void backupWorld(String worldName) {
+        public void backupWorld(File worldFolder) {
+        }
+
+        @Override
+        File getLoadedWorldFolder(String worldName) {
+            return new File(worldName);
         }
 
         @Override
@@ -160,7 +166,7 @@ class ResetSchedulerTest {
         }
 
         @Override
-        public void deleteWorldFolder(String worldName) {
+        public void deleteWorldFolder(File worldFolder) {
         }
 
         @Override
