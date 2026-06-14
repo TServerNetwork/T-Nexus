@@ -1,5 +1,6 @@
 package network.tserver.tnexus.manager;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -107,6 +108,8 @@ class ResourceWorldManagerTest {
 
         TrackingWorldManagerState worldState = new TrackingWorldManagerState();
         TrackingFileManager fileManager = new TrackingFileManager(plugin);
+        File expectedWorldFolder = new File(plugin.getDataFolder(), "test-worlds/resource");
+        fileManager.loadedWorldFolder = expectedWorldFolder;
         Path schematicPath = plugin.getDataFolder().toPath().resolve("schematics").resolve("resource").resolve("spawn.schem");
         Files.createDirectories(schematicPath.getParent());
         Files.writeString(schematicPath, "test");
@@ -133,6 +136,8 @@ class ResourceWorldManagerTest {
         assertEquals(nextReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
         assertTrue(fileManager.backupCalled.get());
         assertTrue(fileManager.deleteCalled.get());
+        assertEquals(expectedWorldFolder, fileManager.backupWorldFolder.get());
+        assertEquals(expectedWorldFolder, fileManager.deleteWorldFolder.get());
         assertTrue(editService.flattenCalled.get());
         assertTrue(editService.pasteCalled.get());
         assertEquals("resource", editService.flattenWorldName.get());
@@ -315,6 +320,9 @@ class ResourceWorldManagerTest {
         protected final AtomicBoolean backupCalled = new AtomicBoolean();
         protected final AtomicBoolean deleteCalled = new AtomicBoolean();
         protected final AtomicBoolean restoreCalled = new AtomicBoolean();
+        protected final AtomicReference<File> backupWorldFolder = new AtomicReference<>();
+        protected final AtomicReference<File> deleteWorldFolder = new AtomicReference<>();
+        protected File loadedWorldFolder;
         private Path schematicPath;
 
         private TrackingFileManager(TNexus plugin) {
@@ -322,8 +330,14 @@ class ResourceWorldManagerTest {
         }
 
         @Override
-        public void backupWorld(String worldName) {
+        public void backupWorld(File worldFolder) {
             this.backupCalled.set(true);
+            this.backupWorldFolder.set(worldFolder);
+        }
+
+        @Override
+        File getLoadedWorldFolder(String worldName) {
+            return this.loadedWorldFolder == null ? new File(worldName) : this.loadedWorldFolder;
         }
 
         @Override
@@ -332,8 +346,9 @@ class ResourceWorldManagerTest {
         }
 
         @Override
-        public void deleteWorldFolder(String worldName) {
+        public void deleteWorldFolder(File worldFolder) {
             this.deleteCalled.set(true);
+            this.deleteWorldFolder.set(worldFolder);
         }
 
         @Override
@@ -363,8 +378,9 @@ class ResourceWorldManagerTest {
         }
 
         @Override
-        public void backupWorld(String worldName) {
+        public void backupWorld(File worldFolder) {
             this.backupCalled.set(true);
+            this.backupWorldFolder.set(worldFolder);
             this.backupStarted.countDown();
             try {
                 this.continueBackup.await(5, TimeUnit.SECONDS);

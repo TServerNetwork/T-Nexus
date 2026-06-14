@@ -62,14 +62,19 @@ public class ResourceWorldFileManager {
      * @param worldName world name
      */
     public void backupWorld(String worldName) {
-        Path worldFolder = getWorldFolder(worldName);
-        if (!Files.isDirectory(worldFolder)) {
-            throw new IllegalStateException("World folder does not exist: " + worldFolder);
-        }
+        backupWorld(resolveWorldFolder(worldName));
+    }
 
-        Path backupRoot = getBackupWorldRoot(worldName);
+    /**
+     * Creates a rotated backup for the given world folder.
+     *
+     * @param worldFolder world folder
+     */
+    public void backupWorld(File worldFolder) {
+        Path worldFolderPath = validateWorldFolder(worldFolder);
+        Path backupRoot = getBackupWorldRoot(worldFolder.getName());
         rotateBackups(backupRoot, Math.max(1, this.settings.backupGenerations()));
-        copyDirectory(worldFolder, backupRoot.resolve("1"));
+        copyDirectory(worldFolderPath, backupRoot.resolve("1"));
     }
 
     /**
@@ -83,7 +88,7 @@ public class ResourceWorldFileManager {
             throw new IllegalStateException("Latest backup does not exist for " + worldName);
         }
 
-        Path worldFolder = getWorldFolder(worldName);
+        Path worldFolder = validateWorldFolder(resolveWorldFolder(worldName));
         deleteDirectoryIfExists(worldFolder);
         copyDirectory(latestBackup, worldFolder);
     }
@@ -94,7 +99,16 @@ public class ResourceWorldFileManager {
      * @param worldName world name
      */
     public void deleteWorldFolder(String worldName) {
-        deleteDirectoryIfExists(getWorldFolder(worldName));
+        deleteWorldFolder(resolveWorldFolder(worldName));
+    }
+
+    /**
+     * Deletes the world folder if it exists.
+     *
+     * @param worldFolder world folder
+     */
+    public void deleteWorldFolder(File worldFolder) {
+        deleteDirectoryIfExists(validateWorldFolder(worldFolder));
     }
 
     /**
@@ -137,8 +151,8 @@ public class ResourceWorldFileManager {
                 .resolve("spawn.schem");
     }
 
-    private Path getWorldFolder(String worldName) {
-        return resolveWorldFolder(worldName).toPath();
+    File getLoadedWorldFolder(String worldName) {
+        return resolveWorldFolder(worldName);
     }
 
     private File resolveWorldFolder(String worldName) {
@@ -147,11 +161,15 @@ public class ResourceWorldFileManager {
             throw new IllegalStateException("World not loaded: " + worldName);
         }
 
-        File worldFolder = world.getWorldFolder();
+        return world.getWorldFolder();
+    }
+
+    private Path validateWorldFolder(File worldFolder) {
+        Objects.requireNonNull(worldFolder, "worldFolder");
         if (!worldFolder.exists()) {
             throw new IllegalStateException("World folder does not exist: " + worldFolder.getAbsolutePath());
         }
-        return worldFolder;
+        return worldFolder.toPath();
     }
 
     @SuppressWarnings("unchecked")

@@ -400,10 +400,11 @@ public final class ResourceWorldManager {
             ResetContext context,
             ConfigManager.ResourceWorldDefinition worldDefinition) {
         return runOnMainThread(() -> teleportPlayersToFallback(context.worldName()))
-                .thenCompose(ignored -> runAsync(() -> this.fileManager.backupWorld(context.worldName())))
-                .thenCompose(ignored -> runOnMainThread(() -> unloadForReset(context.worldName())))
+                .thenCompose(ignored -> runOnMainThread(() -> this.fileManager.getLoadedWorldFolder(context.worldName())))
+                .thenCompose(worldFolder -> runAsync(() -> this.fileManager.backupWorld(worldFolder))
+                        .thenCompose(ignored -> runOnMainThread(() -> unloadForReset(context.worldName())))
                 .thenCompose(ignored -> runAsync(() -> this.fileManager.randomizeStructureSeeds(context.worldName())))
-                .thenCompose(seed -> runAsync(() -> this.fileManager.deleteWorldFolder(context.worldName()))
+                .thenCompose(seed -> runAsync(() -> this.fileManager.deleteWorldFolder(worldFolder))
                         .thenCompose(ignored -> runOnMainThread(() -> regenerateAndLoadWorld(context.worldName(), seed)))
                         .thenCompose(ignored -> waitForWorldLoad(context.worldName()))
                         .thenCompose(world -> runOnMainThread(() -> determineFlattenSurface(world))
@@ -423,7 +424,7 @@ public final class ResourceWorldManager {
                                                     "resource.notification.complete.broadcast",
                                                     context.worldName(),
                                                     Map.of("next_reset", DATE_TIME_FORMATTER.format(nextReset)));
-                                        }).thenApply(ignoredAgain -> nextReset)))));
+                                        }).thenApply(ignoredAgain -> nextReset))))));
     }
 
     private CompletableFuture<LocalDateTime> handleResetResult(
