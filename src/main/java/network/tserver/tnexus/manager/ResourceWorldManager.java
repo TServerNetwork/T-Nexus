@@ -402,10 +402,8 @@ public final class ResourceWorldManager {
         return runOnMainThread(() -> teleportPlayersToFallback(context.worldName()))
                 .thenCompose(ignored -> runOnMainThread(() -> this.fileManager.getLoadedWorldFolder(context.worldName())))
                 .thenCompose(worldFolder -> runAsync(() -> this.fileManager.backupWorld(worldFolder))
-                        .thenCompose(ignored -> runOnMainThread(() -> unloadForReset(context.worldName())))
                 .thenCompose(ignored -> runAsync(() -> this.fileManager.randomizeStructureSeeds(context.worldName())))
-                .thenCompose(seed -> runAsync(() -> this.fileManager.deleteWorldFolder(worldFolder))
-                        .thenCompose(ignored -> runOnMainThread(() -> regenerateAndLoadWorld(context.worldName(), seed)))
+                .thenCompose(seed -> runOnMainThread(() -> regenerateWorld(context.worldName(), seed))
                         .thenCompose(ignored -> waitForWorldLoad(context.worldName()))
                         .thenCompose(world -> runOnMainThread(() -> determineFlattenSurface(world))
                                 .thenCompose(surfaceY -> runAsync(() -> this.worldEditService.flattenArea(
@@ -557,22 +555,9 @@ public final class ResourceWorldManager {
         }
     }
 
-    private void unloadForReset(String worldName) {
-        World loadedWorld = Bukkit.getWorld(worldName);
-        if (loadedWorld == null) {
-            return;
-        }
-        if (!unloadWorld(worldName)) {
-            throw new IllegalStateException("Failed to unload world " + worldName);
-        }
-    }
-
-    private void regenerateAndLoadWorld(String worldName, long seed) {
+    private void regenerateWorld(String worldName, long seed) {
         if (!regenerateWorld(worldName, String.valueOf(seed))) {
             throw new IllegalStateException("Failed to regenerate world " + worldName);
-        }
-        if (!loadWorld(worldName)) {
-            throw new IllegalStateException("Failed to load world " + worldName);
         }
     }
 
