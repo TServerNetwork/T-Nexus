@@ -32,6 +32,10 @@ class ConfigManagerTest {
         assertEquals("localhost", configManager.getString("tnexus.database.host"));
         assertEquals(3306, configManager.getInt("tnexus.database.port"));
         assertEquals(1000.0D, configManager.getDouble("tnexus.economy.starting-balance"));
+        assertEquals(100, configManager.getAfkSettings().scoreThreshold());
+        assertEquals(100, configManager.getAfkSettings().scoreMax());
+        assertEquals(2, configManager.getAfkSettings().decayPerSecond());
+        assertEquals(300, configManager.getAfkSettings().timeoutSeconds());
         assertTrue(configManager.getBoolean("tnexus.missing-flag", true));
         assertEquals("tnexus_", configManager.getDatabaseSettings().tablePrefix());
         assertEquals("BLACK_STAINED_GLASS_PANE", configManager.getGuiSettings().headerItem());

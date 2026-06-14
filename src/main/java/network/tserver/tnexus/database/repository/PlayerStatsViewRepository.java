@@ -178,6 +178,7 @@ public final class PlayerStatsViewRepository {
         }
         return new PlayerSummary(
                 queryPlayTime(connection, playerId, periodStart),
+                queryAfkTime(connection, playerId, periodStart),
                 querySummedInteger(connection, this.deathStatsTableName, "count", playerId, periodStartDate),
                 baseSummary.respawns(),
                 querySummedDouble(connection, this.distanceStatsTableName, "distance", playerId, periodStartDate),
@@ -190,7 +191,8 @@ public final class PlayerStatsViewRepository {
 
     private PlayerSummary queryBasePlayerSummary(java.sql.Connection connection, UUID playerId) throws Exception {
         String sql = """
-                SELECT play_time, deaths, respawns, distance, first_login, sleep_count, portal_count, chat_count, brew_count
+                SELECT play_time, afk_time, deaths, respawns, distance, first_login, sleep_count, portal_count, chat_count,
+                       brew_count
                 FROM %s
                 WHERE player_uuid = ?
                 """.formatted(this.playerStatsTableName);
@@ -198,11 +200,12 @@ public final class PlayerStatsViewRepository {
             statement.setString(1, playerId.toString());
             try (var resultSet = statement.executeQuery()) {
                 if (!resultSet.next()) {
-                    return new PlayerSummary(0L, 0, 0, 0.0D, null, 0, 0, 0, 0);
+                    return new PlayerSummary(0L, 0L, 0, 0, 0.0D, null, 0, 0, 0, 0);
                 }
                 Timestamp firstLogin = resultSet.getTimestamp("first_login");
                 return new PlayerSummary(
                         resultSet.getLong("play_time"),
+                        resultSet.getLong("afk_time"),
                         resultSet.getInt("deaths"),
                         resultSet.getInt("respawns"),
                         resultSet.getDouble("distance"),
@@ -466,12 +469,24 @@ public final class PlayerStatsViewRepository {
     }
 
     private long queryPlayTime(java.sql.Connection connection, UUID playerId, Instant periodStart) throws Exception {
+        return querySessionDurations(connection, playerId, periodStart).playTimeSeconds();
+    }
+
+    private long queryAfkTime(java.sql.Connection connection, UUID playerId, Instant periodStart) throws Exception {
+        return querySessionDurations(connection, playerId, periodStart).afkTimeSeconds();
+    }
+
+    private SessionDurations querySessionDurations(
+            java.sql.Connection connection,
+            UUID playerId,
+            Instant periodStart) throws Exception {
         String sql = """
-                SELECT session_start, session_end
+                SELECT session_start, session_end, duration_seconds, afk_duration_seconds
                 FROM %s
                 WHERE player_uuid = ? AND session_end >= ?
                 """.formatted(this.playSessionsTableName);
         long totalSeconds = 0L;
+        long afkSeconds = 0L;
         try (var statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerId.toString());
             statement.setTimestamp(2, Timestamp.from(periodStart));
@@ -481,12 +496,17 @@ public final class PlayerStatsViewRepository {
                     Instant sessionEnd = resultSet.getTimestamp("session_end").toInstant();
                     Instant effectiveStart = sessionStart.isAfter(periodStart) ? sessionStart : periodStart;
                     if (sessionEnd.isAfter(effectiveStart)) {
-                        totalSeconds += Duration.between(effectiveStart, sessionEnd).getSeconds();
+                        long overlappingSeconds = Duration.between(effectiveStart, sessionEnd).getSeconds();
+                        totalSeconds += overlappingSeconds;
+                        long sessionDurationSeconds = Math.max(1L, resultSet.getLong("duration_seconds"));
+                        long sessionAfkSeconds = resultSet.getLong("afk_duration_seconds");
+                        afkSeconds += Math.round(
+                                (double) sessionAfkSeconds * overlappingSeconds / (double) sessionDurationSeconds);
                     }
                 }
             }
         }
-        return totalSeconds;
+        return new SessionDurations(totalSeconds, afkSeconds);
     }
 
     /**
@@ -530,6 +550,7 @@ public final class PlayerStatsViewRepository {
      * Flattened player summary counters.
      *
      * @param playTimeSeconds total play time in seconds
+     * @param afkTimeSeconds total AFK time in seconds
      * @param deaths total deaths
      * @param respawns total respawns
      * @param distance total distance travelled
@@ -541,6 +562,7 @@ public final class PlayerStatsViewRepository {
      */
     public record PlayerSummary(
             long playTimeSeconds,
+            long afkTimeSeconds,
             int deaths,
             int respawns,
             double distance,
@@ -549,6 +571,9 @@ public final class PlayerStatsViewRepository {
             int portalCount,
             int chatCount,
             int brewCount) {
+    }
+
+    private record SessionDurations(long playTimeSeconds, long afkTimeSeconds) {
     }
 
     /**

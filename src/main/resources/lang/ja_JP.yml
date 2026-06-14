@@ -341,6 +341,9 @@ stats:
       environment: "&e環境要因"
     general:
       play-time: "&eプレイ時間"
+      login-time: "&eログイン時間"
+      active-play-time: "&e実稼働時間"
+      afk-time: "&eAFK時間"
       distance: "&e移動距離"
       deaths: "&e死亡回数"
       respawns: "&eリスポーン回数"

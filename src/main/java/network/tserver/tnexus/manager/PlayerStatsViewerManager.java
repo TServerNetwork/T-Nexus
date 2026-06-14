@@ -395,9 +395,24 @@ public final class PlayerStatsViewerManager {
                 "GENERAL_PLAY_TIME",
                 StatsCategory.GENERAL,
                 Material.CLOCK,
-                "stats.labels.general.play-time",
+                "stats.labels.general.login-time",
                 formatDuration(summary.playTimeSeconds()),
                 summary.playTimeSeconds()));
+        long activePlayTimeSeconds = Math.max(0L, summary.playTimeSeconds() - summary.afkTimeSeconds());
+        entries.add(createFixedEntry(
+                "GENERAL_ACTIVE_PLAY_TIME",
+                StatsCategory.GENERAL,
+                Material.COMPASS,
+                "stats.labels.general.active-play-time",
+                formatDuration(activePlayTimeSeconds),
+                activePlayTimeSeconds));
+        entries.add(createFixedEntry(
+                "GENERAL_AFK_TIME",
+                StatsCategory.GENERAL,
+                Material.LIGHT_GRAY_BED,
+                "stats.labels.general.afk-time",
+                formatDuration(summary.afkTimeSeconds()),
+                summary.afkTimeSeconds()));
         entries.add(createFixedEntry(
                 "GENERAL_DISTANCE",
                 StatsCategory.GENERAL,
