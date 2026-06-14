@@ -34,6 +34,7 @@ class ResourceWorldSeedCommandListenerTest {
         World resourceWorld = this.server.addSimpleWorld("resource");
         SeedListenerTestTNexus.showRealSeedToAdmin = false;
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, SeedListenerTestTNexus.class);
+        new ResourceWorldSeedCommandListener(plugin);
         PlayerMock player = this.server.addPlayer();
         player.teleport(resourceWorld.getSpawnLocation());
 
@@ -53,6 +54,7 @@ class ResourceWorldSeedCommandListenerTest {
         World resourceWorld = this.server.addSimpleWorld("resource");
         SeedListenerTestTNexus.showRealSeedToAdmin = true;
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, SeedListenerTestTNexus.class);
+        new ResourceWorldSeedCommandListener(plugin);
         PlayerMock admin = this.server.addPlayer();
         admin.teleport(resourceWorld.getSpawnLocation());
         admin.addAttachment(plugin, "tnexus.admin", true);
@@ -71,7 +73,8 @@ class ResourceWorldSeedCommandListenerTest {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         World lobby = this.server.addSimpleWorld("lobby");
         SeedListenerTestTNexus.showRealSeedToAdmin = false;
-        TestPluginSupport.loadPlugin(this.server, SeedListenerTestTNexus.class);
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, SeedListenerTestTNexus.class);
+        new ResourceWorldSeedCommandListener(plugin);
         PlayerMock player = this.server.addPlayer();
         player.teleport(lobby.getSpawnLocation());
 
