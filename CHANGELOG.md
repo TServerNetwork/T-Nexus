@@ -1,3 +1,18 @@
+# [0.39.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.38.0...v0.39.0) (2026-06-14)
+
+
+### Bug Fixes
+
+* **stats:** fetch latest data on GUI open ([#75](https://github.com/TServerNetwork/T-Nexus/issues/75)) ([e98775c](https://github.com/TServerNetwork/T-Nexus/commit/e98775c362d554aff5410b4991aa4f7c5f1f81d8))
+* **stats:** fix block stats GUI crash ([#75](https://github.com/TServerNetwork/T-Nexus/issues/75)) ([daf03f6](https://github.com/TServerNetwork/T-Nexus/commit/daf03f67e406526d404c8a1e732a4f7dfc7dad0a))
+* **stats:** show per-material craft details in activity stats ([#75](https://github.com/TServerNetwork/T-Nexus/issues/75)) ([efc5517](https://github.com/TServerNetwork/T-Nexus/commit/efc551786403da92e8317cca6d1019c5a91c5dc0))
+
+
+### Features
+
+* **stats:** add environmental damage category to combat stats ([#75](https://github.com/TServerNetwork/T-Nexus/issues/75)) ([fc44b01](https://github.com/TServerNetwork/T-Nexus/commit/fc44b014946684f9b5d2d0f70bc12197cc838248))
+* **stats:** consolidate item pickup/drop into single category ([#75](https://github.com/TServerNetwork/T-Nexus/issues/75)) ([2cf07de](https://github.com/TServerNetwork/T-Nexus/commit/2cf07dea5d496ae5d1b61b7e57305fe179b11607))
+
 # [0.38.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.37.1...v0.38.0) (2026-06-13)
 
 
