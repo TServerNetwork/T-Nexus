@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -129,10 +130,38 @@ class CommandManagerTest {
         updateMainMenuTitle(plugin, "&bReloaded Menu");
 
         assertTrue(this.server.dispatchCommand(player, "tnexus reload"));
-        assertEquals("§8[§6T-Nexus§8] §aReload complete", player.nextMessage());
+        try {
+            assertEquals("§8[§6T-Nexus§8] §aReload complete", waitForNextMessage(player));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
 
         assertTrue(this.server.dispatchCommand(player, "tnexus"));
         assertEquals("§bReloaded Menu", player.getOpenInventory().getTitle());
+    }
+
+    @Test
+    void shouldReloadDatabaseSettingsAndResourceWorldManager() throws Exception {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.H2TestTNexus.class);
+        PlayerMock admin = this.server.addPlayer("Admin");
+        admin.addAttachment(plugin, "tnexus.admin", true);
+
+        updateReloadDatabaseSettings(plugin, "reload_command");
+        updateResourceWorldName(plugin, "mine_reload");
+
+        assertTrue(this.server.dispatchCommand(admin, "tnexus reload"));
+        assertEquals(
+                "§8[§6T-Nexus§8] §a設定ファイルとメッセージを再読み込みしました。",
+                waitForNextMessage(admin));
+
+        try (var connection = plugin.getDatabaseManager().getConnection()) {
+            assertTrue(connection.getMetaData().getURL().contains("reload_command"));
+        }
+        assertTrue(plugin.getResourceWorldManager().getWorldDefinition("mine_reload").isPresent());
+        assertIterableEquals(
+                List.of("mine_reload"),
+                invokeTabCompletion(plugin, "onResourceTabComplete", admin, new String[]{"info", "mine"}));
     }
 
     @Test
@@ -638,6 +667,30 @@ class CommandManagerTest {
         File configFile = plugin.getDataFolder().toPath().resolve("config.yml").toFile();
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(configFile);
         configuration.set("tnexus.gui.main-menu-title", title);
+        configuration.save(configFile);
+    }
+
+    private void updateReloadDatabaseSettings(TNexus plugin, String databaseName) throws IOException {
+        File configFile = plugin.getDataFolder().toPath().resolve("config.yml").toFile();
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(configFile);
+        configuration.set(
+                "tnexus.database.jdbc-url",
+                "jdbc:h2:mem:%s;MODE=MySQL;DB_CLOSE_DELAY=-1".formatted(databaseName));
+        configuration.set("tnexus.database.driver-class-name", "org.h2.Driver");
+        configuration.set("tnexus.database.username", "sa");
+        configuration.set("tnexus.database.password", "");
+        configuration.set("tnexus.database.pool-size", 4);
+        configuration.save(configFile);
+    }
+
+    private void updateResourceWorldName(TNexus plugin, String worldName) throws IOException {
+        File configFile = plugin.getDataFolder().toPath().resolve("config.yml").toFile();
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(configFile);
+        List<Map<?, ?>> worlds = new java.util.ArrayList<>(configuration.getMapList("resource-world.worlds"));
+        Map<Object, Object> updatedWorld = new java.util.LinkedHashMap<>(worlds.getFirst());
+        updatedWorld.put("name", worldName);
+        worlds.set(0, updatedWorld);
+        configuration.set("resource-world.worlds", worlds);
         configuration.save(configFile);
     }
 

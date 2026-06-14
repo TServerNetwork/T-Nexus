@@ -16,7 +16,6 @@ import org.jetbrains.annotations.Nullable;
 public final class ResourceWorldTeleportListener implements Listener {
 
     private final TNexus plugin;
-    private final ResourceWorldManager resourceWorldManager;
 
     /**
      * Creates and registers the resource-world teleport listener.
@@ -25,7 +24,6 @@ public final class ResourceWorldTeleportListener implements Listener {
      */
     public ResourceWorldTeleportListener(TNexus plugin) {
         this.plugin = plugin;
-        this.resourceWorldManager = plugin.getResourceWorldManager();
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -37,7 +35,8 @@ public final class ResourceWorldTeleportListener implements Listener {
         }
 
         String worldName = destinationWorld.getName();
-        if (!this.resourceWorldManager.isResetting(worldName)) {
+        ResourceWorldManager resourceWorldManager = getResourceWorldManager();
+        if (!resourceWorldManager.isResetting(worldName)) {
             return;
         }
 
@@ -46,7 +45,7 @@ public final class ResourceWorldTeleportListener implements Listener {
                 event.getPlayer(),
                 "resource-world.tp-blocked",
                 Map.of(
-                        "display_name", this.resourceWorldManager.getDisplayName(worldName),
+                        "display_name", resourceWorldManager.getDisplayName(worldName),
                         "world", worldName));
     }
 
@@ -56,5 +55,9 @@ public final class ResourceWorldTeleportListener implements Listener {
             return null;
         }
         return event.getTo().getWorld();
+    }
+
+    private ResourceWorldManager getResourceWorldManager() {
+        return this.plugin.getResourceWorldManager();
     }
 }

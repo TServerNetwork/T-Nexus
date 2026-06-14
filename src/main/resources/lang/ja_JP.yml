@@ -8,6 +8,7 @@ general:
   player-only: "&cこのコマンドはプレイヤーのみ実行できます。"
   console-only: "&cThis command can only be run from the console."
   reload-success: "&a設定ファイルとメッセージを再読み込みしました。"
+  reload-failed: "&c再読み込みに失敗しました。サーバーログを確認してください。"
   unknown-command: "&c不明なコマンドです。/tnexus help を使用してください。"
 hook:
   success: "&a[T-Nexus] {0} とのフックに成功しました。"
