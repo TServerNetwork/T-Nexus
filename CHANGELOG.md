@@ -1,3 +1,10 @@
+## [0.41.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.2...v0.41.3) (2026-06-14)
+
+
+### Bug Fixes
+
+* **resource:** use Bukkit API to resolve world folder path instead of relative path ([ecc7275](https://github.com/TServerNetwork/T-Nexus/commit/ecc727542cd79f3c5460ef7891837c0a3b7c0845))
+
 ## [0.41.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.1...v0.41.2) (2026-06-14)
 
 
