@@ -1,3 +1,10 @@
+## [0.41.4](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.3...v0.41.4) (2026-06-14)
+
+
+### Bug Fixes
+
+* **resource:** resolve world folder before unloading to avoid null world reference ([2264b55](https://github.com/TServerNetwork/T-Nexus/commit/2264b559b362615c997aeee55755ba50afab8b67))
+
 ## [0.41.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.2...v0.41.3) (2026-06-14)
 
 
