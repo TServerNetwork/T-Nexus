@@ -135,15 +135,11 @@ class ResourceWorldManagerTest {
         assertEquals(LocalDateTime.of(2026, 6, 15, 9, 0, 10), nextReset);
         assertEquals(nextReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
         assertTrue(fileManager.backupCalled.get());
-        assertTrue(fileManager.deleteCalled.get());
         assertEquals(expectedWorldFolder, fileManager.backupWorldFolder.get());
-        assertEquals(expectedWorldFolder, fileManager.deleteWorldFolder.get());
         assertTrue(editService.flattenCalled.get());
         assertTrue(editService.pasteCalled.get());
         assertEquals("resource", editService.flattenWorldName.get());
         assertEquals("resource", editService.pasteWorldName.get());
-        assertEquals("resource", worldState.unloadWorldCall.get());
-        assertEquals("resource", worldState.loadWorldCall.get());
         assertEquals("resource|123456", worldState.regenWorldCall.get());
         assertSame(this.server.getWorld("lobby"), player.getWorld());
         assertFalse(manager.isResetting("resource"));
@@ -318,10 +314,8 @@ class ResourceWorldManagerTest {
 
     private static class TrackingFileManager extends ResourceWorldFileManager {
         protected final AtomicBoolean backupCalled = new AtomicBoolean();
-        protected final AtomicBoolean deleteCalled = new AtomicBoolean();
         protected final AtomicBoolean restoreCalled = new AtomicBoolean();
         protected final AtomicReference<File> backupWorldFolder = new AtomicReference<>();
-        protected final AtomicReference<File> deleteWorldFolder = new AtomicReference<>();
         protected File loadedWorldFolder;
         private Path schematicPath;
 
@@ -343,12 +337,6 @@ class ResourceWorldManagerTest {
         @Override
         public void restoreLatestBackup(String worldName) {
             this.restoreCalled.set(true);
-        }
-
-        @Override
-        public void deleteWorldFolder(File worldFolder) {
-            this.deleteCalled.set(true);
-            this.deleteWorldFolder.set(worldFolder);
         }
 
         @Override
