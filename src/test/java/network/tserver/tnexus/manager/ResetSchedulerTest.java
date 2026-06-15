@@ -187,7 +187,7 @@ class ResetSchedulerTest {
 
     private static final class NoOpEditService implements ResourceWorldEditService {
         @Override
-        public void flattenArea(World world, int radius, int surfaceY) {
+        public void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY) {
         }
 
         @Override

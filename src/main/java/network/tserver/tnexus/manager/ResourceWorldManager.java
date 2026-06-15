@@ -1,6 +1,7 @@
 package network.tserver.tnexus.manager;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -30,7 +31,7 @@ import org.bukkit.entity.Player;
  */
 public final class ResourceWorldManager {
 
-    private static final int FLATTEN_RADIUS = 32;
+    private static final int FALLBACK_CYLINDER_RADIUS = 8;
     private static final int WORLD_LOAD_WAIT_TICKS = 200;
     private static final String ADMIN_PERMISSION = "tnexus.admin";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -216,6 +217,20 @@ public final class ResourceWorldManager {
      * @return completion future with the next scheduled reset time
      */
     public CompletableFuture<LocalDateTime> executeReset(String worldName) {
+        return executeReset(worldName, ResetTrigger.MANUAL);
+    }
+
+    /**
+     * Executes a scheduled resource-world reset and persists the next schedule.
+     *
+     * @param worldName world name
+     * @return completion future with the next scheduled reset time
+     */
+    public CompletableFuture<LocalDateTime> executeScheduledReset(String worldName) {
+        return executeReset(worldName, ResetTrigger.SCHEDULED);
+    }
+
+    private CompletableFuture<LocalDateTime> executeReset(String worldName, ResetTrigger resetTrigger) {
         Objects.requireNonNull(worldName, "worldName");
         ConfigManager.ResourceWorldDefinition worldDefinition = this.worldDefinitions.get(worldName);
         if (worldDefinition == null) {
@@ -235,6 +250,7 @@ public final class ResourceWorldManager {
                                     worldName,
                                     scheduledResetTime,
                                     nextScheduledReset,
+                                    resetTrigger,
                                     currentEntry))
                             .thenCompose(context -> executeResetFlow(context, worldDefinition))
                             .handle((result, throwable) -> handleResetResult(worldName, result, throwable))
@@ -375,6 +391,7 @@ public final class ResourceWorldManager {
             String worldName,
             LocalDateTime scheduledResetTime,
             LocalDateTime nextScheduledReset,
+            ResetTrigger resetTrigger,
             Optional<ResourceWorldResetRepository.ResourceWorldResetEntry> currentEntry) {
         return runOnMainThread(() -> broadcast("resource.notification.start.broadcast", worldName))
                 .thenCompose(ignored -> currentEntry
@@ -392,7 +409,7 @@ public final class ResourceWorldManager {
                                 throw new IllegalStateException("Failed to mark reset as in progress for " + worldName);
                             }
                             this.activeResetEntryIds.put(worldName, entryId);
-                            return new ResetContext(worldName, entryId, scheduledResetTime, nextScheduledReset);
+                            return new ResetContext(worldName, entryId, scheduledResetTime, nextScheduledReset, resetTrigger);
                         }));
     }
 
@@ -402,27 +419,37 @@ public final class ResourceWorldManager {
         return runOnMainThread(() -> teleportPlayersToFallback(context.worldName()))
                 .thenCompose(ignored -> runOnMainThread(() -> this.fileManager.getLoadedWorldFolder(context.worldName())))
                 .thenCompose(worldFolder -> runAsync(() -> this.fileManager.backupWorld(worldFolder))
-                .thenCompose(ignored -> runAsync(() -> this.fileManager.randomizeStructureSeeds(context.worldName())))
-                .thenCompose(seed -> runOnMainThread(() -> regenerateWorld(context.worldName(), seed))
-                        .thenCompose(ignored -> waitForWorldLoad(context.worldName()))
-                        .thenCompose(world -> runOnMainThread(() -> determineFlattenSurface(world))
-                                .thenCompose(surfaceY -> runAsync(() -> this.worldEditService.flattenArea(
-                                                world,
-                                                FLATTEN_RADIUS,
-                                                surfaceY))
-                                        .thenCompose(flattened -> runOnMainThread(() -> world.getHighestBlockYAt(0, 0)))
-                                        .thenCompose(postFlattenSurfaceY -> maybePasteSpawnSchematic(
-                                                context.worldName(),
-                                                world,
-                                                postFlattenSurfaceY))
-                                        .thenCompose(pasteIgnored -> persistResetSuccess(context, seed))
-                                        .thenCompose(nextReset -> runOnMainThread(() -> {
-                                            clearResetting(context.worldName());
-                                            broadcast(
-                                                    "resource.notification.complete.broadcast",
-                                                    context.worldName(),
-                                                    Map.of("next_reset", DATE_TIME_FORMATTER.format(nextReset)));
-                                        }).thenApply(ignoredAgain -> nextReset))))));
+                        .thenCompose(ignored -> runAsync(() -> this.fileManager.randomizeStructureSeeds(context.worldName())))
+                        .thenCompose(seed -> runOnMainThread(() -> regenerateWorld(context.worldName(), seed))
+                                .thenCompose(ignored -> waitForWorldLoad(context.worldName()))
+                                .thenCompose(world -> runAsync(() -> this.fileManager.getSpawnSchematicPath(context.worldName()))
+                                        .thenCompose(schematicPath -> prepareSpawnArea(world, schematicPath)
+                                                .thenCompose(postFlattenSurfaceY -> maybePasteSpawnSchematic(
+                                                        context.worldName(),
+                                                        world,
+                                                        schematicPath,
+                                                        postFlattenSurfaceY))
+                                                .thenCompose(pasteIgnored -> persistResetSuccess(
+                                                        context,
+                                                        worldDefinition,
+                                                        seed))
+                                                .thenCompose(nextReset -> runOnMainThread(() -> {
+                                                    clearResetting(context.worldName());
+                                                    broadcast(
+                                                            "resource.notification.complete.broadcast",
+                                                            context.worldName(),
+                                                            Map.of("next_reset", DATE_TIME_FORMATTER.format(nextReset)));
+                                                }).thenApply(ignoredAgain -> nextReset))))));
+    }
+
+    private CompletableFuture<Integer> prepareSpawnArea(World world, Path schematicPath) {
+        return runOnMainThread(() -> determineFlattenSurface(world))
+                .thenCompose(surfaceY -> runAsync(() -> this.worldEditService.prepareSpawnArea(
+                        world,
+                        schematicPath,
+                        FALLBACK_CYLINDER_RADIUS,
+                        surfaceY)))
+                .thenCompose(flattened -> runOnMainThread(() -> world.getHighestBlockYAt(0, 0)));
     }
 
     private CompletableFuture<LocalDateTime> handleResetResult(
@@ -438,7 +465,8 @@ public final class ResourceWorldManager {
                 worldName,
                 entryId == null ? -1L : entryId,
                 LocalDateTime.now(this.clock),
-                LocalDateTime.now(this.clock));
+                LocalDateTime.now(this.clock),
+                ResetTrigger.SCHEDULED);
         return handleResetFailure(context, unwrap(throwable));
     }
 
@@ -488,7 +516,11 @@ public final class ResourceWorldManager {
         }));
     }
 
-    private CompletableFuture<LocalDateTime> persistResetSuccess(ResetContext context, long seed) {
+    private CompletableFuture<LocalDateTime> persistResetSuccess(
+            ResetContext context,
+            ConfigManager.ResourceWorldDefinition worldDefinition,
+            long seed) {
+        LocalDateTime nextScheduledReset = resolveNextScheduledReset(context, worldDefinition);
         return this.repository.updateStatusAndSeed(
                         context.currentEntryId(),
                         ResourceWorldResetRepository.ResetStatus.COMPLETED,
@@ -501,10 +533,19 @@ public final class ResourceWorldManager {
                 .thenCompose(ignored -> this.repository.insert(
                         ResourceWorldResetRepository.ResourceWorldResetRecord.scheduled(
                                 context.worldName(),
-                                context.nextScheduledReset(),
-                                context.nextScheduledReset(),
+                                nextScheduledReset,
+                                nextScheduledReset,
                                 null)))
-                .thenApply(ignored -> context.nextScheduledReset());
+                .thenApply(ignored -> nextScheduledReset);
+    }
+
+    private LocalDateTime resolveNextScheduledReset(
+            ResetContext context,
+            ConfigManager.ResourceWorldDefinition worldDefinition) {
+        if (context.resetTrigger() == ResetTrigger.MANUAL) {
+            return LocalDateTime.now(this.clock).plusDays(worldDefinition.resetIntervalDays());
+        }
+        return context.nextScheduledReset();
     }
 
     private CompletableFuture<Void> persistResetFailure(ResetContext context, String errorMessage) {
@@ -523,9 +564,8 @@ public final class ResourceWorldManager {
                 });
     }
 
-    private CompletableFuture<Void> maybePasteSpawnSchematic(String worldName, World world, int surfaceY) {
+    private CompletableFuture<Void> maybePasteSpawnSchematic(String worldName, World world, Path schematicPath, int surfaceY) {
         return runAsync(() -> {
-            var schematicPath = this.fileManager.getSpawnSchematicPath(worldName);
             if (!Files.isRegularFile(schematicPath)) {
                 return;
             }
@@ -711,6 +751,12 @@ public final class ResourceWorldManager {
             String worldName,
             long currentEntryId,
             LocalDateTime scheduledResetTime,
-            LocalDateTime nextScheduledReset) {
+            LocalDateTime nextScheduledReset,
+            ResetTrigger resetTrigger) {
+    }
+
+    private enum ResetTrigger {
+        MANUAL,
+        SCHEDULED
     }
 }
