@@ -136,6 +136,16 @@ class ResetSchedulerTest {
             }
 
             @Override
+            public boolean removeWorld(String worldName) {
+                return true;
+            }
+
+            @Override
+            public boolean importWorld(String worldName, World.Environment environment) {
+                return true;
+            }
+
+            @Override
             public boolean regenerateWorld(String worldName, String seed) {
                 return true;
             }

@@ -20,6 +20,9 @@ import java.util.Objects;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
+import org.bukkit.Tag;
 import org.bukkit.World;
 
 /**
@@ -194,11 +197,31 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
 
     private Material resolveMarkerMaterial() {
         String configured = this.schematicSettings.airMarkerBlock();
-        Material material = Material.matchMaterial(configured, true);
+        Material material = resolveConfiguredBlockMaterial(configured);
         if (material == null || !material.isBlock()) {
             throw new IllegalStateException("Invalid resource-world air marker block: " + configured);
         }
         return material;
+    }
+
+    static Material resolveConfiguredBlockMaterial(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return null;
+        }
+
+        NamespacedKey namespacedKey = NamespacedKey.fromString(configured);
+        if (namespacedKey != null) {
+            Material registryMaterial = Registry.MATERIAL.get(namespacedKey);
+            if (registryMaterial != null) {
+                return registryMaterial;
+            }
+        }
+
+        Material matchedMaterial = Material.matchMaterial(configured, true);
+        if (matchedMaterial != null) {
+            return matchedMaterial;
+        }
+        return Material.matchMaterial(configured);
     }
 
     private void flattenInnerArea(
@@ -252,8 +275,9 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
             return;
         }
 
-        Map<ColumnKey, Integer> originalHeights = captureOuterHeights(world, terrainPlan);
-        for (Map.Entry<ColumnKey, Integer> entry : originalHeights.entrySet()) {
+        Map<ColumnKey, Integer> originalHeights = captureOuterHeights(world, terrainPlan, minY, maxY);
+        Map<ColumnKey, Integer> smoothedHeights = smoothOuterHeights(originalHeights, minY, maxY);
+        for (Map.Entry<ColumnKey, Integer> entry : smoothedHeights.entrySet()) {
             ColumnKey column = entry.getKey();
             int targetSurfaceY = calculateBlendedSurfaceY(
                     terrainPlan,
@@ -267,17 +291,78 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         }
     }
 
-    private Map<ColumnKey, Integer> captureOuterHeights(World world, TerrainPlan terrainPlan) {
+    private Map<ColumnKey, Integer> captureOuterHeights(World world, TerrainPlan terrainPlan, int minY, int maxY) {
         Map<ColumnKey, Integer> heights = new HashMap<>();
         for (int x = terrainPlan.outerMinX(); x <= terrainPlan.outerMaxX(); x++) {
             for (int z = terrainPlan.outerMinZ(); z <= terrainPlan.outerMaxZ(); z++) {
                 if (terrainPlan.isInsideInnerArea(x, z)) {
                     continue;
                 }
-                heights.put(new ColumnKey(x, z), world.getHighestBlockYAt(x, z));
+                heights.put(new ColumnKey(x, z), sampleTerrainSurfaceY(world, x, z, minY, maxY));
             }
         }
         return heights;
+    }
+
+    private Map<ColumnKey, Integer> smoothOuterHeights(
+            Map<ColumnKey, Integer> capturedHeights,
+            int minY,
+            int maxY) {
+        Map<ColumnKey, Integer> smoothed = new HashMap<>();
+        for (Map.Entry<ColumnKey, Integer> entry : capturedHeights.entrySet()) {
+            ColumnKey center = entry.getKey();
+            int total = entry.getValue() * 2;
+            int samples = 2;
+            for (int offsetX = -1; offsetX <= 1; offsetX++) {
+                for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+                    if (offsetX == 0 && offsetZ == 0) {
+                        continue;
+                    }
+                    Integer neighborHeight = capturedHeights.get(new ColumnKey(center.x() + offsetX, center.z() + offsetZ));
+                    if (neighborHeight == null) {
+                        continue;
+                    }
+                    total += neighborHeight;
+                    samples++;
+                }
+            }
+            smoothed.put(center, clamp((int) Math.round(total / (double) samples), minY + 1, maxY));
+        }
+        return smoothed;
+    }
+
+    private int sampleTerrainSurfaceY(World world, int x, int z, int minY, int maxY) {
+        int highestY = clamp(world.getHighestBlockYAt(x, z), minY + 1, maxY);
+        for (int y = highestY; y >= minY + 1; y--) {
+            Material material = world.getBlockAt(x, y, z).getType();
+            if (isTerrainSurfaceMaterial(material)) {
+                return y;
+            }
+        }
+        return minY + 1;
+    }
+
+    private boolean isTerrainSurfaceMaterial(Material material) {
+        if (material.isAir() || !material.isSolid()) {
+            return false;
+        }
+        if (Tag.LOGS.isTagged(material) || Tag.LEAVES.isTagged(material)) {
+            return false;
+        }
+        if (Tag.SNOW.isTagged(material) || Tag.FLOWERS.isTagged(material) || Tag.SAPLINGS.isTagged(material)) {
+            return false;
+        }
+        String materialName = material.name();
+        return !materialName.endsWith("_BUSH")
+                && !materialName.endsWith("_GRASS")
+                && !materialName.endsWith("_FERN")
+                && !materialName.contains("MUSHROOM")
+                && !materialName.contains("VINE")
+                && !materialName.contains("BAMBOO")
+                && !materialName.contains("ROOTS")
+                && !materialName.contains("CORAL")
+                && !materialName.contains("KELP")
+                && !materialName.contains("SEAGRASS");
     }
 
     private int calculateBlendedSurfaceY(

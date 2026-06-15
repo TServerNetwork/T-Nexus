@@ -1,5 +1,7 @@
 package network.tserver.tnexus.manager;
 
+import org.bukkit.World;
+
 /**
  * Minimal Multiverse world operations required by T-Nexus.
  */
@@ -12,6 +14,23 @@ public interface MultiverseWorldService {
      * @return {@code true} when the unload succeeds
      */
     boolean unloadWorld(String worldName);
+
+    /**
+     * Removes a managed world from the Multiverse registry.
+     *
+     * @param worldName world name
+     * @return {@code true} when the removal succeeds
+     */
+    boolean removeWorld(String worldName);
+
+    /**
+     * Imports a Bukkit-loaded world into the Multiverse registry.
+     *
+     * @param worldName world name
+     * @param environment world environment
+     * @return {@code true} when the import succeeds
+     */
+    boolean importWorld(String worldName, World.Environment environment);
 
     /**
      * Regenerates a managed world with the provided seed.

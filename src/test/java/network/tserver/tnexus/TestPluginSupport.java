@@ -444,6 +444,14 @@ public final class TestPluginSupport {
             return new FakeAttempt(true);
         }
 
+        public FakeAttempt removeWorld(Object world) {
+            return new FakeAttempt(true);
+        }
+
+        public FakeAttempt importWorld(Object options) {
+            return new FakeAttempt(true);
+        }
+
         public FakeAttempt regenWorld(Object options) {
             return new FakeAttempt(true);
         }

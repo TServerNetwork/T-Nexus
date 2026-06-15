@@ -18,12 +18,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
 import java.util.logging.Level;
+import net.kyori.adventure.util.TriState;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.WorldCreator;
 import org.bukkit.entity.Player;
 
 /**
@@ -269,6 +271,27 @@ public final class ResourceWorldManager {
     }
 
     /**
+     * Removes a Multiverse-managed world registration.
+     *
+     * @param worldName world name
+     * @return {@code true} when removal succeeded
+     */
+    public boolean removeWorld(String worldName) {
+        return this.worldManager.removeWorld(worldName);
+    }
+
+    /**
+     * Imports a Bukkit-loaded world into Multiverse management.
+     *
+     * @param worldName world name
+     * @param environment world environment
+     * @return {@code true} when import succeeded
+     */
+    public boolean importWorld(String worldName, World.Environment environment) {
+        return this.worldManager.importWorld(worldName, environment);
+    }
+
+    /**
      * Regenerates a Multiverse-managed world.
      *
      * @param worldName world name
@@ -419,9 +442,15 @@ public final class ResourceWorldManager {
         return runOnMainThread(() -> teleportPlayersToFallback(context.worldName()))
                 .thenCompose(ignored -> runOnMainThread(() -> this.fileManager.getLoadedWorldFolder(context.worldName())))
                 .thenCompose(worldFolder -> runAsync(() -> this.fileManager.backupWorld(worldFolder))
-                        .thenCompose(ignored -> runAsync(() -> this.fileManager.randomizeStructureSeeds(context.worldName())))
-                        .thenCompose(seed -> runOnMainThread(() -> regenerateWorld(context.worldName(), seed))
-                                .thenCompose(ignored -> waitForWorldLoad(context.worldName()))
+                        .thenCompose(ignored -> runOnMainThread(() -> unloadWorldForReset(context.worldName())))
+                        .thenCompose(ignored -> runAsync(() -> {
+                            this.fileManager.deleteWorldFolder(worldFolder);
+                            return this.fileManager.randomizeStructureSeeds(context.worldName());
+                        }))
+                        .thenCompose(seed -> runOnMainThread(() -> recreateWorld(
+                                        context.worldName(),
+                                        worldDefinition,
+                                        seed))
                                 .thenCompose(world -> runAsync(() -> this.fileManager.getSpawnSchematicPath(context.worldName()))
                                         .thenCompose(schematicPath -> prepareSpawnArea(world, schematicPath)
                                                 .thenCompose(postFlattenSurfaceY -> maybePasteSpawnSchematic(
@@ -498,10 +527,14 @@ public final class ResourceWorldManager {
     }
 
     private CompletableFuture<Void> attemptRestore(String worldName) {
+        ConfigManager.ResourceWorldDefinition worldDefinition = this.worldDefinitions.get(worldName);
         return runOnMainThread(() -> {
             World loadedWorld = Bukkit.getWorld(worldName);
             if (loadedWorld != null && !unloadWorld(worldName)) {
                 throw new IllegalStateException("Failed to unload world before restore: " + worldName);
+            }
+            if (!removeWorld(worldName)) {
+                throw new IllegalStateException("Failed to remove world before restore: " + worldName);
             }
         }).thenCompose(ignored -> runAsync(() -> {
             if (!this.fileManager.hasLatestBackup(worldName)) {
@@ -509,11 +542,12 @@ public final class ResourceWorldManager {
             }
             this.fileManager.restoreLatestBackup(worldName);
         })).thenCompose(ignored -> runOnMainThread(() -> {
-            if (!loadWorld(worldName)) {
-                throw new IllegalStateException("Failed to load restored world " + worldName);
+            if (worldDefinition == null) {
+                throw new IllegalStateException("Unknown resource world: " + worldName);
             }
-        })).thenCompose(ignored -> waitForWorldLoad(worldName).thenAccept(restoredWorld -> {
-        }));
+            createAndRegisterWorld(worldName, worldDefinition, null);
+        })).thenAccept(ignored -> {
+        });
     }
 
     private CompletableFuture<LocalDateTime> persistResetSuccess(
@@ -599,6 +633,53 @@ public final class ResourceWorldManager {
         if (!regenerateWorld(worldName, String.valueOf(seed))) {
             throw new IllegalStateException("Failed to regenerate world " + worldName);
         }
+    }
+
+    private void unloadWorldForReset(String worldName) {
+        World loadedWorld = Bukkit.getWorld(worldName);
+        if (loadedWorld != null && !unloadWorld(worldName)) {
+            throw new IllegalStateException("Failed to unload world before reset: " + worldName);
+        }
+    }
+
+    private World recreateWorld(
+            String worldName,
+            ConfigManager.ResourceWorldDefinition worldDefinition,
+            long seed) {
+        return createAndRegisterWorld(worldName, worldDefinition, seed);
+    }
+
+    private World createAndRegisterWorld(
+            String worldName,
+            ConfigManager.ResourceWorldDefinition worldDefinition,
+            Long seed) {
+        if (!removeWorld(worldName)) {
+            throw new IllegalStateException("Failed to remove world from Multiverse: " + worldName);
+        }
+
+        World world = createBukkitWorld(worldName, worldDefinition, seed);
+        if (!importWorld(worldName, worldDefinition.dimension())) {
+            throw new IllegalStateException("Failed to import world into Multiverse: " + worldName);
+        }
+        return world;
+    }
+
+    private World createBukkitWorld(
+            String worldName,
+            ConfigManager.ResourceWorldDefinition worldDefinition,
+            Long seed) {
+        WorldCreator creator = new WorldCreator(worldName)
+                .environment(worldDefinition.dimension())
+                .generateStructures(true)
+                .keepSpawnLoaded(TriState.FALSE);
+        if (seed != null) {
+            creator.seed(seed);
+        }
+        World world = creator.createWorld();
+        if (world == null) {
+            throw new IllegalStateException("Failed to create Bukkit world " + worldName);
+        }
+        return world;
     }
 
     private int determineFlattenSurface(World world) {

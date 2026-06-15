@@ -69,6 +69,7 @@ public final class MultiverseHook implements PluginHook<MultiverseWorldService> 
     private static final class MultiverseWorldServiceAdapter implements MultiverseWorldService {
 
         private static final String LOAD_WORLD_OPTIONS = "org.mvplugins.multiverse.core.world.options.LoadWorldOptions";
+        private static final String IMPORT_WORLD_OPTIONS = "org.mvplugins.multiverse.core.world.options.ImportWorldOptions";
         private static final String LOADED_WORLD_TYPE = "org.mvplugins.multiverse.core.world.LoadedMultiverseWorld";
         private static final String MULTIVERSE_WORLD_TYPE = "org.mvplugins.multiverse.core.world.MultiverseWorld";
         private static final String REGEN_WORLD_OPTIONS = "org.mvplugins.multiverse.core.world.options.RegenWorldOptions";
@@ -91,6 +92,23 @@ public final class MultiverseHook implements PluginHook<MultiverseWorldService> 
             options = invokeMethod(options, "unloadBukkitWorld", true);
             options = invokeMethod(options, "saveBukkitWorld", true);
             return isSuccess(invokeMethod(this.worldManager, "unloadWorld", options));
+        }
+
+        @Override
+        public boolean removeWorld(String worldName) {
+            Object world = getOrNull(invokeMethod(this.worldManager, "getWorld", worldName));
+            if (world == null) {
+                return true;
+            }
+            return isSuccess(invokeMethod(this.worldManager, "removeWorld", world));
+        }
+
+        @Override
+        public boolean importWorld(String worldName, org.bukkit.World.Environment environment) {
+            Object options = invokeStaticMethod(IMPORT_WORLD_OPTIONS, "worldName", String.class, worldName);
+            options = invokeMethod(options, "environment", environment);
+            options = invokeMethod(options, "doFolderCheck", false);
+            return isSuccess(invokeMethod(this.worldManager, "importWorld", options));
         }
 
         @Override
@@ -133,8 +151,21 @@ public final class MultiverseHook implements PluginHook<MultiverseWorldService> 
                 String parameterTypeName,
                 Object argument) {
             try {
+                return invokeStaticMethod(ownerClassName, methodName, Class.forName(parameterTypeName), argument);
+            } catch (ClassNotFoundException exception) {
+                throw new IllegalStateException(
+                        "Failed to resolve Multiverse parameter type " + parameterTypeName,
+                        exception);
+            }
+        }
+
+        private static Object invokeStaticMethod(
+                String ownerClassName,
+                String methodName,
+                Class<?> parameterType,
+                Object argument) {
+            try {
                 Class<?> ownerClass = Class.forName(ownerClassName);
-                Class<?> parameterType = Class.forName(parameterTypeName);
                 if (!parameterType.isInstance(argument)) {
                     return new FluentOptionsShim();
                 }
@@ -212,6 +243,14 @@ public final class MultiverseHook implements PluginHook<MultiverseWorldService> 
             }
 
             public FluentOptionsShim seed(String ignored) {
+                return this;
+            }
+
+            public FluentOptionsShim environment(org.bukkit.World.Environment ignored) {
+                return this;
+            }
+
+            public FluentOptionsShim doFolderCheck(boolean ignored) {
                 return this;
             }
         }

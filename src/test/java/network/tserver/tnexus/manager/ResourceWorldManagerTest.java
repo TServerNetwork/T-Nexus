@@ -89,10 +89,14 @@ class ResourceWorldManagerTest {
         assertFalse(manager.isResetting("resource"));
 
         assertTrue(manager.unloadWorld("resource"));
+        assertTrue(manager.removeWorld("resource"));
+        assertTrue(manager.importWorld("resource", World.Environment.NORMAL));
         assertTrue(manager.regenerateWorld("resource", "12345"));
         assertTrue(manager.loadWorld("resource"));
 
         assertEquals("resource", state.unloadWorldCall.get());
+        assertEquals("resource", state.removeWorldCall.get());
+        assertEquals("resource|NORMAL", state.importWorldCall.get());
         assertEquals("resource", state.loadWorldCall.get());
         assertEquals("resource|12345", state.regenWorldCall.get());
     }
@@ -141,7 +145,9 @@ class ResourceWorldManagerTest {
         assertEquals("resource", editService.flattenWorldName.get());
         assertEquals(schematicPath, editService.flattenSchematicPath.get());
         assertEquals("resource", editService.pasteWorldName.get());
-        assertEquals("resource|123456", worldState.regenWorldCall.get());
+        assertEquals("resource", worldState.unloadWorldCall.get());
+        assertEquals("resource", worldState.removeWorldCall.get());
+        assertEquals("resource|NORMAL", worldState.importWorldCall.get());
         assertSame(this.server.getWorld("lobby"), player.getWorld());
         assertFalse(manager.isResetting("resource"));
 
@@ -179,7 +185,7 @@ class ResourceWorldManagerTest {
         admin.addAttachment(plugin, "tnexus.admin", true);
 
         TrackingWorldManagerState worldState = new TrackingWorldManagerState();
-        worldState.regenShouldSucceed = false;
+        worldState.importShouldSucceed = false;
         TrackingFileManager fileManager = new TrackingFileManager(plugin);
         TrackingEditService editService = new TrackingEditService();
         ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
@@ -204,7 +210,7 @@ class ResourceWorldManagerTest {
                 .get(5, TimeUnit.SECONDS)
                 .orElseThrow();
         assertEquals(ResourceWorldResetRepository.ResetStatus.FAILED, failedEntry.status());
-        assertTrue(failedEntry.errorMessage().contains("Failed to regenerate world resource"));
+        assertTrue(failedEntry.errorMessage().contains("Failed to import world into Multiverse: resource"));
 
         String startMessage = admin.nextMessage();
         String adminMessage = admin.nextMessage();
@@ -213,7 +219,7 @@ class ResourceWorldManagerTest {
         assertNotNull(adminMessage);
         assertNotNull(failedBroadcast);
         assertTrue(adminMessage.contains("resource"));
-        assertTrue(adminMessage.contains("Failed to regenerate world resource"));
+        assertTrue(adminMessage.contains("Failed to import world into Multiverse: resource"));
         assertTrue(failedBroadcast.contains("resource"));
     }
 
@@ -290,6 +296,18 @@ class ResourceWorldManagerTest {
             }
 
             @Override
+            public boolean removeWorld(String worldName) {
+                state.removeWorldCall.set(worldName);
+                return true;
+            }
+
+            @Override
+            public boolean importWorld(String worldName, World.Environment environment) {
+                state.importWorldCall.set(worldName + "|" + environment.name());
+                return state.importShouldSucceed;
+            }
+
+            @Override
             public boolean regenerateWorld(String worldName, String seed) {
                 state.regenWorldCall.set(worldName + "|" + seed);
                 return state.regenShouldSucceed;
@@ -308,8 +326,11 @@ class ResourceWorldManagerTest {
 
     private static final class TrackingWorldManagerState {
         private final AtomicReference<String> unloadWorldCall = new AtomicReference<>();
+        private final AtomicReference<String> removeWorldCall = new AtomicReference<>();
+        private final AtomicReference<String> importWorldCall = new AtomicReference<>();
         private final AtomicReference<String> loadWorldCall = new AtomicReference<>();
         private final AtomicReference<String> regenWorldCall = new AtomicReference<>();
+        private boolean importShouldSucceed = true;
         private boolean regenShouldSucceed = true;
     }
 
@@ -338,6 +359,10 @@ class ResourceWorldManagerTest {
         @Override
         public void restoreLatestBackup(String worldName) {
             this.restoreCalled.set(true);
+        }
+
+        @Override
+        public void deleteWorldFolder(File worldFolder) {
         }
 
         @Override
