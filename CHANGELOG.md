@@ -1,3 +1,11 @@
+## [0.43.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.43.0...v0.43.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **world:** recreate resource worlds and smooth terrain blending ([fe24be9](https://github.com/TServerNetwork/T-Nexus/commit/fe24be92b76085ea66eea0fb8d6818e2aaa39364))
+* **world:** support namespaced air marker materials ([d634978](https://github.com/TServerNetwork/T-Nexus/commit/d634978d3694ff8fe08152104df15606c5766287))
+
 # [0.43.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.42.0...v0.43.0) (2026-06-15)
 
 
