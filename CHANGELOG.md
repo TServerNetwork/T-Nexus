@@ -1,3 +1,10 @@
+# [0.42.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.6...v0.42.0) (2026-06-15)
+
+
+### Features
+
+* **resource:** blend spawn terrain around schematics and manual resets ([e94daae](https://github.com/TServerNetwork/T-Nexus/commit/e94daae09d40d406096ab03f98ad8bdc90543dbe))
+
 ## [0.41.6](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.5...v0.41.6) (2026-06-15)
 
 
