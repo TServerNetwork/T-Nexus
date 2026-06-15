@@ -31,6 +31,8 @@ class MultiverseHookTest {
         assertTrue(hook.hook(plugin));
         assertNotNull(hook.getApi());
         assertTrue(hook.getApi().unloadWorld("resource"));
+        assertTrue(hook.getApi().removeWorld("resource"));
+        assertTrue(hook.getApi().importWorld("resource", org.bukkit.World.Environment.NORMAL));
         assertTrue(hook.getApi().regenerateWorld("resource", "12345"));
         assertTrue(hook.getApi().loadWorld("resource"));
     }
