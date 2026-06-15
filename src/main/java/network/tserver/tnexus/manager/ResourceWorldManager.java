@@ -24,6 +24,7 @@ import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.entity.Player;
@@ -34,6 +35,7 @@ import org.bukkit.entity.Player;
 public final class ResourceWorldManager {
 
     private static final int FALLBACK_CYLINDER_RADIUS = 8;
+    private static final int WATER_SURFACE_FALLBACK_RADIUS = 24;
     private static final int WORLD_LOAD_WAIT_TICKS = 200;
     private static final String ADMIN_PERMISSION = "tnexus.admin";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -477,8 +479,7 @@ public final class ResourceWorldManager {
                         world,
                         schematicPath,
                         FALLBACK_CYLINDER_RADIUS,
-                        surfaceY)))
-                .thenCompose(flattened -> runOnMainThread(() -> world.getHighestBlockYAt(0, 0)));
+                        surfaceY)).thenApply(ignored -> surfaceY));
     }
 
     private CompletableFuture<LocalDateTime> handleResetResult(
@@ -682,11 +683,49 @@ public final class ResourceWorldManager {
         return world;
     }
 
-    private int determineFlattenSurface(World world) {
-        int highest = world.getHighestBlockYAt(0, 0);
+    int determineFlattenSurface(World world) {
         int min = world.getMinHeight() + 1;
         int max = world.getMaxHeight() - 2;
-        return Math.max(min, Math.min(highest, max));
+        int surfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(world, 0, 0, min, max, true);
+        Material surfaceMaterial = world.getBlockAt(0, surfaceY, 0).getType();
+        if (!FaweResourceWorldEditService.isLiquidSurfaceMaterial(surfaceMaterial)) {
+            return surfaceY;
+        }
+
+        Integer nearbyLandY = findNearbyLandY(world, min, max, surfaceY, WATER_SURFACE_FALLBACK_RADIUS);
+        if (nearbyLandY != null) {
+            this.plugin.getLogger().info("Resolved resource-world surfaceY from nearby land because origin was liquid: "
+                    + "originY=" + surfaceY + ", landY=" + nearbyLandY + ", world=" + world.getName());
+            return nearbyLandY;
+        }
+
+        this.plugin.getLogger().info("Using liquid surfaceY for resource world because no nearby land was found: "
+                + "surfaceY=" + surfaceY + ", world=" + world.getName());
+        return surfaceY;
+    }
+
+    private Integer findNearbyLandY(World world, int minY, int maxY, int minimumSurfaceY, int radiusLimit) {
+        for (int radius = 1; radius <= radiusLimit; radius++) {
+            for (FaweResourceWorldEditService.ColumnKey column : FaweResourceWorldEditService.perimeterColumns(radius)) {
+                int topY = Math.max(minY, Math.min(world.getHighestBlockYAt(column.x(), column.z()), maxY));
+                Material topMaterial = world.getBlockAt(column.x(), topY, column.z()).getType();
+                if (FaweResourceWorldEditService.isLiquidSurfaceMaterial(topMaterial)
+                        || !FaweResourceWorldEditService.isTerrainSurfaceMaterial(topMaterial)) {
+                    continue;
+                }
+                int sampledY = FaweResourceWorldEditService.sampleTerrainSurfaceY(
+                        world,
+                        column.x(),
+                        column.z(),
+                        minY,
+                        maxY,
+                        false);
+                if (sampledY >= minimumSurfaceY) {
+                    return sampledY;
+                }
+            }
+        }
+        return null;
     }
 
     private CompletableFuture<World> waitForWorldLoad(String worldName) {

@@ -14,7 +14,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import network.tserver.tnexus.TNexus;
@@ -101,10 +103,11 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                     .copyBiomes(true)
                     .copyEntities(true)
                     .build());
+            editSession.flushQueue();
             if (this.schematicSettings.replaceAirMarkerAfterPaste()) {
                 replaceMarkerBlocks(editSession, replacementPlan);
+                editSession.flushQueue();
             }
-            editSession.flushQueue();
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read resource world schematic", exception);
         } catch (Exception exception) {
@@ -159,36 +162,34 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
 
     private MarkerReplacementPlan createMarkerReplacementPlan(Clipboard clipboard, int x, int y, int z) {
         Material markerMaterial = resolveMarkerMaterial();
-        String markerBlockId = markerMaterial.getKey().toString();
         BlockVector3 targetOrigin = BlockVector3.at(x, y, z);
         BlockVector3 clipboardOrigin = clipboard.getOrigin();
         BlockVector3 regionMinimum = clipboard.getRegion().getMinimumPoint();
         BlockVector3 regionMaximum = clipboard.getRegion().getMaximumPoint();
         BlockVector3 worldMinimum = regionMinimum.subtract(clipboardOrigin).add(targetOrigin);
         BlockVector3 worldMaximum = regionMaximum.subtract(clipboardOrigin).add(targetOrigin);
-        Map<BlockVector3, Boolean> markerPositions = new HashMap<>();
-        for (BlockVector3 position : clipboard.getRegion()) {
-            if (!clipboard.getBlock(position).getBlockType().id().equals(markerBlockId)) {
-                continue;
-            }
-            BlockVector3 worldPosition = position.subtract(clipboardOrigin).add(targetOrigin);
-            markerPositions.put(worldPosition, Boolean.TRUE);
-        }
         return new MarkerReplacementPlan(
-                markerMaterial,
+                markerMaterial.getKey().toString(),
                 worldMinimum,
-                worldMaximum,
-                markerPositions);
+                worldMaximum);
     }
 
     private void replaceMarkerBlocks(EditSession editSession, MarkerReplacementPlan replacementPlan) throws Exception {
         int replacedCount = 0;
-        for (BlockVector3 markerPosition : replacementPlan.markerPositions().keySet()) {
-            editSession.setBlock(markerPosition, BlockTypes.AIR.getDefaultState());
-            replacedCount++;
+        for (int x = replacementPlan.worldMinimum().x(); x <= replacementPlan.worldMaximum().x(); x++) {
+            for (int y = replacementPlan.worldMinimum().y(); y <= replacementPlan.worldMaximum().y(); y++) {
+                for (int z = replacementPlan.worldMinimum().z(); z <= replacementPlan.worldMaximum().z(); z++) {
+                    BlockVector3 position = BlockVector3.at(x, y, z);
+                    if (!editSession.getBlock(position).getBlockType().id().equals(replacementPlan.markerBlockId())) {
+                        continue;
+                    }
+                    editSession.setBlock(position, BlockTypes.AIR.getDefaultState());
+                    replacedCount++;
+                }
+            }
         }
         this.plugin.getLogger().info("Replaced air marker blocks after schematic paste: marker="
-                + replacementPlan.markerMaterial().getKey()
+                + replacementPlan.markerBlockId()
                 + ", count="
                 + replacedCount
                 + ", range="
@@ -331,8 +332,22 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         return smoothed;
     }
 
-    private int sampleTerrainSurfaceY(World world, int x, int z, int minY, int maxY) {
+    static int sampleTerrainSurfaceY(World world, int x, int z, int minY, int maxY) {
+        return sampleTerrainSurfaceY(world, x, z, minY, maxY, false);
+    }
+
+    static int sampleTerrainSurfaceY(
+            World world,
+            int x,
+            int z,
+            int minY,
+            int maxY,
+            boolean allowLiquidSurface) {
         int highestY = clamp(world.getHighestBlockYAt(x, z), minY + 1, maxY);
+        Material highestMaterial = world.getBlockAt(x, highestY, z).getType();
+        if (allowLiquidSurface && isLiquidSurfaceMaterial(highestMaterial)) {
+            return highestY;
+        }
         for (int y = highestY; y >= minY + 1; y--) {
             Material material = world.getBlockAt(x, y, z).getType();
             if (isTerrainSurfaceMaterial(material)) {
@@ -342,7 +357,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         return minY + 1;
     }
 
-    private boolean isTerrainSurfaceMaterial(Material material) {
+    static boolean isTerrainSurfaceMaterial(Material material) {
         if (material.isAir() || !material.isSolid()) {
             return false;
         }
@@ -363,6 +378,25 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                 && !materialName.contains("CORAL")
                 && !materialName.contains("KELP")
                 && !materialName.contains("SEAGRASS");
+    }
+
+    static boolean isLiquidSurfaceMaterial(Material material) {
+        return material == Material.WATER
+                || material == Material.LAVA
+                || material == Material.BUBBLE_COLUMN;
+    }
+
+    static List<ColumnKey> perimeterColumns(int radius) {
+        List<ColumnKey> columns = new ArrayList<>();
+        for (int x = -radius; x <= radius; x++) {
+            columns.add(new ColumnKey(x, -radius));
+            columns.add(new ColumnKey(x, radius));
+        }
+        for (int z = (-radius + 1); z <= (radius - 1); z++) {
+            columns.add(new ColumnKey(-radius, z));
+            columns.add(new ColumnKey(radius, z));
+        }
+        return columns;
     }
 
     private int calculateBlendedSurfaceY(
@@ -402,7 +436,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         return 0;
     }
 
-    private int clamp(int value, int min, int max) {
+    private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(value, max));
     }
 
@@ -450,10 +484,9 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     }
 
     private record MarkerReplacementPlan(
-            Material markerMaterial,
+            String markerBlockId,
             BlockVector3 worldMinimum,
-            BlockVector3 worldMaximum,
-            Map<BlockVector3, Boolean> markerPositions) {
+            BlockVector3 worldMaximum) {
 
         private String worldBounds() {
             return "[" + this.worldMinimum.x() + "," + this.worldMinimum.y() + "," + this.worldMinimum.z()
@@ -516,6 +549,6 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         }
     }
 
-    private record ColumnKey(int x, int z) {
+    record ColumnKey(int x, int z) {
     }
 }

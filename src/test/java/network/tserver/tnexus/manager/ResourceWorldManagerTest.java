@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -145,6 +146,7 @@ class ResourceWorldManagerTest {
         assertEquals("resource", editService.flattenWorldName.get());
         assertEquals(schematicPath, editService.flattenSchematicPath.get());
         assertEquals("resource", editService.pasteWorldName.get());
+        assertEquals(editService.flattenSurfaceY.get(), editService.pasteY.get());
         assertEquals("resource", worldState.unloadWorldCall.get());
         assertEquals("resource", worldState.removeWorldCall.get());
         assertEquals("resource|NORMAL", worldState.importWorldCall.get());
@@ -261,6 +263,50 @@ class ResourceWorldManagerTest {
 
         continueBackup.countDown();
         waitFor(resetFuture);
+    }
+
+    @Test
+    void shouldFallbackToNearbyLandWhenOriginSurfaceIsWater() {
+        TNexus plugin = loadPlugin();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
+        World world = this.server.addSimpleWorld("resource_surface");
+
+        world.getBlockAt(0, 62, 0).setType(Material.STONE);
+        world.getBlockAt(0, 63, 0).setType(Material.WATER);
+        world.getBlockAt(2, 70, 0).setType(Material.DIRT);
+        world.getBlockAt(2, 71, 0).setType(Material.GRASS_BLOCK);
+
+        assertEquals(71, manager.determineFlattenSurface(world));
+    }
+
+    @Test
+    void shouldKeepWaterSurfaceWhenNearbyLandIsBelowWaterline() {
+        TNexus plugin = loadPlugin();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
+        World world = this.server.addSimpleWorld("resource_surface_water");
+
+        world.getBlockAt(0, 62, 0).setType(Material.STONE);
+        world.getBlockAt(0, 63, 0).setType(Material.WATER);
+        world.getBlockAt(2, 60, 0).setType(Material.DIRT);
+        world.getBlockAt(2, 61, 0).setType(Material.GRASS_BLOCK);
+
+        assertEquals(63, manager.determineFlattenSurface(world));
     }
 
     private TNexus loadPlugin() {
@@ -412,6 +458,8 @@ class ResourceWorldManagerTest {
         private final AtomicReference<String> pasteWorldName = new AtomicReference<>();
         private final AtomicReference<Path> flattenSchematicPath = new AtomicReference<>();
         private final AtomicReference<Integer> flattenFallbackRadius = new AtomicReference<>();
+        private final AtomicReference<Integer> flattenSurfaceY = new AtomicReference<>();
+        private final AtomicReference<Integer> pasteY = new AtomicReference<>();
 
         @Override
         public void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY) {
@@ -419,6 +467,7 @@ class ResourceWorldManagerTest {
             this.flattenWorldName.set(world.getName());
             this.flattenSchematicPath.set(schematicPath);
             this.flattenFallbackRadius.set(fallbackRadius);
+            this.flattenSurfaceY.set(surfaceY);
             assertEquals(8, fallbackRadius);
         }
 
@@ -426,6 +475,7 @@ class ResourceWorldManagerTest {
         public void pasteSchematic(World world, Path schematicPath, int x, int y, int z) {
             this.pasteCalled.set(true);
             this.pasteWorldName.set(world.getName());
+            this.pasteY.set(y);
             assertTrue(Files.exists(schematicPath));
             assertEquals(0, x);
             assertEquals(0, z);
