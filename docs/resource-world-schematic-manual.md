@@ -38,6 +38,7 @@ flowchart TD
 
 `spawn.schem` が存在する場合、T-Nexus は最初に schematic の外形を読みます。  
 そのうえで、建物本体の周囲だけを整地し、さらに外周を自然地形へなめらかにブレンドします。
+貼り付け時は schematic 内の通常 `AIR` を直接ワールドへ書き込みません。
 
 ### 4-2. イメージ
 
@@ -60,6 +61,7 @@ flowchart TB
 2. schematic の周囲に少し余白を足した範囲を整地する
 3. その外側を自然地形へ向けて段階的にブレンドする
 4. 最後に `(0, surfaceY, 0)` を基準に schematic を貼る
+5. air marker block が含まれている場所だけ、貼り付け後に `AIR` へ置換する
 
 ## 5. schematic がない場合の流れ
 
@@ -104,6 +106,31 @@ flowchart TB
 
 - schematic 外周が完全な真っ平らになる前提では作らないでください
 - 入口や床の高さを厳密に合わせたい場合は、原点位置と床面設計で吸収してください
+
+### 6-4. AIR と air marker block の扱い
+
+- `spawn.schem` には、基本的に実際に置きたいブロックだけを保存してください
+- 通常の `AIR` は貼り付け時に無視されます
+- 建物内部、通路、吹き抜けなど、明示的に空間として空けたい場所は air marker block で埋めてから schematic 化してください
+- 貼り付け後、air marker block は T-Nexus により `AIR` へ置換されます
+- 円形床の四隅などに含まれる余白 `AIR` では、自然地形は削られません
+
+### 6-5. air marker block の設定
+
+デフォルトの air marker block は次です。
+
+- `minecraft:magenta_concrete`
+
+設定は `config.yml` の以下で変更できます。
+
+```yml
+resource-world:
+  spawn:
+    schematic:
+      ignore-air-blocks: true
+      air-marker-block: "minecraft:magenta_concrete"
+      replace-air-marker-after-paste: true
+```
 
 ## 7. 次回リセット日時の扱い
 
