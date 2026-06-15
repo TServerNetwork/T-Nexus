@@ -132,13 +132,14 @@ class ResourceWorldManagerTest {
         waitFor(resetFuture);
         LocalDateTime nextReset = resetFuture.get(5, TimeUnit.SECONDS);
 
-        assertEquals(LocalDateTime.of(2026, 6, 15, 9, 0, 10), nextReset);
+        assertEquals(LocalDateTime.of(2026, 6, 15, 9, 0), nextReset);
         assertEquals(nextReset, repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow());
         assertTrue(fileManager.backupCalled.get());
         assertEquals(expectedWorldFolder, fileManager.backupWorldFolder.get());
         assertTrue(editService.flattenCalled.get());
         assertTrue(editService.pasteCalled.get());
         assertEquals("resource", editService.flattenWorldName.get());
+        assertEquals(schematicPath, editService.flattenSchematicPath.get());
         assertEquals("resource", editService.pasteWorldName.get());
         assertEquals("resource|123456", worldState.regenWorldCall.get());
         assertSame(this.server.getWorld("lobby"), player.getWorld());
@@ -384,12 +385,16 @@ class ResourceWorldManagerTest {
         private final AtomicBoolean pasteCalled = new AtomicBoolean();
         private final AtomicReference<String> flattenWorldName = new AtomicReference<>();
         private final AtomicReference<String> pasteWorldName = new AtomicReference<>();
+        private final AtomicReference<Path> flattenSchematicPath = new AtomicReference<>();
+        private final AtomicReference<Integer> flattenFallbackRadius = new AtomicReference<>();
 
         @Override
-        public void flattenArea(World world, int radius, int surfaceY) {
+        public void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY) {
             this.flattenCalled.set(true);
             this.flattenWorldName.set(world.getName());
-            assertEquals(32, radius);
+            this.flattenSchematicPath.set(schematicPath);
+            this.flattenFallbackRadius.set(fallbackRadius);
+            assertEquals(8, fallbackRadius);
         }
 
         @Override

@@ -9,13 +9,14 @@ import org.bukkit.World;
 public interface ResourceWorldEditService {
 
     /**
-     * Flattens the area around world origin to a constant surface level.
+     * Prepares the terrain around spawn for the given schematic.
      *
      * @param world target world
-     * @param radius flatten radius around 0,0
-     * @param surfaceY final surface height
+     * @param schematicPath schematic path; when absent, implementations may fall back to a simple flat area
+     * @param fallbackRadius fallback radius around 0,0 when no schematic is present
+     * @param surfaceY final surface height at the schematic origin
      */
-    void flattenArea(World world, int radius, int surfaceY);
+    void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY);
 
     /**
      * Pastes the given schematic at the provided world coordinates.

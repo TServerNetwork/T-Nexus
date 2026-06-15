@@ -109,7 +109,7 @@ public final class ResetScheduler {
             long resetDelayTicks = Math.max(1L, (resetDelayMillis + 49L) / 50L);
             worldTasks.add(Bukkit.getScheduler().runTaskLater(
                     this.plugin,
-                    () -> this.manager.executeReset(worldName)
+                    () -> this.manager.executeScheduledReset(worldName)
                             .thenAccept(nextScheduledReset -> Bukkit.getScheduler().runTask(
                                     this.plugin,
                                     () -> scheduleWorld(worldName, nextScheduledReset)))
