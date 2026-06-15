@@ -1,3 +1,10 @@
+# [0.43.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.42.0...v0.43.0) (2026-06-15)
+
+
+### Features
+
+* **resource:** support air marker blocks in spawn schematics ([9492dd7](https://github.com/TServerNetwork/T-Nexus/commit/9492dd7ef83d3d4d56b0a3bbde9752b3014d5db7))
+
 # [0.42.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.6...v0.42.0) (2026-06-15)
 
 
