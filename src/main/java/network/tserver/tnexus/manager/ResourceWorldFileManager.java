@@ -157,11 +157,12 @@ public class ResourceWorldFileManager {
 
     private File resolveWorldFolder(String worldName) {
         World world = Bukkit.getWorld(worldName);
-        if (world == null) {
-            throw new IllegalStateException("World not loaded: " + worldName);
+        if (world != null) {
+            return world.getWorldFolder();
         }
-
-        return world.getWorldFolder();
+        return this.plugin.getServer().getWorldContainer().toPath()
+                .resolve(worldName)
+                .toFile();
     }
 
     private Path validateWorldFolder(File worldFolder) {

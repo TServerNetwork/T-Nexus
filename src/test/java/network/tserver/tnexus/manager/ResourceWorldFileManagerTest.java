@@ -13,7 +13,7 @@ import org.mockbukkit.mockbukkit.ServerMock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResourceWorldFileManagerTest {
 
@@ -54,15 +54,23 @@ class ResourceWorldFileManagerTest {
     }
 
     @Test
-    void shouldRequireLoadedWorldToBackup() {
+    void shouldResolveWorldFolderFromWorldContainerWhenWorldIsUnloaded() throws Exception {
         this.server = TestPluginSupport.mockServerWithRequiredPlugins();
         TNexus plugin = TestPluginSupport.loadPlugin(this.server, TestPluginSupport.TestTNexus.class);
         ResourceWorldFileManager fileManager = new ResourceWorldFileManager(plugin);
+        Path worldFolder = this.server.getWorldContainer().toPath().resolve("resource");
+        Files.createDirectories(worldFolder);
+        Files.writeString(worldFolder.resolve("marker.txt"), "resource");
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> fileManager.backupWorld("resource"));
-
-        assertEquals("World not loaded: resource", exception.getMessage());
+        assertEquals(worldFolder.toFile(), fileManager.getLoadedWorldFolder("resource"));
+        fileManager.backupWorld("resource");
+        assertTrue(Files.exists(this.server.getWorldContainer().toPath()
+                .resolve("plugins")
+                .resolve("T-Nexus")
+                .resolve("backups")
+                .resolve("resource")
+                .resolve("1")
+                .resolve("marker.txt")));
     }
 
     @Test
