@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.junit.jupiter.api.AfterEach;
@@ -266,7 +267,7 @@ class ResourceWorldManagerTest {
     }
 
     @Test
-    void shouldFallbackToNearbyLandWhenOriginSurfaceIsWater() {
+    void shouldUseWaterSurfaceWhenOriginSurfaceIsWater() {
         TNexus plugin = loadPlugin();
         TrackingWorldManagerState state = new TrackingWorldManagerState();
         ResourceWorldManager manager = new ResourceWorldManager(
@@ -284,11 +285,11 @@ class ResourceWorldManagerTest {
         world.getBlockAt(2, 70, 0).setType(Material.DIRT);
         world.getBlockAt(2, 71, 0).setType(Material.GRASS_BLOCK);
 
-        assertEquals(71, manager.determineFlattenSurface(world));
+        assertEquals(63, manager.determineFlattenSurface(world));
     }
 
     @Test
-    void shouldKeepWaterSurfaceWhenNearbyLandIsBelowWaterline() {
+    void shouldResolveSpawnPointAboveConfiguredSurface() {
         TNexus plugin = loadPlugin();
         TrackingWorldManagerState state = new TrackingWorldManagerState();
         ResourceWorldManager manager = new ResourceWorldManager(
@@ -299,14 +300,17 @@ class ResourceWorldManagerTest {
                 new TrackingFileManager(plugin),
                 new TrackingEditService(),
                 () -> 100L);
-        World world = this.server.addSimpleWorld("resource_surface_water");
+        World world = this.server.addSimpleWorld("resource_spawn");
 
-        world.getBlockAt(0, 62, 0).setType(Material.STONE);
-        world.getBlockAt(0, 63, 0).setType(Material.WATER);
-        world.getBlockAt(2, 60, 0).setType(Material.DIRT);
-        world.getBlockAt(2, 61, 0).setType(Material.GRASS_BLOCK);
+        world.getBlockAt(0, 63, 0).setType(Material.GRASS_BLOCK);
+        world.getBlockAt(0, 64, 0).setType(Material.AIR);
+        world.getBlockAt(0, 65, 0).setType(Material.AIR);
 
-        assertEquals(63, manager.determineFlattenSurface(world));
+        Location spawnPoint = manager.resolveSpawnPoint(world, 63);
+
+        assertEquals(0.5D, spawnPoint.getX());
+        assertEquals(64.0D, spawnPoint.getY());
+        assertEquals(0.5D, spawnPoint.getZ());
     }
 
     private TNexus loadPlugin() {

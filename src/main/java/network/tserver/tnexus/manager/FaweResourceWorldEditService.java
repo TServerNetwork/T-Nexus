@@ -105,7 +105,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                     .build());
             editSession.flushQueue();
             if (this.schematicSettings.replaceAirMarkerAfterPaste()) {
-                replaceMarkerBlocks(editSession, replacementPlan);
+                replaceMarkerBlocks(world, replacementPlan);
                 editSession.flushQueue();
             }
         } catch (IOException exception) {
@@ -169,27 +169,27 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         BlockVector3 worldMinimum = regionMinimum.subtract(clipboardOrigin).add(targetOrigin);
         BlockVector3 worldMaximum = regionMaximum.subtract(clipboardOrigin).add(targetOrigin);
         return new MarkerReplacementPlan(
-                markerMaterial.getKey().toString(),
+                markerMaterial,
                 worldMinimum,
                 worldMaximum);
     }
 
-    private void replaceMarkerBlocks(EditSession editSession, MarkerReplacementPlan replacementPlan) throws Exception {
+    private void replaceMarkerBlocks(World world, MarkerReplacementPlan replacementPlan) {
         int replacedCount = 0;
         for (int x = replacementPlan.worldMinimum().x(); x <= replacementPlan.worldMaximum().x(); x++) {
             for (int y = replacementPlan.worldMinimum().y(); y <= replacementPlan.worldMaximum().y(); y++) {
                 for (int z = replacementPlan.worldMinimum().z(); z <= replacementPlan.worldMaximum().z(); z++) {
-                    BlockVector3 position = BlockVector3.at(x, y, z);
-                    if (!editSession.getBlock(position).getBlockType().id().equals(replacementPlan.markerBlockId())) {
+                    org.bukkit.block.Block block = world.getBlockAt(x, y, z);
+                    if (block.getType() != replacementPlan.markerMaterial()) {
                         continue;
                     }
-                    editSession.setBlock(position, BlockTypes.AIR.getDefaultState());
+                    block.setType(Material.AIR, false);
                     replacedCount++;
                 }
             }
         }
         this.plugin.getLogger().info("Replaced air marker blocks after schematic paste: marker="
-                + replacementPlan.markerBlockId()
+                + replacementPlan.markerMaterial().getKey()
                 + ", count="
                 + replacedCount
                 + ", range="
@@ -484,7 +484,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     }
 
     private record MarkerReplacementPlan(
-            String markerBlockId,
+            Material markerMaterial,
             BlockVector3 worldMinimum,
             BlockVector3 worldMaximum) {
 

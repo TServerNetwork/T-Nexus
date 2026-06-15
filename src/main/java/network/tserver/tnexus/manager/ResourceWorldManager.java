@@ -24,9 +24,11 @@ import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
 /**
@@ -35,7 +37,6 @@ import org.bukkit.entity.Player;
 public final class ResourceWorldManager {
 
     private static final int FALLBACK_CYLINDER_RADIUS = 8;
-    private static final int WATER_SURFACE_FALLBACK_RADIUS = 24;
     private static final int WORLD_LOAD_WAIT_TICKS = 200;
     private static final String ADMIN_PERMISSION = "tnexus.admin";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -459,7 +460,10 @@ public final class ResourceWorldManager {
                                                         context.worldName(),
                                                         world,
                                                         schematicPath,
-                                                        postFlattenSurfaceY))
+                                                        postFlattenSurfaceY)
+                                                        .thenCompose(pasteIgnored -> configureSpawnPoint(
+                                                                world,
+                                                                postFlattenSurfaceY)))
                                                 .thenCompose(pasteIgnored -> persistResetSuccess(
                                                         context,
                                                         worldDefinition,
@@ -600,11 +604,41 @@ public final class ResourceWorldManager {
     }
 
     private CompletableFuture<Void> maybePasteSpawnSchematic(String worldName, World world, Path schematicPath, int surfaceY) {
-        return runAsync(() -> {
+        return runOnMainThread(() -> {
             if (!Files.isRegularFile(schematicPath)) {
                 return;
             }
             this.worldEditService.pasteSchematic(world, schematicPath, 0, surfaceY, 0);
+        });
+    }
+
+    private CompletableFuture<Void> configureSpawnPoint(World world, int surfaceY) {
+        return runOnMainThread(() -> {
+            Location spawnLocation = resolveSpawnPoint(world, surfaceY);
+            try {
+                if (!world.setSpawnLocation(
+                        spawnLocation.getBlockX(),
+                        spawnLocation.getBlockY(),
+                        spawnLocation.getBlockZ())) {
+                    throw new IllegalStateException("Failed to set resource-world spawn location for " + world.getName());
+                }
+            } catch (RuntimeException exception) {
+                if (!"org.mockbukkit.mockbukkit.exception.UnimplementedOperationException"
+                        .equals(exception.getClass().getName())) {
+                    throw exception;
+                }
+                this.plugin.getLogger().fine("Spawn location updates are not implemented by the active test world: "
+                        + world.getName());
+                return;
+            }
+            this.plugin.getLogger().info("Configured resource-world spawn point: world="
+                    + world.getName()
+                    + ", x="
+                    + spawnLocation.getX()
+                    + ", y="
+                    + spawnLocation.getY()
+                    + ", z="
+                    + spawnLocation.getZ());
         });
     }
 
@@ -686,46 +720,37 @@ public final class ResourceWorldManager {
     int determineFlattenSurface(World world) {
         int min = world.getMinHeight() + 1;
         int max = world.getMaxHeight() - 2;
-        int surfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(world, 0, 0, min, max, true);
-        Material surfaceMaterial = world.getBlockAt(0, surfaceY, 0).getType();
-        if (!FaweResourceWorldEditService.isLiquidSurfaceMaterial(surfaceMaterial)) {
-            return surfaceY;
-        }
-
-        Integer nearbyLandY = findNearbyLandY(world, min, max, surfaceY, WATER_SURFACE_FALLBACK_RADIUS);
-        if (nearbyLandY != null) {
-            this.plugin.getLogger().info("Resolved resource-world surfaceY from nearby land because origin was liquid: "
-                    + "originY=" + surfaceY + ", landY=" + nearbyLandY + ", world=" + world.getName());
-            return nearbyLandY;
-        }
-
-        this.plugin.getLogger().info("Using liquid surfaceY for resource world because no nearby land was found: "
-                + "surfaceY=" + surfaceY + ", world=" + world.getName());
-        return surfaceY;
+        return FaweResourceWorldEditService.sampleTerrainSurfaceY(world, 0, 0, min, max, true);
     }
 
-    private Integer findNearbyLandY(World world, int minY, int maxY, int minimumSurfaceY, int radiusLimit) {
-        for (int radius = 1; radius <= radiusLimit; radius++) {
-            for (FaweResourceWorldEditService.ColumnKey column : FaweResourceWorldEditService.perimeterColumns(radius)) {
-                int topY = Math.max(minY, Math.min(world.getHighestBlockYAt(column.x(), column.z()), maxY));
-                Material topMaterial = world.getBlockAt(column.x(), topY, column.z()).getType();
-                if (FaweResourceWorldEditService.isLiquidSurfaceMaterial(topMaterial)
-                        || !FaweResourceWorldEditService.isTerrainSurfaceMaterial(topMaterial)) {
-                    continue;
-                }
-                int sampledY = FaweResourceWorldEditService.sampleTerrainSurfaceY(
-                        world,
-                        column.x(),
-                        column.z(),
-                        minY,
-                        maxY,
-                        false);
-                if (sampledY >= minimumSurfaceY) {
-                    return sampledY;
-                }
+    Location resolveSpawnPoint(World world, int surfaceY) {
+        int minY = world.getMinHeight() + 1;
+        int maxY = world.getMaxHeight() - 2;
+        int startY = clamp(surfaceY + 1, minY + 1, maxY);
+        for (int y = startY; y <= maxY; y++) {
+            Block feetBlock = world.getBlockAt(0, y, 0);
+            Block headBlock = world.getBlockAt(0, y + 1, 0);
+            Block floorBlock = world.getBlockAt(0, y - 1, 0);
+            if (!isSpawnPassable(feetBlock) || !isSpawnPassable(headBlock)) {
+                continue;
             }
+            if (isSpawnPassable(floorBlock) || FaweResourceWorldEditService.isLiquidSurfaceMaterial(floorBlock.getType())) {
+                continue;
+            }
+            return new Location(world, 0.5D, y, 0.5D);
         }
-        return null;
+        int fallbackY = clamp(world.getHighestBlockYAt(0, 0) + 1, minY + 1, maxY);
+        return new Location(world, 0.5D, fallbackY, 0.5D);
+    }
+
+    private boolean isSpawnPassable(Block block) {
+        Material material = block.getType();
+        return material.isAir()
+                || (!material.isSolid() && !FaweResourceWorldEditService.isLiquidSurfaceMaterial(material));
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(value, max));
     }
 
     private CompletableFuture<World> waitForWorldLoad(String worldName) {
