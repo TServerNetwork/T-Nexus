@@ -1,3 +1,10 @@
+# [0.44.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.43.1...v0.44.0) (2026-06-15)
+
+
+### Features
+
+* **world:** refine schematic surface alignment and water fallback ([98f45f7](https://github.com/TServerNetwork/T-Nexus/commit/98f45f70201a874f1d0a4198b016c04eaadbc7a9))
+
 ## [0.43.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.43.0...v0.43.1) (2026-06-15)
 
 
