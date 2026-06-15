@@ -1,3 +1,10 @@
+# [0.45.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.44.0...v0.45.0) (2026-06-15)
+
+
+### Features
+
+* **world:** restore water surface alignment and set spawn point ([d7dc8e6](https://github.com/TServerNetwork/T-Nexus/commit/d7dc8e66eeca55becf6314dbe96cae36a8066799))
+
 # [0.44.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.43.1...v0.44.0) (2026-06-15)
 
 
