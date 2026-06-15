@@ -46,6 +46,11 @@ class ConfigManagerTest {
         assertEquals("plugins/T-Nexus/backups", configManager.getResourceWorldSettings().backupPath());
         assertEquals(1234567890L, configManager.getResourceWorldSettings().seedObfuscationKey());
         assertFalse(configManager.getResourceWorldSettings().showRealSeedToAdmin());
+        assertTrue(configManager.getResourceWorldSettings().spawnSchematicSettings().ignoreAirBlocks());
+        assertEquals(
+                "minecraft:magenta_concrete",
+                configManager.getResourceWorldSettings().spawnSchematicSettings().airMarkerBlock());
+        assertTrue(configManager.getResourceWorldSettings().spawnSchematicSettings().replaceAirMarkerAfterPaste());
         assertEquals(3, configManager.getResourceWorldSettings().worlds().size());
         assertEquals("resource_end", configManager.getResourceWorldSettings().worlds().get(2).name());
         assertEquals("THE_END", configManager.getResourceWorldSettings().worlds().get(2).dimension().name());

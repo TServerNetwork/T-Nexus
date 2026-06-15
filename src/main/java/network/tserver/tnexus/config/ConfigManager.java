@@ -292,7 +292,26 @@ public final class ConfigManager {
                 section.getString("fallback-world", "lobby"),
                 section.getLong("seed-obfuscation-key", 1234567890L),
                 section.getBoolean("show-real-seed-to-admin", false),
+                loadSpawnSchematicSettings(section),
                 List.copyOf(worlds));
+    }
+
+    private ResourceWorldSpawnSchematicSettings loadSpawnSchematicSettings(ConfigurationSection section) {
+        ConfigurationSection spawnSection = section.getConfigurationSection("spawn");
+        ConfigurationSection schematicSection = spawnSection == null
+                ? null
+                : spawnSection.getConfigurationSection("schematic");
+        if (schematicSection == null) {
+            return new ResourceWorldSpawnSchematicSettings(
+                    true,
+                    "minecraft:magenta_concrete",
+                    true);
+        }
+
+        return new ResourceWorldSpawnSchematicSettings(
+                schematicSection.getBoolean("ignore-air-blocks", true),
+                schematicSection.getString("air-marker-block", "minecraft:magenta_concrete"),
+                schematicSection.getBoolean("replace-air-marker-after-paste", true));
     }
 
     private String requireString(Map<?, ?> values, String key) {
@@ -397,6 +416,7 @@ public final class ConfigManager {
      * @param fallbackWorld fallback world name
      * @param seedObfuscationKey seed obfuscation key
      * @param showRealSeedToAdmin whether admins should see the real seed
+     * @param spawnSchematicSettings spawn schematic settings
      * @param worlds configured resource worlds
      */
     public record ResourceWorldSettings(
@@ -405,7 +425,21 @@ public final class ConfigManager {
             String fallbackWorld,
             long seedObfuscationKey,
             boolean showRealSeedToAdmin,
+            ResourceWorldSpawnSchematicSettings spawnSchematicSettings,
             List<ResourceWorldDefinition> worlds) {
+    }
+
+    /**
+     * Immutable spawn schematic configuration values.
+     *
+     * @param ignoreAirBlocks whether AIR in the schematic should be skipped during paste
+     * @param airMarkerBlock namespaced marker block that should become AIR after paste
+     * @param replaceAirMarkerAfterPaste whether marker replacement should run after a successful paste
+     */
+    public record ResourceWorldSpawnSchematicSettings(
+            boolean ignoreAirBlocks,
+            String airMarkerBlock,
+            boolean replaceAirMarkerAfterPaste) {
     }
 
     /**

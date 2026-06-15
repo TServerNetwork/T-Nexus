@@ -2,6 +2,7 @@ package network.tserver.tnexus.manager;
 
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
@@ -17,6 +18,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import network.tserver.tnexus.TNexus;
+import network.tserver.tnexus.config.ConfigManager;
+import org.bukkit.Material;
 import org.bukkit.World;
 
 /**
@@ -29,6 +32,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     private static final int FALLBACK_BLEND_DISTANCE = 6;
 
     private final TNexus plugin;
+    private final ConfigManager.ResourceWorldSpawnSchematicSettings schematicSettings;
 
     /**
      * Creates a new FAWE edit service.
@@ -37,6 +41,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
      */
     public FaweResourceWorldEditService(TNexus plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.schematicSettings = this.plugin.getConfigManager().getResourceWorldSettings().spawnSchematicSettings();
     }
 
     @Override
@@ -78,13 +83,24 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                      .world(adaptedWorld)
                      .maxBlocks(-1)
                      .build()) {
-            ClipboardHolder holder = new ClipboardHolder(reader.read());
+            Clipboard clipboard = reader.read();
+            ClipboardHolder holder = new ClipboardHolder(clipboard);
+            MarkerReplacementPlan replacementPlan = createMarkerReplacementPlan(clipboard, x, y, z);
+            this.plugin.getLogger().info("Pasting resource schematic with ignoreAirBlocks="
+                    + this.schematicSettings.ignoreAirBlocks()
+                    + ", airMarkerBlock="
+                    + this.schematicSettings.airMarkerBlock()
+                    + ", replacementRange="
+                    + replacementPlan.worldBounds());
             Operations.complete(holder.createPaste(editSession)
                     .to(BlockVector3.at(x, y, z))
-                    .ignoreAirBlocks(false)
+                    .ignoreAirBlocks(this.schematicSettings.ignoreAirBlocks())
                     .copyBiomes(true)
                     .copyEntities(true)
                     .build());
+            if (this.schematicSettings.replaceAirMarkerAfterPaste()) {
+                replaceMarkerBlocks(editSession, replacementPlan);
+            }
             editSession.flushQueue();
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read resource world schematic", exception);
@@ -136,6 +152,53 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read resource world schematic", exception);
         }
+    }
+
+    private MarkerReplacementPlan createMarkerReplacementPlan(Clipboard clipboard, int x, int y, int z) {
+        Material markerMaterial = resolveMarkerMaterial();
+        String markerBlockId = markerMaterial.getKey().toString();
+        BlockVector3 targetOrigin = BlockVector3.at(x, y, z);
+        BlockVector3 clipboardOrigin = clipboard.getOrigin();
+        BlockVector3 regionMinimum = clipboard.getRegion().getMinimumPoint();
+        BlockVector3 regionMaximum = clipboard.getRegion().getMaximumPoint();
+        BlockVector3 worldMinimum = regionMinimum.subtract(clipboardOrigin).add(targetOrigin);
+        BlockVector3 worldMaximum = regionMaximum.subtract(clipboardOrigin).add(targetOrigin);
+        Map<BlockVector3, Boolean> markerPositions = new HashMap<>();
+        for (BlockVector3 position : clipboard.getRegion()) {
+            if (!clipboard.getBlock(position).getBlockType().id().equals(markerBlockId)) {
+                continue;
+            }
+            BlockVector3 worldPosition = position.subtract(clipboardOrigin).add(targetOrigin);
+            markerPositions.put(worldPosition, Boolean.TRUE);
+        }
+        return new MarkerReplacementPlan(
+                markerMaterial,
+                worldMinimum,
+                worldMaximum,
+                markerPositions);
+    }
+
+    private void replaceMarkerBlocks(EditSession editSession, MarkerReplacementPlan replacementPlan) throws Exception {
+        int replacedCount = 0;
+        for (BlockVector3 markerPosition : replacementPlan.markerPositions().keySet()) {
+            editSession.setBlock(markerPosition, BlockTypes.AIR.getDefaultState());
+            replacedCount++;
+        }
+        this.plugin.getLogger().info("Replaced air marker blocks after schematic paste: marker="
+                + replacementPlan.markerMaterial().getKey()
+                + ", count="
+                + replacedCount
+                + ", range="
+                + replacementPlan.worldBounds());
+    }
+
+    private Material resolveMarkerMaterial() {
+        String configured = this.schematicSettings.airMarkerBlock();
+        Material material = Material.matchMaterial(configured, true);
+        if (material == null || !material.isBlock()) {
+            throw new IllegalStateException("Invalid resource-world air marker block: " + configured);
+        }
+        return material;
     }
 
     private void flattenInnerArea(
@@ -299,6 +362,19 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     }
 
     private record ClipboardData(int minX, int maxX, int minZ, int maxZ) {
+    }
+
+    private record MarkerReplacementPlan(
+            Material markerMaterial,
+            BlockVector3 worldMinimum,
+            BlockVector3 worldMaximum,
+            Map<BlockVector3, Boolean> markerPositions) {
+
+        private String worldBounds() {
+            return "[" + this.worldMinimum.x() + "," + this.worldMinimum.y() + "," + this.worldMinimum.z()
+                    + "] -> ["
+                    + this.worldMaximum.x() + "," + this.worldMaximum.y() + "," + this.worldMaximum.z() + "]";
+        }
     }
 
     private record TerrainPlan(

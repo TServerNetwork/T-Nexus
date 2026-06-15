@@ -62,6 +62,11 @@ resource-world:
   fallback-world: "lobby"
   seed-obfuscation-key: 1234567890
   show-real-seed-to-admin: false
+  spawn:
+    schematic:
+      ignore-air-blocks: true
+      air-marker-block: "minecraft:magenta_concrete"
+      replace-air-marker-after-paste: true
   worlds:
     - name: "resource"
       dimension: "NORMAL"
