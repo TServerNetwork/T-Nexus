@@ -73,6 +73,7 @@ class SignShopManagerTest {
         manager.executeTrade(buyer, shop, TradeAction.BUY, 4);
 
         waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 4));
+        waitUntil(() -> hasTransactionCount(plugin, buyer, "SHOP_BUY", 1));
 
         assertEquals(60.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
         assertEquals(40.0D, plugin.getEconomyManager().getBalance(owner.getUniqueId()).get(5, TimeUnit.SECONDS));
@@ -718,6 +719,7 @@ class SignShopManagerTest {
         manager.executeTrade(buyer, liveShop, TradeAction.BUY, 5);
 
         waitUntil(() -> buyer.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), 5));
+        waitUntil(() -> hasTransactionCount(plugin, buyer, "SHOP_BUY", 1));
 
         assertEquals(50.0D, plugin.getEconomyManager().getBalance(buyer.getUniqueId()).get(5, TimeUnit.SECONDS));
         assertEquals(1, countTransactions(plugin, buyer, "SHOP_BUY"));
@@ -902,6 +904,14 @@ class SignShopManagerTest {
                 resultSet.next();
                 return resultSet.getInt(1);
             }
+        }
+    }
+
+    private boolean hasTransactionCount(TNexus plugin, Player player, String type, int expectedCount) {
+        try {
+            return countTransactions(plugin, player, type) == expectedCount;
+        } catch (Exception exception) {
+            return false;
         }
     }
 
