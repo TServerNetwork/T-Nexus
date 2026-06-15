@@ -1,3 +1,10 @@
+## [0.41.6](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.5...v0.41.6) (2026-06-15)
+
+
+### Bug Fixes
+
+* **resource:** fallback to world container for unloaded folders ([36338ad](https://github.com/TServerNetwork/T-Nexus/commit/36338adcad8e0c20cc4d789b6dcc5a17d56202f1))
+
 ## [0.41.5](https://github.com/TServerNetwork/T-Nexus/compare/v0.41.4...v0.41.5) (2026-06-14)
 
 
