@@ -20,6 +20,8 @@ import java.util.Objects;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.World;
 
 /**
@@ -194,11 +196,31 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
 
     private Material resolveMarkerMaterial() {
         String configured = this.schematicSettings.airMarkerBlock();
-        Material material = Material.matchMaterial(configured, true);
+        Material material = resolveConfiguredBlockMaterial(configured);
         if (material == null || !material.isBlock()) {
             throw new IllegalStateException("Invalid resource-world air marker block: " + configured);
         }
         return material;
+    }
+
+    static Material resolveConfiguredBlockMaterial(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return null;
+        }
+
+        NamespacedKey namespacedKey = NamespacedKey.fromString(configured);
+        if (namespacedKey != null) {
+            Material registryMaterial = Registry.MATERIAL.get(namespacedKey);
+            if (registryMaterial != null) {
+                return registryMaterial;
+            }
+        }
+
+        Material matchedMaterial = Material.matchMaterial(configured, true);
+        if (matchedMaterial != null) {
+            return matchedMaterial;
+        }
+        return Material.matchMaterial(configured);
     }
 
     private void flattenInnerArea(
