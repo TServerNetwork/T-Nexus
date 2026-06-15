@@ -35,7 +35,10 @@ class SignShopManagerTest {
 
     @AfterEach
     void tearDown() {
-        MockBukkit.unmock();
+        if (this.server != null) {
+            MockBukkit.unmock();
+            this.server = null;
+        }
     }
 
     @Test
