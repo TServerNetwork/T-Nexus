@@ -24,6 +24,7 @@ import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRule;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -661,6 +662,7 @@ public final class ResourceWorldManager {
                         + world.getName());
                 return;
             }
+            configureSpawnRadius(world);
             this.plugin.getLogger().info("Configured resource-world spawn point: world="
                     + world.getName()
                     + ", x="
@@ -670,6 +672,22 @@ public final class ResourceWorldManager {
                     + ", z="
                     + spawnLocation.getZ());
         });
+    }
+
+    private void configureSpawnRadius(World world) {
+        try {
+            if (!world.setGameRule(GameRule.SPAWN_RADIUS, 0)) {
+                this.plugin.getLogger().warning("Failed to set resource-world spawn radius to 0 for "
+                        + world.getName());
+            }
+        } catch (RuntimeException exception) {
+            if (!"org.mockbukkit.mockbukkit.exception.UnimplementedOperationException"
+                    .equals(exception.getClass().getName())) {
+                throw exception;
+            }
+            this.plugin.getLogger().fine("Spawn radius updates are not implemented by the active test world: "
+                    + world.getName());
+        }
     }
 
     private void teleportPlayersToFallback(String worldName) {

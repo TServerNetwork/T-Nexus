@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import org.bukkit.GameRule;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -399,6 +400,46 @@ class ResourceWorldManagerTest {
         assertEquals(0.5D, spawnPoint.getX());
         assertEquals(64.0D, spawnPoint.getY());
         assertEquals(0.5D, spawnPoint.getZ());
+    }
+
+    @Test
+    void shouldSetSpawnRadiusToZeroWhenConfiguringSpawnPoint() throws Exception {
+        TNexus plugin = loadPlugin();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
+        World world = this.server.addSimpleWorld("resource_spawn_radius");
+        world.getBlockAt(4, 71, -3).setType(Material.GRASS_BLOCK);
+        world.getBlockAt(4, 72, -3).setType(Material.AIR);
+        world.getBlockAt(4, 73, -3).setType(Material.AIR);
+
+        Method method = ResourceWorldManager.class.getDeclaredMethod(
+                "configureSpawnPoint",
+                World.class,
+                ResourceWorldManager.SpawnAnchor.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void> future = (CompletableFuture<Void>) method.invoke(
+                manager,
+                world,
+                new ResourceWorldManager.SpawnAnchor(4, -3, 71));
+        waitFor(future);
+        future.get(5, TimeUnit.SECONDS);
+
+        Integer spawnRadius = world.getGameRuleValue(GameRule.SPAWN_RADIUS);
+        if (spawnRadius != null) {
+            assertEquals(0, spawnRadius);
+        }
+        assertEquals(4, world.getSpawnLocation().getBlockX());
+        assertEquals(72, world.getSpawnLocation().getBlockY());
+        assertEquals(-3, world.getSpawnLocation().getBlockZ());
     }
 
     @Test
