@@ -361,17 +361,16 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
 
     private ColumnSnapshot captureColumnSnapshot(World world, int x, int z, int minY, int maxY) {
         int terrainSurfaceY = sampleTerrainSurfaceY(world, x, z, minY, maxY, false);
-        int highestY = clamp(world.getHighestBlockYAt(x, z), minY + 1, maxY);
-        Material highestMaterial = world.getBlockAt(x, highestY, z).getType();
-        if (!isLiquidSurfaceMaterial(highestMaterial)) {
+        Integer liquidSurfaceY = findTopExposedLiquidSurfaceY(world, x, z, minY, maxY);
+        if (liquidSurfaceY == null) {
             return new ColumnSnapshot(terrainSurfaceY, null, null);
         }
 
-        BlockState liquidState = resolveLiquidState(highestMaterial);
+        BlockState liquidState = resolveLiquidState(world.getBlockAt(x, liquidSurfaceY, z).getType());
         if (liquidState == null) {
             return new ColumnSnapshot(terrainSurfaceY, null, null);
         }
-        return new ColumnSnapshot(terrainSurfaceY, highestY, liquidState);
+        return new ColumnSnapshot(terrainSurfaceY, liquidSurfaceY, liquidState);
     }
 
     private Map<ColumnKey, Integer> smoothOuterHeights(
@@ -412,13 +411,13 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
             int minY,
             int maxY,
             boolean allowLiquidSurface) {
+        if (world.getEnvironment() == World.Environment.NETHER) {
+            return sampleNetherSurfaceY(world, x, z, minY, maxY, allowLiquidSurface);
+        }
         int highestY = clamp(world.getHighestBlockYAt(x, z), minY + 1, maxY);
         Material highestMaterial = world.getBlockAt(x, highestY, z).getType();
         if (allowLiquidSurface && isLiquidSurfaceMaterial(highestMaterial)) {
             return highestY;
-        }
-        if (world.getEnvironment() == World.Environment.NETHER) {
-            return sampleNetherSurfaceY(world, x, z, minY, maxY);
         }
         for (int y = highestY; y >= minY + 1; y--) {
             Material material = world.getBlockAt(x, y, z).getType();
@@ -429,10 +428,21 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         return minY + 1;
     }
 
-    static int sampleNetherSurfaceY(World world, int x, int z, int minY, int maxY) {
+    static int sampleNetherSurfaceY(
+            World world,
+            int x,
+            int z,
+            int minY,
+            int maxY,
+            boolean allowLiquidSurface) {
         int startY = clamp(world.getHighestBlockYAt(x, z), minY + 2, maxY - 2);
         for (int y = startY; y >= minY + 1; y--) {
             Material surfaceMaterial = world.getBlockAt(x, y, z).getType();
+            if (allowLiquidSurface
+                    && isLiquidSurfaceMaterial(surfaceMaterial)
+                    && isOpenSurfaceSpace(world.getBlockAt(x, y + 1, z).getType())) {
+                return y;
+            }
             if (!isTerrainSurfaceMaterial(surfaceMaterial)) {
                 continue;
             }
@@ -443,13 +453,22 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
             }
             return y;
         }
+        return minY + 1;
+    }
+
+    static Integer findTopExposedLiquidSurfaceY(World world, int x, int z, int minY, int maxY) {
+        int startY = clamp(world.getHighestBlockYAt(x, z), minY + 1, maxY);
         for (int y = startY; y >= minY + 1; y--) {
             Material material = world.getBlockAt(x, y, z).getType();
-            if (isTerrainSurfaceMaterial(material)) {
-                return y;
+            if (!isLiquidSurfaceMaterial(material)) {
+                continue;
             }
+            if (!isOpenSurfaceSpace(world.getBlockAt(x, y + 1, z).getType())) {
+                continue;
+            }
+            return y;
         }
-        return minY + 1;
+        return null;
     }
 
     static boolean isTerrainSurfaceMaterial(Material material) {

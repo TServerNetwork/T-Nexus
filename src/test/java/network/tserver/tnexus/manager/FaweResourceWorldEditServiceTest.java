@@ -87,7 +87,23 @@ class FaweResourceWorldEditServiceTest {
         world.getBlockAt(0, 81, 0).setType(Material.AIR);
         world.getBlockAt(0, 82, 0).setType(Material.AIR);
 
-        assertEquals(80, FaweResourceWorldEditService.sampleNetherSurfaceY(world, 0, 0, minY, maxY));
+        assertEquals(80, FaweResourceWorldEditService.sampleNetherSurfaceY(world, 0, 0, minY, maxY, false));
+    }
+
+    @Test
+    void shouldTreatExposedNetherLavaAsLiquidSurfaceInsteadOfRoof() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        World world = this.server.addSimpleWorld("resource_nether_lava");
+        int minY = world.getMinHeight() + 1;
+        int maxY = 120;
+
+        world.getBlockAt(0, 120, 0).setType(Material.BEDROCK);
+        world.getBlockAt(0, 119, 0).setType(Material.NETHERRACK);
+        world.getBlockAt(0, 31, 0).setType(Material.LAVA);
+        world.getBlockAt(0, 32, 0).setType(Material.AIR);
+
+        assertEquals(31, FaweResourceWorldEditService.sampleNetherSurfaceY(world, 0, 0, minY, maxY, true));
+        assertEquals(31, FaweResourceWorldEditService.findTopExposedLiquidSurfaceY(world, 0, 0, minY, maxY));
     }
 
     @Test
