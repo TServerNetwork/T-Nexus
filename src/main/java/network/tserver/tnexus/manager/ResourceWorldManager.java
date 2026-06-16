@@ -760,6 +760,9 @@ public final class ResourceWorldManager {
                 if (surfaceY < originSurfaceY - 2) {
                     continue;
                 }
+                if (!isSafeSpawnAnchorColumn(world, column.x(), column.z(), surfaceY, max)) {
+                    continue;
+                }
                 this.plugin.getLogger().info("Resolved resource-world spawn anchor from nearby land because origin was liquid: "
                         + "originY=" + originSurfaceY
                         + ", anchorX=" + column.x()
@@ -793,6 +796,19 @@ public final class ResourceWorldManager {
         }
         int fallbackY = clamp(world.getHighestBlockYAt(spawnAnchor.x(), spawnAnchor.z()) + 1, minY + 1, maxY);
         return new Location(world, spawnAnchor.x() + 0.5D, fallbackY, spawnAnchor.z() + 0.5D);
+    }
+
+    private boolean isSafeSpawnAnchorColumn(World world, int x, int z, int surfaceY, int maxY) {
+        if (surfaceY + 2 > maxY) {
+            return false;
+        }
+        Block floorBlock = world.getBlockAt(x, surfaceY, z);
+        Block feetBlock = world.getBlockAt(x, surfaceY + 1, z);
+        Block headBlock = world.getBlockAt(x, surfaceY + 2, z);
+        if (!floorBlock.getType().isSolid() || FaweResourceWorldEditService.isLiquidSurfaceMaterial(floorBlock.getType())) {
+            return false;
+        }
+        return isSpawnPassable(feetBlock) && isSpawnPassable(headBlock);
     }
 
     private boolean isSpawnPassable(Block block) {

@@ -27,6 +27,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.Tag;
 import org.bukkit.World;
+import org.bukkit.block.TileState;
 
 /**
  * Default FAWE-backed resource-world edit service.
@@ -69,6 +70,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                 .world(adaptedWorld)
                 .maxBlocks(-1)
                 .build()) {
+            removeOverwrittenTileEntities(world, terrainPlan, minY, maxY);
             flattenInnerArea(editSession, terrainPlan, minY, maxY, surfaceY, fillBlock, topBlock);
             blendOuterArea(editSession, world, terrainPlan, minY, maxY, surfaceY, fillBlock, topBlock);
             editSession.flushQueue();
@@ -164,6 +166,33 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read resource world schematic", exception);
         }
+    }
+
+    private void removeOverwrittenTileEntities(World world, TerrainPlan terrainPlan, int minY, int maxY) {
+        int removedCount = 0;
+        Map<String, Integer> removedTypes = new HashMap<>();
+        for (int x = terrainPlan.outerMinX(); x <= terrainPlan.outerMaxX(); x++) {
+            for (int z = terrainPlan.outerMinZ(); z <= terrainPlan.outerMaxZ(); z++) {
+                for (int y = minY; y <= maxY; y++) {
+                    org.bukkit.block.Block block = world.getBlockAt(x, y, z);
+                    org.bukkit.block.BlockState state = block.getState();
+                    if (!(state instanceof TileState)) {
+                        continue;
+                    }
+                    removedTypes.merge(block.getType().getKey().toString(), 1, Integer::sum);
+                    block.setType(Material.AIR, false);
+                    removedCount++;
+                }
+            }
+        }
+        this.plugin.getLogger().info("Removed tile entities before resource-world terrain reshape: count="
+                + removedCount
+                + ", range=["
+                + terrainPlan.outerMinX() + "," + minY + "," + terrainPlan.outerMinZ()
+                + "] -> ["
+                + terrainPlan.outerMaxX() + "," + maxY + "," + terrainPlan.outerMaxZ()
+                + "], types="
+                + removedTypes);
     }
 
     private MarkerReplacementPlan createMarkerReplacementPlan(Clipboard clipboard, int x, int y, int z) {
@@ -612,7 +641,11 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
 
         private boolean isInsideInnerArea(int x, int z) {
             if (this.circular) {
-                return ((x * x) + (z * z)) <= (this.innerRadius * this.innerRadius);
+                double centerX = (this.innerMinX + this.innerMaxX) / 2.0D;
+                double centerZ = (this.innerMinZ + this.innerMaxZ) / 2.0D;
+                double deltaX = x - centerX;
+                double deltaZ = z - centerZ;
+                return ((deltaX * deltaX) + (deltaZ * deltaZ)) <= (this.innerRadius * (double) this.innerRadius);
             }
             return x >= this.innerMinX && x <= this.innerMaxX
                     && z >= this.innerMinZ && z <= this.innerMaxZ;
