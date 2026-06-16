@@ -1,3 +1,10 @@
+## [0.46.5](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.4...v0.46.5) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** use vanilla spawn anchor for resource placement ([f9bcffd](https://github.com/TServerNetwork/T-Nexus/commit/f9bcffd8252be40b24b1d1db89917dc9d2840733))
+
 ## [0.46.4](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.3...v0.46.4) (2026-06-16)
 
 
