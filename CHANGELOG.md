@@ -1,3 +1,10 @@
+## [0.46.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.2...v0.46.3) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** run shoreline anchor prep on main thread ([efbdb30](https://github.com/TServerNetwork/T-Nexus/commit/efbdb30ad03209606fea430110998b5602048d65))
+
 ## [0.46.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.1...v0.46.2) (2026-06-16)
 
 
