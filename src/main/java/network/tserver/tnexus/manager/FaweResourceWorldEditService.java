@@ -10,6 +10,7 @@ import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.session.ClipboardHolder;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockTypes;
+import com.sk89q.worldedit.world.block.BlockType;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -35,7 +36,6 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     private static final int SCHEMATIC_MARGIN = 4;
     private static final int BLEND_DISTANCE = 12;
     private static final int FALLBACK_BLEND_DISTANCE = 6;
-
     private final TNexus plugin;
     private final ConfigManager.ResourceWorldSpawnSchematicSettings schematicSettings;
 
@@ -50,10 +50,16 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     }
 
     @Override
-    public void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY) {
+    public void prepareSpawnArea(
+            World world,
+            Path schematicPath,
+            int anchorX,
+            int anchorZ,
+            int fallbackRadius,
+            int surfaceY) {
         Objects.requireNonNull(world, "world");
         com.sk89q.worldedit.world.World adaptedWorld = adaptWorld(world);
-        TerrainPlan terrainPlan = buildTerrainPlan(world, schematicPath, fallbackRadius);
+        TerrainPlan terrainPlan = buildTerrainPlan(schematicPath, anchorX, anchorZ, fallbackRadius);
         int minY = world.getMinHeight();
         int maxY = world.getMaxHeight() - 1;
         BlockState fillBlock = resolveFillBlock(world).getDefaultState();
@@ -125,16 +131,16 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         }
     }
 
-    private TerrainPlan buildTerrainPlan(World world, Path schematicPath, int fallbackRadius) {
+    private TerrainPlan buildTerrainPlan(Path schematicPath, int anchorX, int anchorZ, int fallbackRadius) {
         if (schematicPath == null || !java.nio.file.Files.isRegularFile(schematicPath)) {
-            return TerrainPlan.circular(fallbackRadius, FALLBACK_BLEND_DISTANCE);
+            return TerrainPlan.circular(anchorX, anchorZ, fallbackRadius, FALLBACK_BLEND_DISTANCE);
         }
 
         ClipboardData clipboardData = loadClipboardData(schematicPath);
-        int innerMinX = clipboardData.minX() - SCHEMATIC_MARGIN;
-        int innerMaxX = clipboardData.maxX() + SCHEMATIC_MARGIN;
-        int innerMinZ = clipboardData.minZ() - SCHEMATIC_MARGIN;
-        int innerMaxZ = clipboardData.maxZ() + SCHEMATIC_MARGIN;
+        int innerMinX = anchorX + clipboardData.minX() - SCHEMATIC_MARGIN;
+        int innerMaxX = anchorX + clipboardData.maxX() + SCHEMATIC_MARGIN;
+        int innerMinZ = anchorZ + clipboardData.minZ() - SCHEMATIC_MARGIN;
+        int innerMaxZ = anchorZ + clipboardData.maxZ() + SCHEMATIC_MARGIN;
         return TerrainPlan.rectangular(innerMinX, innerMaxX, innerMinZ, innerMaxZ, BLEND_DISTANCE);
     }
 
@@ -239,7 +245,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                     if (!terrainPlan.isInsideInnerArea(x, z)) {
                         continue;
                     }
-                    reshapeColumn(editSession, x, z, minY, maxY, surfaceY, fillBlock, topBlock);
+                    reshapeColumn(editSession, x, z, minY, maxY, surfaceY, null, null, fillBlock, topBlock);
                 }
             }
             return;
@@ -276,8 +282,8 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
             return;
         }
 
-        Map<ColumnKey, Integer> originalHeights = captureOuterHeights(world, terrainPlan, minY, maxY);
-        Map<ColumnKey, Integer> smoothedHeights = smoothOuterHeights(originalHeights, minY, maxY);
+        Map<ColumnKey, ColumnSnapshot> capturedColumns = captureOuterColumns(world, terrainPlan, minY, maxY);
+        Map<ColumnKey, Integer> smoothedHeights = smoothOuterHeights(extractTerrainHeights(capturedColumns), minY, maxY);
         for (Map.Entry<ColumnKey, Integer> entry : smoothedHeights.entrySet()) {
             ColumnKey column = entry.getKey();
             int targetSurfaceY = calculateBlendedSurfaceY(
@@ -288,21 +294,55 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                     entry.getValue(),
                     minY,
                     maxY);
-            reshapeColumn(editSession, column.x(), column.z(), minY, maxY, targetSurfaceY, fillBlock, topBlock);
+            ColumnSnapshot snapshot = capturedColumns.get(column);
+            reshapeColumn(
+                    editSession,
+                    column.x(),
+                    column.z(),
+                    minY,
+                    maxY,
+                    targetSurfaceY,
+                    snapshot == null ? null : snapshot.liquidState(),
+                    snapshot == null ? null : snapshot.liquidTopY(),
+                    fillBlock,
+                    topBlock);
         }
     }
 
-    private Map<ColumnKey, Integer> captureOuterHeights(World world, TerrainPlan terrainPlan, int minY, int maxY) {
-        Map<ColumnKey, Integer> heights = new HashMap<>();
+    private Map<ColumnKey, ColumnSnapshot> captureOuterColumns(World world, TerrainPlan terrainPlan, int minY, int maxY) {
+        Map<ColumnKey, ColumnSnapshot> columns = new HashMap<>();
         for (int x = terrainPlan.outerMinX(); x <= terrainPlan.outerMaxX(); x++) {
             for (int z = terrainPlan.outerMinZ(); z <= terrainPlan.outerMaxZ(); z++) {
                 if (terrainPlan.isInsideInnerArea(x, z)) {
                     continue;
                 }
-                heights.put(new ColumnKey(x, z), sampleTerrainSurfaceY(world, x, z, minY, maxY));
+                columns.put(new ColumnKey(x, z), captureColumnSnapshot(world, x, z, minY, maxY));
             }
         }
+        return columns;
+    }
+
+    private Map<ColumnKey, Integer> extractTerrainHeights(Map<ColumnKey, ColumnSnapshot> capturedColumns) {
+        Map<ColumnKey, Integer> heights = new HashMap<>();
+        for (Map.Entry<ColumnKey, ColumnSnapshot> entry : capturedColumns.entrySet()) {
+            heights.put(entry.getKey(), entry.getValue().terrainSurfaceY());
+        }
         return heights;
+    }
+
+    private ColumnSnapshot captureColumnSnapshot(World world, int x, int z, int minY, int maxY) {
+        int terrainSurfaceY = sampleTerrainSurfaceY(world, x, z, minY, maxY, false);
+        int highestY = clamp(world.getHighestBlockYAt(x, z), minY + 1, maxY);
+        Material highestMaterial = world.getBlockAt(x, highestY, z).getType();
+        if (!isLiquidSurfaceMaterial(highestMaterial)) {
+            return new ColumnSnapshot(terrainSurfaceY, null, null);
+        }
+
+        BlockState liquidState = resolveLiquidState(highestMaterial);
+        if (liquidState == null) {
+            return new ColumnSnapshot(terrainSurfaceY, null, null);
+        }
+        return new ColumnSnapshot(terrainSurfaceY, highestY, liquidState);
     }
 
     private Map<ColumnKey, Integer> smoothOuterHeights(
@@ -422,7 +462,9 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     }
 
     private int circularBlendStep(TerrainPlan terrainPlan, int x, int z) {
-        double distance = Math.sqrt((x * (double) x) + (z * (double) z));
+        double centerX = (terrainPlan.innerMinX() + terrainPlan.innerMaxX()) / 2.0D;
+        double centerZ = (terrainPlan.innerMinZ() + terrainPlan.innerMaxZ()) / 2.0D;
+        double distance = Math.sqrt(Math.pow(x - centerX, 2.0D) + Math.pow(z - centerZ, 2.0D));
         return (int) Math.ceil(Math.max(0.0D, distance - terrainPlan.innerRadius()));
     }
 
@@ -447,6 +489,8 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
             int minY,
             int maxY,
             int targetSurfaceY,
+            BlockState liquidState,
+            Integer liquidTopY,
             BlockState fillBlock,
             BlockState topBlock) throws Exception {
         if (targetSurfaceY < maxY) {
@@ -461,7 +505,30 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                     BlockVector3.at(x, targetSurfaceY - 1, z));
             editSession.setBlocks((com.sk89q.worldedit.regions.Region) fillRegion, fillBlock);
         }
-        editSession.setBlock(BlockVector3.at(x, targetSurfaceY, z), topBlock);
+        BlockState columnTopBlock = topBlock;
+        if (liquidState != null && liquidTopY != null) {
+            columnTopBlock = fillBlock;
+        }
+        editSession.setBlock(BlockVector3.at(x, targetSurfaceY, z), columnTopBlock);
+
+        if (liquidState != null && liquidTopY != null) {
+            int restoredTopY = clamp(liquidTopY, targetSurfaceY + 1, maxY);
+            if (restoredTopY > targetSurfaceY) {
+                CuboidRegion liquidRegion = new CuboidRegion(
+                        BlockVector3.at(x, targetSurfaceY + 1, z),
+                        BlockVector3.at(x, restoredTopY, z));
+                editSession.setBlocks((com.sk89q.worldedit.regions.Region) liquidRegion, liquidState);
+            }
+        }
+    }
+
+    private BlockState resolveLiquidState(Material material) {
+        BlockType liquidType = switch (material) {
+            case WATER, BUBBLE_COLUMN -> BlockTypes.WATER;
+            case LAVA -> BlockTypes.LAVA;
+            default -> null;
+        };
+        return liquidType == null ? null : liquidType.getDefaultState();
     }
 
     private com.sk89q.worldedit.world.block.BlockType resolveFillBlock(World world) {
@@ -481,6 +548,9 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
     }
 
     private record ClipboardData(int minX, int maxX, int minZ, int maxZ) {
+    }
+
+    private record ColumnSnapshot(int terrainSurfaceY, Integer liquidTopY, BlockState liquidState) {
     }
 
     private record MarkerReplacementPlan(
@@ -513,12 +583,12 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
             return new TerrainPlan(innerMinX, innerMaxX, innerMinZ, innerMaxZ, blendDistance, false, 0);
         }
 
-        private static TerrainPlan circular(int innerRadius, int blendDistance) {
+        private static TerrainPlan circular(int centerX, int centerZ, int innerRadius, int blendDistance) {
             return new TerrainPlan(
-                    -innerRadius,
-                    innerRadius,
-                    -innerRadius,
-                    innerRadius,
+                    centerX - innerRadius,
+                    centerX + innerRadius,
+                    centerZ - innerRadius,
+                    centerZ + innerRadius,
                     blendDistance,
                     true,
                     innerRadius);

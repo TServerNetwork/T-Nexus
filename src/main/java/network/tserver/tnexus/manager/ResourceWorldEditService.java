@@ -13,10 +13,12 @@ public interface ResourceWorldEditService {
      *
      * @param world target world
      * @param schematicPath schematic path; when absent, implementations may fall back to a simple flat area
-     * @param fallbackRadius fallback radius around 0,0 when no schematic is present
+     * @param anchorX x coordinate of the schematic origin / spawn anchor
+     * @param anchorZ z coordinate of the schematic origin / spawn anchor
+     * @param fallbackRadius fallback radius around the anchor when no schematic is present
      * @param surfaceY final surface height at the schematic origin
      */
-    void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY);
+    void prepareSpawnArea(World world, Path schematicPath, int anchorX, int anchorZ, int fallbackRadius, int surfaceY);
 
     /**
      * Pastes the given schematic at the provided world coordinates.

@@ -148,6 +148,8 @@ class ResourceWorldManagerTest {
         assertEquals(schematicPath, editService.flattenSchematicPath.get());
         assertEquals("resource", editService.pasteWorldName.get());
         assertEquals(editService.flattenSurfaceY.get(), editService.pasteY.get());
+        assertEquals(editService.flattenAnchorX.get(), editService.pasteX.get());
+        assertEquals(editService.flattenAnchorZ.get(), editService.pasteZ.get());
         assertEquals("resource", worldState.unloadWorldCall.get());
         assertEquals("resource", worldState.removeWorldCall.get());
         assertEquals("resource|NORMAL", worldState.importWorldCall.get());
@@ -267,7 +269,7 @@ class ResourceWorldManagerTest {
     }
 
     @Test
-    void shouldUseWaterSurfaceWhenOriginSurfaceIsWater() {
+    void shouldResolveSpawnAnchorToNearbyLandWhenOriginSurfaceIsWater() {
         TNexus plugin = loadPlugin();
         TrackingWorldManagerState state = new TrackingWorldManagerState();
         ResourceWorldManager manager = new ResourceWorldManager(
@@ -285,7 +287,11 @@ class ResourceWorldManagerTest {
         world.getBlockAt(2, 70, 0).setType(Material.DIRT);
         world.getBlockAt(2, 71, 0).setType(Material.GRASS_BLOCK);
 
-        assertEquals(63, manager.determineFlattenSurface(world));
+        ResourceWorldManager.SpawnAnchor spawnAnchor = manager.resolveSpawnAnchor(world);
+
+        assertEquals(2, spawnAnchor.x());
+        assertEquals(0, spawnAnchor.z());
+        assertEquals(71, spawnAnchor.surfaceY());
     }
 
     @Test
@@ -306,7 +312,7 @@ class ResourceWorldManagerTest {
         world.getBlockAt(0, 64, 0).setType(Material.AIR);
         world.getBlockAt(0, 65, 0).setType(Material.AIR);
 
-        Location spawnPoint = manager.resolveSpawnPoint(world, 63);
+        Location spawnPoint = manager.resolveSpawnPoint(world, new ResourceWorldManager.SpawnAnchor(0, 0, 63));
 
         assertEquals(0.5D, spawnPoint.getX());
         assertEquals(64.0D, spawnPoint.getY());
@@ -463,15 +469,27 @@ class ResourceWorldManagerTest {
         private final AtomicReference<Path> flattenSchematicPath = new AtomicReference<>();
         private final AtomicReference<Integer> flattenFallbackRadius = new AtomicReference<>();
         private final AtomicReference<Integer> flattenSurfaceY = new AtomicReference<>();
+        private final AtomicReference<Integer> flattenAnchorX = new AtomicReference<>();
+        private final AtomicReference<Integer> flattenAnchorZ = new AtomicReference<>();
+        private final AtomicReference<Integer> pasteX = new AtomicReference<>();
         private final AtomicReference<Integer> pasteY = new AtomicReference<>();
+        private final AtomicReference<Integer> pasteZ = new AtomicReference<>();
 
         @Override
-        public void prepareSpawnArea(World world, Path schematicPath, int fallbackRadius, int surfaceY) {
+        public void prepareSpawnArea(
+                World world,
+                Path schematicPath,
+                int anchorX,
+                int anchorZ,
+                int fallbackRadius,
+                int surfaceY) {
             this.flattenCalled.set(true);
             this.flattenWorldName.set(world.getName());
             this.flattenSchematicPath.set(schematicPath);
             this.flattenFallbackRadius.set(fallbackRadius);
             this.flattenSurfaceY.set(surfaceY);
+            this.flattenAnchorX.set(anchorX);
+            this.flattenAnchorZ.set(anchorZ);
             assertEquals(8, fallbackRadius);
         }
 
@@ -479,10 +497,10 @@ class ResourceWorldManagerTest {
         public void pasteSchematic(World world, Path schematicPath, int x, int y, int z) {
             this.pasteCalled.set(true);
             this.pasteWorldName.set(world.getName());
+            this.pasteX.set(x);
             this.pasteY.set(y);
+            this.pasteZ.set(z);
             assertTrue(Files.exists(schematicPath));
-            assertEquals(0, x);
-            assertEquals(0, z);
         }
     }
 }

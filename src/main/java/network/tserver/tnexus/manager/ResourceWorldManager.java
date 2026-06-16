@@ -37,6 +37,7 @@ import org.bukkit.entity.Player;
 public final class ResourceWorldManager {
 
     private static final int FALLBACK_CYLINDER_RADIUS = 8;
+    private static final int WATER_SURFACE_FALLBACK_RADIUS = 24;
     private static final int WORLD_LOAD_WAIT_TICKS = 200;
     private static final String ADMIN_PERMISSION = "tnexus.admin";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -456,15 +457,13 @@ public final class ResourceWorldManager {
                                         seed))
                                 .thenCompose(world -> runAsync(() -> this.fileManager.getSpawnSchematicPath(context.worldName()))
                                         .thenCompose(schematicPath -> prepareSpawnArea(world, schematicPath)
-                                                .thenCompose(postFlattenSurfaceY -> maybePasteSpawnSchematic(
-                                                        context.worldName(),
-                                                        world,
-                                                        schematicPath,
-                                                        postFlattenSurfaceY)
-                                                        .thenCompose(pasteIgnored -> configureSpawnPoint(
+                                                .thenCompose(spawnAnchor -> maybePasteSpawnSchematic(
+                                                                context.worldName(),
                                                                 world,
-                                                                postFlattenSurfaceY)))
-                                                .thenCompose(pasteIgnored -> persistResetSuccess(
+                                                                schematicPath,
+                                                                spawnAnchor)
+                                                        .thenCompose(pasteIgnored -> configureSpawnPoint(world, spawnAnchor)))
+                                                .thenCompose(configuredAnchor -> persistResetSuccess(
                                                         context,
                                                         worldDefinition,
                                                         seed))
@@ -477,13 +476,15 @@ public final class ResourceWorldManager {
                                                 }).thenApply(ignoredAgain -> nextReset))))));
     }
 
-    private CompletableFuture<Integer> prepareSpawnArea(World world, Path schematicPath) {
-        return runOnMainThread(() -> determineFlattenSurface(world))
-                .thenCompose(surfaceY -> runAsync(() -> this.worldEditService.prepareSpawnArea(
+    private CompletableFuture<SpawnAnchor> prepareSpawnArea(World world, Path schematicPath) {
+        return runOnMainThread(() -> resolveSpawnAnchor(world))
+                .thenCompose(spawnAnchor -> runAsync(() -> this.worldEditService.prepareSpawnArea(
                         world,
                         schematicPath,
+                        spawnAnchor.x(),
+                        spawnAnchor.z(),
                         FALLBACK_CYLINDER_RADIUS,
-                        surfaceY)).thenApply(ignored -> surfaceY));
+                        spawnAnchor.surfaceY())).thenApply(ignored -> spawnAnchor));
     }
 
     private CompletableFuture<LocalDateTime> handleResetResult(
@@ -603,18 +604,27 @@ public final class ResourceWorldManager {
                 });
     }
 
-    private CompletableFuture<Void> maybePasteSpawnSchematic(String worldName, World world, Path schematicPath, int surfaceY) {
+    private CompletableFuture<Void> maybePasteSpawnSchematic(
+            String worldName,
+            World world,
+            Path schematicPath,
+            SpawnAnchor spawnAnchor) {
         return runOnMainThread(() -> {
             if (!Files.isRegularFile(schematicPath)) {
                 return;
             }
-            this.worldEditService.pasteSchematic(world, schematicPath, 0, surfaceY, 0);
+            this.worldEditService.pasteSchematic(
+                    world,
+                    schematicPath,
+                    spawnAnchor.x(),
+                    spawnAnchor.surfaceY(),
+                    spawnAnchor.z());
         });
     }
 
-    private CompletableFuture<Void> configureSpawnPoint(World world, int surfaceY) {
+    private CompletableFuture<Void> configureSpawnPoint(World world, SpawnAnchor spawnAnchor) {
         return runOnMainThread(() -> {
-            Location spawnLocation = resolveSpawnPoint(world, surfaceY);
+            Location spawnLocation = resolveSpawnPoint(world, spawnAnchor);
             try {
                 if (!world.setSpawnLocation(
                         spawnLocation.getBlockX(),
@@ -723,24 +733,66 @@ public final class ResourceWorldManager {
         return FaweResourceWorldEditService.sampleTerrainSurfaceY(world, 0, 0, min, max, true);
     }
 
-    Location resolveSpawnPoint(World world, int surfaceY) {
+    SpawnAnchor resolveSpawnAnchor(World world) {
+        int min = world.getMinHeight() + 1;
+        int max = world.getMaxHeight() - 2;
+        int originSurfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(world, 0, 0, min, max, true);
+        Material originMaterial = world.getBlockAt(0, originSurfaceY, 0).getType();
+        if (!FaweResourceWorldEditService.isLiquidSurfaceMaterial(originMaterial)) {
+            return new SpawnAnchor(0, 0, originSurfaceY);
+        }
+
+        for (int radius = 1; radius <= WATER_SURFACE_FALLBACK_RADIUS; radius++) {
+            for (FaweResourceWorldEditService.ColumnKey column : FaweResourceWorldEditService.perimeterColumns(radius)) {
+                int topY = Math.max(min, Math.min(world.getHighestBlockYAt(column.x(), column.z()), max));
+                Material topMaterial = world.getBlockAt(column.x(), topY, column.z()).getType();
+                if (FaweResourceWorldEditService.isLiquidSurfaceMaterial(topMaterial)
+                        || !FaweResourceWorldEditService.isTerrainSurfaceMaterial(topMaterial)) {
+                    continue;
+                }
+                int surfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(
+                        world,
+                        column.x(),
+                        column.z(),
+                        min,
+                        max,
+                        false);
+                if (surfaceY < originSurfaceY - 2) {
+                    continue;
+                }
+                this.plugin.getLogger().info("Resolved resource-world spawn anchor from nearby land because origin was liquid: "
+                        + "originY=" + originSurfaceY
+                        + ", anchorX=" + column.x()
+                        + ", anchorZ=" + column.z()
+                        + ", landY=" + surfaceY
+                        + ", world=" + world.getName());
+                return new SpawnAnchor(column.x(), column.z(), surfaceY);
+            }
+        }
+
+        this.plugin.getLogger().info("Using liquid origin as resource-world spawn anchor because no nearby land was found: "
+                + "surfaceY=" + originSurfaceY + ", world=" + world.getName());
+        return new SpawnAnchor(0, 0, originSurfaceY);
+    }
+
+    Location resolveSpawnPoint(World world, SpawnAnchor spawnAnchor) {
         int minY = world.getMinHeight() + 1;
         int maxY = world.getMaxHeight() - 2;
-        int startY = clamp(surfaceY + 1, minY + 1, maxY);
+        int startY = clamp(spawnAnchor.surfaceY() + 1, minY + 1, maxY);
         for (int y = startY; y <= maxY; y++) {
-            Block feetBlock = world.getBlockAt(0, y, 0);
-            Block headBlock = world.getBlockAt(0, y + 1, 0);
-            Block floorBlock = world.getBlockAt(0, y - 1, 0);
+            Block feetBlock = world.getBlockAt(spawnAnchor.x(), y, spawnAnchor.z());
+            Block headBlock = world.getBlockAt(spawnAnchor.x(), y + 1, spawnAnchor.z());
+            Block floorBlock = world.getBlockAt(spawnAnchor.x(), y - 1, spawnAnchor.z());
             if (!isSpawnPassable(feetBlock) || !isSpawnPassable(headBlock)) {
                 continue;
             }
             if (isSpawnPassable(floorBlock) || FaweResourceWorldEditService.isLiquidSurfaceMaterial(floorBlock.getType())) {
                 continue;
             }
-            return new Location(world, 0.5D, y, 0.5D);
+            return new Location(world, spawnAnchor.x() + 0.5D, y, spawnAnchor.z() + 0.5D);
         }
-        int fallbackY = clamp(world.getHighestBlockYAt(0, 0) + 1, minY + 1, maxY);
-        return new Location(world, 0.5D, fallbackY, 0.5D);
+        int fallbackY = clamp(world.getHighestBlockYAt(spawnAnchor.x(), spawnAnchor.z()) + 1, minY + 1, maxY);
+        return new Location(world, spawnAnchor.x() + 0.5D, fallbackY, spawnAnchor.z() + 0.5D);
     }
 
     private boolean isSpawnPassable(Block block) {
@@ -751,6 +803,9 @@ public final class ResourceWorldManager {
 
     private int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(value, max));
+    }
+
+    record SpawnAnchor(int x, int z, int surfaceY) {
     }
 
     private CompletableFuture<World> waitForWorldLoad(String worldName) {
