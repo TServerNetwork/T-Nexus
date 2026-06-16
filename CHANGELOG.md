@@ -1,3 +1,10 @@
+## [0.46.7](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.6...v0.46.7) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** sync multiverse spawn and stop raised liquid restore ([b6dae8b](https://github.com/TServerNetwork/T-Nexus/commit/b6dae8b6d4a26f66bca0c494ef42ef1de2a71f59))
+
 ## [0.46.6](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.5...v0.46.6) (2026-06-16)
 
 
