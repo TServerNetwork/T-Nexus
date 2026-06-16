@@ -1,3 +1,10 @@
+## [0.46.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.0...v0.46.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** stabilize shoreline spawn anchoring and tile cleanup ([8bb1786](https://github.com/TServerNetwork/T-Nexus/commit/8bb178632df6ceb56e157e558c8ebab9c030eea6))
+
 # [0.46.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.45.0...v0.46.0) (2026-06-16)
 
 
