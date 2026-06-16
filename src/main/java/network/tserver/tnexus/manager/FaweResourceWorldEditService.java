@@ -417,7 +417,33 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         if (allowLiquidSurface && isLiquidSurfaceMaterial(highestMaterial)) {
             return highestY;
         }
+        if (world.getEnvironment() == World.Environment.NETHER) {
+            return sampleNetherSurfaceY(world, x, z, minY, maxY);
+        }
         for (int y = highestY; y >= minY + 1; y--) {
+            Material material = world.getBlockAt(x, y, z).getType();
+            if (isTerrainSurfaceMaterial(material)) {
+                return y;
+            }
+        }
+        return minY + 1;
+    }
+
+    static int sampleNetherSurfaceY(World world, int x, int z, int minY, int maxY) {
+        int startY = clamp(world.getHighestBlockYAt(x, z), minY + 2, maxY - 2);
+        for (int y = startY; y >= minY + 1; y--) {
+            Material surfaceMaterial = world.getBlockAt(x, y, z).getType();
+            if (!isTerrainSurfaceMaterial(surfaceMaterial)) {
+                continue;
+            }
+            Material feetMaterial = world.getBlockAt(x, y + 1, z).getType();
+            Material headMaterial = world.getBlockAt(x, y + 2, z).getType();
+            if (!isOpenSurfaceSpace(feetMaterial) || !isOpenSurfaceSpace(headMaterial)) {
+                continue;
+            }
+            return y;
+        }
+        for (int y = startY; y >= minY + 1; y--) {
             Material material = world.getBlockAt(x, y, z).getType();
             if (isTerrainSurfaceMaterial(material)) {
                 return y;
@@ -428,6 +454,9 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
 
     static boolean isTerrainSurfaceMaterial(Material material) {
         if (material.isAir() || !material.isSolid()) {
+            return false;
+        }
+        if (material == Material.BEDROCK) {
             return false;
         }
         if (Tag.LOGS.isTagged(material) || Tag.LEAVES.isTagged(material)) {
@@ -447,6 +476,14 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
                 && !materialName.contains("CORAL")
                 && !materialName.contains("KELP")
                 && !materialName.contains("SEAGRASS");
+    }
+
+    private static boolean isOpenSurfaceSpace(Material material) {
+        return material.isAir()
+                || material == Material.CAVE_AIR
+                || material == Material.VOID_AIR
+                || material == Material.FIRE
+                || material == Material.SOUL_FIRE;
     }
 
     static boolean isLiquidSurfaceMaterial(Material material) {

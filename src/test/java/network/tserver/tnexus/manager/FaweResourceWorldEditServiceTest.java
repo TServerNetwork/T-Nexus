@@ -75,6 +75,22 @@ class FaweResourceWorldEditServiceTest {
     }
 
     @Test
+    void shouldPreferNetherWalkableSurfaceBelowBedrockCeiling() {
+        this.server = TestPluginSupport.mockServerWithRequiredPlugins();
+        World world = this.server.addSimpleWorld("resource_nether");
+        int minY = world.getMinHeight() + 1;
+        int maxY = 120;
+
+        world.getBlockAt(0, 120, 0).setType(Material.BEDROCK);
+        world.getBlockAt(0, 119, 0).setType(Material.NETHERRACK);
+        world.getBlockAt(0, 80, 0).setType(Material.NETHERRACK);
+        world.getBlockAt(0, 81, 0).setType(Material.AIR);
+        world.getBlockAt(0, 82, 0).setType(Material.AIR);
+
+        assertEquals(80, FaweResourceWorldEditService.sampleNetherSurfaceY(world, 0, 0, minY, maxY));
+    }
+
+    @Test
     void shouldExposePerimeterColumnsWithoutCenterDuplicates() {
         assertEquals(8, FaweResourceWorldEditService.perimeterColumns(1).size());
         assertFalse(FaweResourceWorldEditService.perimeterColumns(1).contains(new FaweResourceWorldEditService.ColumnKey(0, 0)));
