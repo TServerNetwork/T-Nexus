@@ -116,6 +116,7 @@ public final class TestPluginSupport {
         registerPlugin(server, "LuckPerms");
         registerMultiversePlugin(server);
         registerPlugin(server, "FastAsyncWorldEdit");
+        registerPlugin(server, "WorldGuard");
     }
 
     /**

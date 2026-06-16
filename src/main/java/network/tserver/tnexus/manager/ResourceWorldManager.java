@@ -23,6 +23,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.config.ConfigManager;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import network.tserver.tnexus.manager.hook.WorldGuardHook;
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
 import org.bukkit.Location;
@@ -50,6 +51,7 @@ public final class ResourceWorldManager {
     private final Clock clock;
     private final ResourceWorldFileManager fileManager;
     private final ResourceWorldEditService worldEditService;
+    private final WorldGuardHook.WorldGuardRegionService worldGuardRegionService;
     private final LongSupplier randomSeedSupplier;
     private final Map<String, ConfigManager.ResourceWorldDefinition> worldDefinitions;
     private final Set<String> resettingWorlds;
@@ -89,6 +91,7 @@ public final class ResourceWorldManager {
                 clock,
                 new ResourceWorldFileManager(plugin),
                 new FaweResourceWorldEditService(plugin),
+                resolveWorldGuardRegionService(plugin),
                 new SecureRandom()::nextLong);
     }
 
@@ -100,6 +103,26 @@ public final class ResourceWorldManager {
             ResourceWorldFileManager fileManager,
             ResourceWorldEditService worldEditService,
             LongSupplier randomSeedSupplier) {
+        this(
+                plugin,
+                repository,
+                worldManager,
+                clock,
+                fileManager,
+                worldEditService,
+                resolveWorldGuardRegionService(plugin),
+                randomSeedSupplier);
+    }
+
+    ResourceWorldManager(
+            TNexus plugin,
+            ResourceWorldResetRepository repository,
+            MultiverseWorldService worldManager,
+            Clock clock,
+            ResourceWorldFileManager fileManager,
+            ResourceWorldEditService worldEditService,
+            WorldGuardHook.WorldGuardRegionService worldGuardRegionService,
+            LongSupplier randomSeedSupplier) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.settings = this.plugin.getConfigManager().getResourceWorldSettings();
         this.repository = Objects.requireNonNull(repository, "repository");
@@ -107,6 +130,7 @@ public final class ResourceWorldManager {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.fileManager = Objects.requireNonNull(fileManager, "fileManager");
         this.worldEditService = Objects.requireNonNull(worldEditService, "worldEditService");
+        this.worldGuardRegionService = Objects.requireNonNull(worldGuardRegionService, "worldGuardRegionService");
         this.randomSeedSupplier = Objects.requireNonNull(randomSeedSupplier, "randomSeedSupplier");
         this.worldDefinitions = new ConcurrentHashMap<>();
         this.resettingWorlds = ConcurrentHashMap.newKeySet();
@@ -457,13 +481,14 @@ public final class ResourceWorldManager {
                                         worldDefinition,
                                         seed))
                                 .thenCompose(world -> runAsync(() -> this.fileManager.getSpawnSchematicPath(context.worldName()))
-                                        .thenCompose(schematicPath -> prepareSpawnArea(world, schematicPath)
+                                                .thenCompose(schematicPath -> prepareSpawnArea(world, schematicPath)
                                                 .thenCompose(spawnAnchor -> maybePasteSpawnSchematic(
                                                                 context.worldName(),
                                                                 world,
                                                                 schematicPath,
                                                                 spawnAnchor)
-                                                        .thenCompose(pasteIgnored -> configureSpawnPoint(world, spawnAnchor)))
+                                                        .thenCompose(pasteIgnored -> configureSpawnPoint(world, spawnAnchor))
+                                                        .thenCompose(configuredIgnored -> configureSpawnProtection(world)))
                                                 .thenCompose(configuredAnchor -> persistResetSuccess(
                                                         context,
                                                         worldDefinition,
@@ -677,6 +702,14 @@ public final class ResourceWorldManager {
         });
     }
 
+    private CompletableFuture<Void> configureSpawnProtection(World world) {
+        return runOnMainThread(() -> this.worldGuardRegionService.createOrReplaceSpawnProtection(
+                world,
+                buildSpawnProtectionRegionName(world.getName()),
+                world.getSpawnLocation(),
+                FALLBACK_CYLINDER_RADIUS));
+    }
+
     private void configureSpawnRadius(World world) {
         try {
             if (!world.setGameRule(GameRule.SPAWN_RADIUS, 0)) {
@@ -862,6 +895,19 @@ public final class ResourceWorldManager {
 
     private int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(value, max));
+    }
+
+    private static WorldGuardHook.WorldGuardRegionService resolveWorldGuardRegionService(TNexus plugin) {
+        WorldGuardHook.WorldGuardRegionService service = plugin.getPluginHookManager()
+                .getApi(WorldGuardHook.WorldGuardRegionService.class);
+        if (service == null) {
+            throw new IllegalStateException("WorldGuard region service is not available");
+        }
+        return service;
+    }
+
+    private String buildSpawnProtectionRegionName(String worldName) {
+        return "tnexus_spawn_" + worldName;
     }
 
     record SpawnAnchor(int x, int z, int surfaceY) {

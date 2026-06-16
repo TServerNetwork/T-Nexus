@@ -36,6 +36,7 @@ import network.tserver.tnexus.manager.hook.FaweHook;
 import network.tserver.tnexus.manager.hook.LuckPermsHook;
 import network.tserver.tnexus.manager.hook.MultiverseHook;
 import network.tserver.tnexus.manager.hook.VaultHook;
+import network.tserver.tnexus.manager.hook.WorldGuardHook;
 import network.tserver.tnexus.listener.PaymentNotificationListener;
 import network.tserver.tnexus.listener.PlayerActivityListener;
 import network.tserver.tnexus.listener.PlayerBlockStatsListener;
@@ -426,6 +427,7 @@ public class TNexus extends JavaPlugin {
         hookManager.register(new LuckPermsHook());
         hookManager.register(new MultiverseHook());
         hookManager.register(new FaweHook());
+        hookManager.register(new WorldGuardHook());
     }
 
     /**

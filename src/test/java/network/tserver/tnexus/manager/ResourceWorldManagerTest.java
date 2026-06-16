@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import network.tserver.tnexus.manager.hook.WorldGuardHook;
 import org.bukkit.GameRule;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -124,6 +125,7 @@ class ResourceWorldManagerTest {
         fileManager.schematicPath = schematicPath;
 
         TrackingEditService editService = new TrackingEditService();
+        TrackingWorldGuardRegionService worldGuardRegionService = new TrackingWorldGuardRegionService();
         ResourceWorldResetRepository repository = new ResourceWorldResetRepository(plugin.getDatabaseManager());
         ResourceWorldManager manager = new ResourceWorldManager(
                 plugin,
@@ -132,6 +134,7 @@ class ResourceWorldManagerTest {
                 Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
                 fileManager,
                 editService,
+                worldGuardRegionService,
                 () -> 777L);
 
         manager.onEnable().get(5, TimeUnit.SECONDS);
@@ -157,6 +160,12 @@ class ResourceWorldManagerTest {
         assertEquals("resource|NORMAL", worldState.importWorldCall.get());
         assertSame(this.server.getWorld("lobby"), player.getWorld());
         assertFalse(manager.isResetting("resource"));
+        assertEquals("resource", worldGuardRegionService.worldName.get());
+        assertEquals("tnexus_spawn_resource", worldGuardRegionService.regionName.get());
+        assertEquals(8, worldGuardRegionService.radius.get());
+        assertEquals(0, worldGuardRegionService.centerX.get());
+        assertEquals(5, worldGuardRegionService.centerY.get());
+        assertEquals(0, worldGuardRegionService.centerZ.get());
 
         String startMessage = player.nextMessage();
         String teleportMessage = player.nextMessage();
@@ -203,6 +212,7 @@ class ResourceWorldManagerTest {
                 Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
                 fileManager,
                 editService,
+                new TrackingWorldGuardRegionService(),
                 () -> 999L);
 
         manager.onEnable().get(5, TimeUnit.SECONDS);
@@ -248,6 +258,7 @@ class ResourceWorldManagerTest {
                 Clock.fixed(Instant.parse("2026-06-14T00:00:00Z"), TOKYO),
                 fileManager,
                 new TrackingEditService(),
+                new TrackingWorldGuardRegionService(),
                 () -> 321L);
 
         manager.onEnable().get(5, TimeUnit.SECONDS);
@@ -679,6 +690,29 @@ class ResourceWorldManagerTest {
             this.pasteY.set(y);
             this.pasteZ.set(z);
             assertTrue(Files.exists(schematicPath));
+        }
+    }
+
+    private static final class TrackingWorldGuardRegionService implements WorldGuardHook.WorldGuardRegionService {
+        private final AtomicReference<String> worldName = new AtomicReference<>();
+        private final AtomicReference<String> regionName = new AtomicReference<>();
+        private final AtomicReference<Integer> centerX = new AtomicReference<>();
+        private final AtomicReference<Integer> centerY = new AtomicReference<>();
+        private final AtomicReference<Integer> centerZ = new AtomicReference<>();
+        private final AtomicReference<Integer> radius = new AtomicReference<>();
+
+        @Override
+        public void createOrReplaceSpawnProtection(
+                World world,
+                String regionName,
+                Location spawnLocation,
+                int radius) {
+            this.worldName.set(world.getName());
+            this.regionName.set(regionName);
+            this.centerX.set(spawnLocation.getBlockX());
+            this.centerY.set(spawnLocation.getBlockY());
+            this.centerZ.set(spawnLocation.getBlockZ());
+            this.radius.set(radius);
         }
     }
 }

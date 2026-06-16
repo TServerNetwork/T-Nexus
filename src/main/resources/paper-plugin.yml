@@ -23,6 +23,9 @@ dependencies:
     FastAsyncWorldEdit:
       load: BEFORE
       required: true
+    WorldGuard:
+      load: BEFORE
+      required: true
 
 commands:
   tnexus:

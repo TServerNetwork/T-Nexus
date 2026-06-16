@@ -121,6 +121,7 @@ class TNexusLifecycleTest {
         registerPlugin("LuckPerms");
         TestPluginSupport.registerMultiversePlugin(this.server);
         registerPlugin("FastAsyncWorldEdit");
+        registerPlugin("WorldGuard");
         TestPluginSupport.registerEconomyProvider(this.server);
         TestPluginSupport.registerLuckPermsProvider(this.server);
     }
