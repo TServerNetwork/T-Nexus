@@ -1,3 +1,10 @@
+# [0.46.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.45.0...v0.46.0) (2026-06-16)
+
+
+### Features
+
+* **world:** anchor spawn schematics to nearby shoreline ([0ac9c94](https://github.com/TServerNetwork/T-Nexus/commit/0ac9c9415f94c4b5cb59f5fb3d002abe1cd59e89))
+
 # [0.45.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.44.0...v0.45.0) (2026-06-15)
 
 
