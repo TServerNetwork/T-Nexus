@@ -1,6 +1,7 @@
 package network.tserver.tnexus.manager;
 
 import java.io.File;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -344,6 +345,47 @@ class ResourceWorldManagerTest {
         assertEquals(0.5D, spawnPoint.getX());
         assertEquals(64.0D, spawnPoint.getY());
         assertEquals(0.5D, spawnPoint.getZ());
+    }
+
+    @Test
+    void shouldPasteSchematicUsingResolvedSpawnAnchorCoordinates() throws Exception {
+        TNexus plugin = loadPlugin();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
+        TrackingEditService editService = new TrackingEditService();
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                editService,
+                () -> 100L);
+        World world = this.server.addSimpleWorld("resource_anchor_paste");
+        Path schematicPath = plugin.getDataFolder().toPath().resolve("schematics").resolve("resource").resolve("spawn.schem");
+        Files.createDirectories(schematicPath.getParent());
+        Files.writeString(schematicPath, "test");
+
+        Method method = ResourceWorldManager.class.getDeclaredMethod(
+                "maybePasteSpawnSchematic",
+                String.class,
+                World.class,
+                Path.class,
+                ResourceWorldManager.SpawnAnchor.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void> future = (CompletableFuture<Void>) method.invoke(
+                manager,
+                "resource_anchor_paste",
+                world,
+                schematicPath,
+                new ResourceWorldManager.SpawnAnchor(6, -4, 72));
+        waitFor(future);
+        future.get(5, TimeUnit.SECONDS);
+
+        assertEquals(6, editService.pasteX.get());
+        assertEquals(72, editService.pasteY.get());
+        assertEquals(-4, editService.pasteZ.get());
     }
 
     private TNexus loadPlugin() {

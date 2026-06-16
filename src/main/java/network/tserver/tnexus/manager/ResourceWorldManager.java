@@ -478,13 +478,23 @@ public final class ResourceWorldManager {
 
     private CompletableFuture<SpawnAnchor> prepareSpawnArea(World world, Path schematicPath) {
         return runOnMainThread(() -> resolveSpawnAnchor(world))
-                .thenCompose(spawnAnchor -> runAsync(() -> this.worldEditService.prepareSpawnArea(
-                        world,
-                        schematicPath,
-                        spawnAnchor.x(),
-                        spawnAnchor.z(),
-                        FALLBACK_CYLINDER_RADIUS,
-                        spawnAnchor.surfaceY())).thenApply(ignored -> spawnAnchor));
+                .thenCompose(spawnAnchor -> {
+                    this.plugin.getLogger().info("Preparing resource-world spawn area with anchor: world="
+                            + world.getName()
+                            + ", x="
+                            + spawnAnchor.x()
+                            + ", y="
+                            + spawnAnchor.surfaceY()
+                            + ", z="
+                            + spawnAnchor.z());
+                    return runAsync(() -> this.worldEditService.prepareSpawnArea(
+                            world,
+                            schematicPath,
+                            spawnAnchor.x(),
+                            spawnAnchor.z(),
+                            FALLBACK_CYLINDER_RADIUS,
+                            spawnAnchor.surfaceY())).thenApply(ignored -> spawnAnchor);
+                });
     }
 
     private CompletableFuture<LocalDateTime> handleResetResult(
@@ -613,6 +623,16 @@ public final class ResourceWorldManager {
             if (!Files.isRegularFile(schematicPath)) {
                 return;
             }
+            this.plugin.getLogger().info("Pasting resource-world schematic at anchor: world="
+                    + world.getName()
+                    + ", x="
+                    + spawnAnchor.x()
+                    + ", y="
+                    + spawnAnchor.surfaceY()
+                    + ", z="
+                    + spawnAnchor.z()
+                    + ", path="
+                    + schematicPath);
             this.worldEditService.pasteSchematic(
                     world,
                     schematicPath,
