@@ -1,3 +1,17 @@
+# [0.47.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.7...v0.47.0) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** avoid nether roof flatten surface ([45ca230](https://github.com/TServerNetwork/T-Nexus/commit/45ca23053ca77f5a539be3432e2289fa5efea243))
+
+
+### Features
+
+* **deps:** add WorldGuard as required dependency ([#140](https://github.com/TServerNetwork/T-Nexus/issues/140)) ([7087d7b](https://github.com/TServerNetwork/T-Nexus/commit/7087d7b0f3049bb57fc2b05b9baa9ede4745d401))
+* **hook:** add WorldGuard hook to PluginHookManager ([#140](https://github.com/TServerNetwork/T-Nexus/issues/140)) ([e82d377](https://github.com/TServerNetwork/T-Nexus/commit/e82d377d94c32cf83a77bcbdce58c19e46664865))
+* **resource:** auto-create spawn protection region after world reset ([#140](https://github.com/TServerNetwork/T-Nexus/issues/140)) ([0c775f9](https://github.com/TServerNetwork/T-Nexus/commit/0c775f98af25f173385b46fdf4d77497c22060ca))
+
 ## [0.46.7](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.6...v0.46.7) (2026-06-16)
 
 
