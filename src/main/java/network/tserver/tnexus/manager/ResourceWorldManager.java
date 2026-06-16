@@ -766,8 +766,7 @@ public final class ResourceWorldManager {
             for (FaweResourceWorldEditService.ColumnKey column : FaweResourceWorldEditService.perimeterColumns(radius)) {
                 int topY = Math.max(min, Math.min(world.getHighestBlockYAt(column.x(), column.z()), max));
                 Material topMaterial = world.getBlockAt(column.x(), topY, column.z()).getType();
-                if (FaweResourceWorldEditService.isLiquidSurfaceMaterial(topMaterial)
-                        || !FaweResourceWorldEditService.isTerrainSurfaceMaterial(topMaterial)) {
+                if (FaweResourceWorldEditService.isLiquidSurfaceMaterial(topMaterial)) {
                     continue;
                 }
                 int surfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(
@@ -777,6 +776,10 @@ public final class ResourceWorldManager {
                         min,
                         max,
                         false);
+                Material surfaceMaterial = world.getBlockAt(column.x(), surfaceY, column.z()).getType();
+                if (!FaweResourceWorldEditService.isTerrainSurfaceMaterial(surfaceMaterial)) {
+                    continue;
+                }
                 if (surfaceY < originSurfaceY - 2) {
                     continue;
                 }

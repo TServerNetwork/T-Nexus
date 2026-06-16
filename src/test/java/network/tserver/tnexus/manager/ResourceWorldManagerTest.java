@@ -296,6 +296,33 @@ class ResourceWorldManagerTest {
     }
 
     @Test
+    void shouldResolveSpawnAnchorToLandBelowBamboo() {
+        TNexus plugin = loadPlugin();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
+        World world = this.server.addSimpleWorld("resource_surface_bamboo");
+
+        world.getBlockAt(0, 62, 0).setType(Material.STONE);
+        world.getBlockAt(0, 63, 0).setType(Material.WATER);
+        world.getBlockAt(2, 70, 0).setType(Material.DIRT);
+        world.getBlockAt(2, 71, 0).setType(Material.GRASS_BLOCK);
+        world.getBlockAt(2, 72, 0).setType(Material.BAMBOO);
+
+        ResourceWorldManager.SpawnAnchor spawnAnchor = manager.resolveSpawnAnchor(world);
+
+        assertEquals(2, spawnAnchor.x());
+        assertEquals(0, spawnAnchor.z());
+        assertEquals(71, spawnAnchor.surfaceY());
+    }
+
+    @Test
     void shouldSkipNearbyLandThatIsTooLowForSpawnAnchor() {
         TNexus plugin = loadPlugin();
         TrackingWorldManagerState state = new TrackingWorldManagerState();
