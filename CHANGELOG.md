@@ -1,3 +1,10 @@
+## [0.47.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.47.0...v0.47.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** avoid nether cliffing from roof surface sampling ([c9d584a](https://github.com/TServerNetwork/T-Nexus/commit/c9d584ae4378296c272646576b56e2f1288f2118))
+
 # [0.47.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.7...v0.47.0) (2026-06-16)
 
 
