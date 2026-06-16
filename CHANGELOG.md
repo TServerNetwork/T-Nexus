@@ -1,3 +1,10 @@
+## [0.46.6](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.5...v0.46.6) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** disable resource spawn radius randomization ([4bc3948](https://github.com/TServerNetwork/T-Nexus/commit/4bc394815001bdc50910878c32a9a0110ed06881))
+
 ## [0.46.5](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.4...v0.46.5) (2026-06-16)
 
 
