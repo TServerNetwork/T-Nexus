@@ -137,6 +137,15 @@ public final class MultiverseHook implements PluginHook<MultiverseWorldService> 
             return isSuccess(invokeMethod(this.worldManager, "loadWorld", options));
         }
 
+        @Override
+        public boolean setSpawnLocation(String worldName, org.bukkit.Location spawnLocation) {
+            Object loadedWorld = getOrNull(invokeMethod(this.worldManager, "getLoadedWorld", worldName));
+            if (loadedWorld == null) {
+                return true;
+            }
+            return invokeSpawnSetter(loadedWorld, spawnLocation);
+        }
+
         private static Object getOrNull(Object option) {
             return option == null ? null : invokeMethod(option, "getOrNull");
         }
@@ -180,6 +189,17 @@ public final class MultiverseHook implements PluginHook<MultiverseWorldService> 
                 return invokeCompatibleMethod(target, methodName, arguments);
             } catch (ReflectiveOperationException exception) {
                 throw new IllegalStateException("Failed to invoke Multiverse method " + methodName, exception);
+            }
+        }
+
+        private static boolean invokeSpawnSetter(Object target, org.bukkit.Location spawnLocation) {
+            try {
+                invokeCompatibleMethod(target, "setSpawnLocation", spawnLocation);
+                return true;
+            } catch (NoSuchMethodException ignored) {
+                return true;
+            } catch (ReflectiveOperationException exception) {
+                throw new IllegalStateException("Failed to update Multiverse spawn location", exception);
             }
         }
 

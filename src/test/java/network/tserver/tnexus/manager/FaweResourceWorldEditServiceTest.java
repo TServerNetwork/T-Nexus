@@ -81,4 +81,11 @@ class FaweResourceWorldEditServiceTest {
         assertTrue(FaweResourceWorldEditService.perimeterColumns(2).contains(new FaweResourceWorldEditService.ColumnKey(2, 0)));
         assertTrue(FaweResourceWorldEditService.perimeterColumns(2).contains(new FaweResourceWorldEditService.ColumnKey(0, -2)));
     }
+
+    @Test
+    void shouldNotRaiseLiquidAboveItsOriginalTopWhenRestoringColumns() {
+        assertEquals(74, FaweResourceWorldEditService.resolveRestoredLiquidTopY(63, 74, 319));
+        assertEquals(90, FaweResourceWorldEditService.resolveRestoredLiquidTopY(90, 74, 319));
+        assertEquals(319, FaweResourceWorldEditService.resolveRestoredLiquidTopY(400, 74, 319));
+    }
 }

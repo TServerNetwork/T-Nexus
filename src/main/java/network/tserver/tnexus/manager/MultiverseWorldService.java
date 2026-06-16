@@ -1,5 +1,6 @@
 package network.tserver.tnexus.manager;
 
+import org.bukkit.Location;
 import org.bukkit.World;
 
 /**
@@ -48,4 +49,15 @@ public interface MultiverseWorldService {
      * @return {@code true} when the load succeeds
      */
     boolean loadWorld(String worldName);
+
+    /**
+     * Updates the managed-world spawn location when supported by the provider.
+     *
+     * @param worldName world name
+     * @param spawnLocation target spawn location
+     * @return {@code true} when the update succeeds or is unsupported but non-fatal
+     */
+    default boolean setSpawnLocation(String worldName, Location spawnLocation) {
+        return true;
+    }
 }

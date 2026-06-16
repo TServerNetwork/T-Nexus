@@ -440,6 +440,7 @@ class ResourceWorldManagerTest {
         assertEquals(4, world.getSpawnLocation().getBlockX());
         assertEquals(72, world.getSpawnLocation().getBlockY());
         assertEquals(-3, world.getSpawnLocation().getBlockZ());
+        assertEquals("resource_spawn_radius|4|72|-3", state.spawnLocationCall.get());
     }
 
     @Test
@@ -541,6 +542,18 @@ class ResourceWorldManagerTest {
                 }
                 return true;
             }
+
+            @Override
+            public boolean setSpawnLocation(String worldName, Location spawnLocation) {
+                state.spawnLocationCall.set(worldName
+                        + "|"
+                        + spawnLocation.getBlockX()
+                        + "|"
+                        + spawnLocation.getBlockY()
+                        + "|"
+                        + spawnLocation.getBlockZ());
+                return true;
+            }
         };
     }
 
@@ -550,6 +563,7 @@ class ResourceWorldManagerTest {
         private final AtomicReference<String> importWorldCall = new AtomicReference<>();
         private final AtomicReference<String> loadWorldCall = new AtomicReference<>();
         private final AtomicReference<String> regenWorldCall = new AtomicReference<>();
+        private final AtomicReference<String> spawnLocationCall = new AtomicReference<>();
         private boolean importShouldSucceed = true;
         private boolean regenShouldSucceed = true;
     }

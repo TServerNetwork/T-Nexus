@@ -662,6 +662,9 @@ public final class ResourceWorldManager {
                         + world.getName());
                 return;
             }
+            if (!this.worldManager.setSpawnLocation(world.getName(), spawnLocation)) {
+                this.plugin.getLogger().warning("Failed to sync Multiverse spawn location for " + world.getName());
+            }
             configureSpawnRadius(world);
             this.plugin.getLogger().info("Configured resource-world spawn point: world="
                     + world.getName()

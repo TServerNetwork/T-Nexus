@@ -511,6 +511,10 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         return Math.max(min, Math.min(value, max));
     }
 
+    static int resolveRestoredLiquidTopY(int liquidTopY, int targetSurfaceY, int maxY) {
+        return Math.min(Math.max(liquidTopY, targetSurfaceY), maxY);
+    }
+
     private void reshapeColumn(
             EditSession editSession,
             int x,
@@ -541,7 +545,7 @@ public final class FaweResourceWorldEditService implements ResourceWorldEditServ
         editSession.setBlock(BlockVector3.at(x, targetSurfaceY, z), columnTopBlock);
 
         if (liquidState != null && liquidTopY != null) {
-            int restoredTopY = clamp(liquidTopY, targetSurfaceY + 1, maxY);
+            int restoredTopY = resolveRestoredLiquidTopY(liquidTopY, targetSurfaceY, maxY);
             if (restoredTopY > targetSurfaceY) {
                 CuboidRegion liquidRegion = new CuboidRegion(
                         BlockVector3.at(x, targetSurfaceY + 1, z),
