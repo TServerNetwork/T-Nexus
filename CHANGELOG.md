@@ -1,3 +1,10 @@
+## [0.46.2](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.1...v0.46.2) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** log and verify shoreline schematic anchor ([a5fec06](https://github.com/TServerNetwork/T-Nexus/commit/a5fec06e837fed9aadee5cb04c91336d86770e8d))
+
 ## [0.46.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.0...v0.46.1) (2026-06-16)
 
 
