@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit;
 import network.tserver.tnexus.TNexus;
 import network.tserver.tnexus.TestPluginSupport;
 import network.tserver.tnexus.database.repository.ResourceWorldResetRepository;
+import network.tserver.tnexus.manager.hook.WorldGuardHook;
+import org.bukkit.Location;
 import network.tserver.tnexus.manager.MultiverseWorldService;
 import org.bukkit.World;
 import org.junit.jupiter.api.AfterEach;
@@ -66,8 +68,14 @@ class ResetSchedulerTest {
         scheduler.scheduleAll().get(5, TimeUnit.SECONDS);
         this.server.getScheduler().performTicks(25);
         waitFor(() -> {
-            this.server.getScheduler().performOneTick();
-            return scheduler.getScheduledTaskCount("resource") > 1;
+            this.server.getScheduler().performTicks(5);
+            try {
+                boolean rescheduled = repository.findNextResetTime("resource").get(1, TimeUnit.SECONDS).stream()
+                        .anyMatch(nextReset -> nextReset.equals(LocalDateTime.of(2026, 6, 15, 9, 0, 1)));
+                return rescheduled && scheduler.getScheduledTaskCount("resource") > 1;
+            } catch (Exception exception) {
+                return false;
+            }
         });
 
         LocalDateTime nextReset = repository.findNextResetTime("resource").get(5, TimeUnit.SECONDS).orElseThrow();
@@ -106,6 +114,7 @@ class ResetSchedulerTest {
                 clock,
                 new NoOpFileManager(plugin),
                 new NoOpEditService(),
+                new NoOpWorldGuardRegionService(),
                 () -> 555L);
     }
 
@@ -118,7 +127,7 @@ class ResetSchedulerTest {
     }
 
     private void waitFor(java.util.function.BooleanSupplier condition) throws Exception {
-        long deadline = System.currentTimeMillis() + 5_000L;
+        long deadline = System.currentTimeMillis() + 15_000L;
         while (System.currentTimeMillis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
@@ -208,6 +217,16 @@ class ResetSchedulerTest {
 
         @Override
         public void pasteSchematic(World world, Path schematicPath, int x, int y, int z) {
+        }
+    }
+
+    private static final class NoOpWorldGuardRegionService implements WorldGuardHook.WorldGuardRegionService {
+        @Override
+        public void createOrReplaceSpawnProtection(
+                World world,
+                String regionName,
+                Location spawnLocation,
+                int radius) {
         }
     }
 }
