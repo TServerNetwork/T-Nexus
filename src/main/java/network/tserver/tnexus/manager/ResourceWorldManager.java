@@ -756,46 +756,61 @@ public final class ResourceWorldManager {
     SpawnAnchor resolveSpawnAnchor(World world) {
         int min = world.getMinHeight() + 1;
         int max = world.getMaxHeight() - 2;
-        int originSurfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(world, 0, 0, min, max, true);
-        Material originMaterial = world.getBlockAt(0, originSurfaceY, 0).getType();
-        if (!FaweResourceWorldEditService.isLiquidSurfaceMaterial(originMaterial)) {
-            return new SpawnAnchor(0, 0, originSurfaceY);
+        Location vanillaSpawn = world.getSpawnLocation();
+        int anchorX = vanillaSpawn.getBlockX();
+        int anchorZ = vanillaSpawn.getBlockZ();
+        int anchorSurfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(world, anchorX, anchorZ, min, max, true);
+        Material anchorMaterial = world.getBlockAt(anchorX, anchorSurfaceY, anchorZ).getType();
+        if (!FaweResourceWorldEditService.isLiquidSurfaceMaterial(anchorMaterial)) {
+            this.plugin.getLogger().info("Resolved resource-world spawn anchor from vanilla spawn: "
+                    + "spawnX=" + anchorX
+                    + ", spawnZ=" + anchorZ
+                    + ", surfaceY=" + anchorSurfaceY
+                    + ", world=" + world.getName());
+            return new SpawnAnchor(anchorX, anchorZ, anchorSurfaceY);
         }
 
         for (int radius = 1; radius <= WATER_SURFACE_FALLBACK_RADIUS; radius++) {
             for (FaweResourceWorldEditService.ColumnKey column : FaweResourceWorldEditService.perimeterColumns(radius)) {
-                int topY = Math.max(min, Math.min(world.getHighestBlockYAt(column.x(), column.z()), max));
-                Material topMaterial = world.getBlockAt(column.x(), topY, column.z()).getType();
+                int candidateX = anchorX + column.x();
+                int candidateZ = anchorZ + column.z();
+                int topY = Math.max(min, Math.min(world.getHighestBlockYAt(candidateX, candidateZ), max));
+                Material topMaterial = world.getBlockAt(candidateX, topY, candidateZ).getType();
                 if (FaweResourceWorldEditService.isLiquidSurfaceMaterial(topMaterial)) {
                     continue;
                 }
                 int surfaceY = FaweResourceWorldEditService.sampleTerrainSurfaceY(
                         world,
-                        column.x(),
-                        column.z(),
+                        candidateX,
+                        candidateZ,
                         min,
                         max,
                         false);
-                Material surfaceMaterial = world.getBlockAt(column.x(), surfaceY, column.z()).getType();
+                Material surfaceMaterial = world.getBlockAt(candidateX, surfaceY, candidateZ).getType();
                 if (!FaweResourceWorldEditService.isTerrainSurfaceMaterial(surfaceMaterial)) {
                     continue;
                 }
-                if (surfaceY < originSurfaceY - 2) {
+                if (surfaceY < anchorSurfaceY - 2) {
                     continue;
                 }
-                this.plugin.getLogger().info("Resolved resource-world spawn anchor from nearby land because origin was liquid: "
-                        + "originY=" + originSurfaceY
-                        + ", anchorX=" + column.x()
-                        + ", anchorZ=" + column.z()
+                this.plugin.getLogger().info("Resolved resource-world spawn anchor from nearby land because vanilla spawn was liquid: "
+                        + "spawnX=" + anchorX
+                        + ", spawnZ=" + anchorZ
+                        + ", spawnY=" + anchorSurfaceY
+                        + ", anchorX=" + candidateX
+                        + ", anchorZ=" + candidateZ
                         + ", landY=" + surfaceY
                         + ", world=" + world.getName());
-                return new SpawnAnchor(column.x(), column.z(), surfaceY);
+                return new SpawnAnchor(candidateX, candidateZ, surfaceY);
             }
         }
 
-        this.plugin.getLogger().info("Using liquid origin as resource-world spawn anchor because no nearby land was found: "
-                + "surfaceY=" + originSurfaceY + ", world=" + world.getName());
-        return new SpawnAnchor(0, 0, originSurfaceY);
+        this.plugin.getLogger().info("Using liquid vanilla spawn as resource-world spawn anchor because no nearby land was found: "
+                + "spawnX=" + anchorX
+                + ", spawnZ=" + anchorZ
+                + ", surfaceY=" + anchorSurfaceY
+                + ", world=" + world.getName());
+        return new SpawnAnchor(anchorX, anchorZ, anchorSurfaceY);
     }
 
     Location resolveSpawnPoint(World world, SpawnAnchor spawnAnchor) {

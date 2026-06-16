@@ -283,6 +283,7 @@ class ResourceWorldManagerTest {
                 () -> 100L);
         World world = this.server.addSimpleWorld("resource_surface");
 
+        assertTrue(world.setSpawnLocation(0, 63, 0));
         world.getBlockAt(0, 62, 0).setType(Material.STONE);
         world.getBlockAt(0, 63, 0).setType(Material.WATER);
         world.getBlockAt(2, 70, 0).setType(Material.DIRT);
@@ -309,6 +310,7 @@ class ResourceWorldManagerTest {
                 () -> 100L);
         World world = this.server.addSimpleWorld("resource_surface_bamboo");
 
+        assertTrue(world.setSpawnLocation(0, 63, 0));
         world.getBlockAt(0, 62, 0).setType(Material.STONE);
         world.getBlockAt(0, 63, 0).setType(Material.WATER);
         world.getBlockAt(2, 70, 0).setType(Material.DIRT);
@@ -336,6 +338,7 @@ class ResourceWorldManagerTest {
                 () -> 100L);
         World world = this.server.addSimpleWorld("resource_surface_low");
 
+        assertTrue(world.setSpawnLocation(0, 63, 0));
         world.getBlockAt(0, 62, 0).setType(Material.STONE);
         world.getBlockAt(0, 63, 0).setType(Material.WATER);
         world.getBlockAt(1, 4, 1).setType(Material.GRASS_BLOCK);
@@ -346,6 +349,30 @@ class ResourceWorldManagerTest {
 
         assertEquals(2, spawnAnchor.x());
         assertEquals(0, spawnAnchor.z());
+        assertEquals(71, spawnAnchor.surfaceY());
+    }
+
+    @Test
+    void shouldResolveSpawnAnchorFromVanillaSpawnColumnWhenSafe() {
+        TNexus plugin = loadPlugin();
+        TrackingWorldManagerState state = new TrackingWorldManagerState();
+        ResourceWorldManager manager = new ResourceWorldManager(
+                plugin,
+                new ResourceWorldResetRepository(plugin.getDatabaseManager()),
+                createTrackingWorldManager(state),
+                Clock.systemDefaultZone(),
+                new TrackingFileManager(plugin),
+                new TrackingEditService(),
+                () -> 100L);
+        World world = this.server.addSimpleWorld("resource_vanilla_spawn");
+
+        assertTrue(world.setSpawnLocation(8, 72, -5));
+        world.getBlockAt(8, 71, -5).setType(Material.GRASS_BLOCK);
+
+        ResourceWorldManager.SpawnAnchor spawnAnchor = manager.resolveSpawnAnchor(world);
+
+        assertEquals(8, spawnAnchor.x());
+        assertEquals(-5, spawnAnchor.z());
         assertEquals(71, spawnAnchor.surfaceY());
     }
 
