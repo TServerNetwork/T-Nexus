@@ -1,3 +1,10 @@
+## [0.46.4](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.3...v0.46.4) (2026-06-16)
+
+
+### Bug Fixes
+
+* **world:** resolve shoreline anchors below vegetation ([2983a9a](https://github.com/TServerNetwork/T-Nexus/commit/2983a9aecf67a8b286095752a84ed31799f9eb8a))
+
 ## [0.46.3](https://github.com/TServerNetwork/T-Nexus/compare/v0.46.2...v0.46.3) (2026-06-16)
 
 
