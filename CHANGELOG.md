@@ -1,3 +1,10 @@
+# [0.48.0](https://github.com/TServerNetwork/T-Nexus/compare/v0.47.1...v0.48.0) (2026-06-17)
+
+
+### Features
+
+* add combat recap base models ([#130](https://github.com/TServerNetwork/T-Nexus/issues/130)) ([#143](https://github.com/TServerNetwork/T-Nexus/issues/143)) ([c0f4dc3](https://github.com/TServerNetwork/T-Nexus/commit/c0f4dc3fc6be3e7bfd50c17fcc23544d9bbbb4da))
+
 ## [0.47.1](https://github.com/TServerNetwork/T-Nexus/compare/v0.47.0...v0.47.1) (2026-06-16)
 
 
